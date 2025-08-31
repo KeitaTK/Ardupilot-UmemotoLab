@@ -851,16 +851,6 @@ Quaternion AC_AttitudeControl::attitude_from_thrust_vector(Vector3f thrust_vecto
     return thrust_vec_quat*yaw_quat;
 }
 
-// Calculates the body frame angular velocities to follow the target attitude
-// void AC_AttitudeControl::update_attitude_target()
-// {
-//     // rotate target and normalize
-//     Quaternion attitude_target_update;
-//     attitude_target_update.from_axis_angle(_ang_vel_target_rads * _dt);
-//     _attitude_target *= attitude_target_update;
-//     _attitude_target.normalize();
-// }
-
 // 補正クオータニオンを作用
 void AC_AttitudeControl::update_attitude_target()
 {
@@ -873,6 +863,16 @@ void AC_AttitudeControl::update_attitude_target()
     // 2) AP_Observer から補正クオータニオンを取得
     //    既存のインスタンスを使うか、シングルトン等から取得
     extern AP_Observer ap_observer;  // 例：外部宣言
+
+    Quaternion pending_correction = ap_observer.get_correction_quaternion();
+    gcs().send_text(MAV_SEVERITY_INFO,
+                    "DBG_CORR=%.4f,%.4f,%.4f,%.4f",
+                    pending_correction.q1,
+                    pending_correction.q2,
+                    pending_correction.q3,
+                    pending_correction.q4);
+
+
     if (ap_observer.is_correction_valid()) {
         Quaternion correction = ap_observer.get_correction_quaternion();
         // 3) 補正を乗算して反映
@@ -881,141 +881,62 @@ void AC_AttitudeControl::update_attitude_target()
     }
 }
 
-// // Calculates the body frame angular velocities to follow the target attitude
-// void AC_AttitudeControl::attitude_controller_run_quat()
-// {
-//     // This represents a quaternion rotation in NED frame to the body
-//     Quaternion attitude_body;
-//     _ahrs.get_quat_body_to_ned(attitude_body);
-
-//     // This vector represents the angular error to rotate the thrust vector using x and y and heading using z
-//     Vector3f attitude_error;
-//     thrust_heading_rotation_angles(_attitude_target, attitude_body, attitude_error, _thrust_angle_rad, _thrust_error_angle_rad);
-
-//     // Compute the angular velocity corrections in the body frame from the attitude error
-//     Vector3f ang_vel_body_rads = update_ang_vel_target_from_att_error(attitude_error);
-
-//     // ensure angular velocity does not go over configured limits
-//     ang_vel_limit(ang_vel_body_rads, radians(_ang_vel_roll_max_degs), radians(_ang_vel_pitch_max_degs), radians(_ang_vel_yaw_max_degs));
-
-//     // rotation from the target frame to the body frame
-//     Quaternion rotation_target_to_body = attitude_body.inverse() * _attitude_target;
-
-//     // target angle velocity vector in the body frame
-//     Vector3f ang_vel_body_feedforward = rotation_target_to_body * _ang_vel_target_rads;
-//     Vector3f gyro = get_latest_gyro();
-//     // Correct the thrust vector and smoothly add feedforward and yaw input
-//     _feedforward_scalar = 1.0f;
-//     if (_thrust_error_angle_rad > AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD * 2.0f) {
-//         ang_vel_body_rads.z = gyro.z;
-//     } else if (_thrust_error_angle_rad > AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD) {
-//         _feedforward_scalar = (1.0f - (_thrust_error_angle_rad - AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD) / AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD);
-//         ang_vel_body_rads.x += ang_vel_body_feedforward.x * _feedforward_scalar;
-//         ang_vel_body_rads.y += ang_vel_body_feedforward.y * _feedforward_scalar;
-//         ang_vel_body_rads.z += ang_vel_body_feedforward.z;
-//         ang_vel_body_rads.z = gyro.z * (1.0 - _feedforward_scalar) + ang_vel_body_rads.z * _feedforward_scalar;
-//     } else {
-//         ang_vel_body_rads += ang_vel_body_feedforward;
-//     }
-
-//     // Record error to handle EKF resets
-//     _attitude_ang_error = attitude_body.inverse() * _attitude_target;
-//     // finally update the attitude target
-//     _ang_vel_body_rads = ang_vel_body_rads;
-// }
-
-// Calculates the body frame angular velocities to follow the target attitude
 void AC_AttitudeControl::attitude_controller_run_quat()
 {
-    // // ==================================================================
-    // // ★★★★★【最終デバッグテスト】★★★★★
-    // gcs().send_text(MAV_SEVERITY_INFO, "ATTITUDE_CONTROLLER_IS_RUNNING");
-    // // ==================================================================
-
-    extern AP_Observer ap_observer;
-    // if (ap_observer.is_correction_valid()) {
-    //     gcs().send_text(MAV_SEVERITY_INFO, "AP_OBSERVER_CORRECTION_IS_VALID");
-    // } else {
-    //     gcs().send_text(MAV_SEVERITY_INFO, "AP_OBSERVER_CORRECTION_IS_NOT_VALID");
-    // }
-
-
-    if (ap_observer.is_correction_valid()) {
-        // 補正用のクォータニオンを取得
-        const Quaternion& correction_quat = ap_observer.get_correction_quaternion();
-
-        // 1Hzデバッグメッセージ送信のためのタイマー処理
-        uint32_t now = AP_HAL::millis();
-        bool send_msg = (now - _last_correction_msg_ms >= 1000);
-        Quaternion pre_correction_quat; // 補正前の値を一時保存する変数
-
-        if (send_msg) {
-            // 送信タイミングの場合のみ、補正前の値を保存
-            pre_correction_quat = _attitude_target;
-        }
-
-        // 目標姿勢に対して補正を適用する
-        _attitude_target = correction_quat * _attitude_target;
-        _attitude_target.normalize();
-
-        if (send_msg) {
-            // タイマーを更新
-            _last_correction_msg_ms = now;
-
-            // 補正前のクォータニオンを"PreQ"として送信
-            gcs().send_text(MAV_SEVERITY_INFO, "PreQ=%.4f,%.4f,%.4f,%.4f",
-                            pre_correction_quat.q1,
-                            pre_correction_quat.q2,
-                            pre_correction_quat.q3,
-                            pre_correction_quat.q4);
-            
-            // 補正後のクォータニオンを"PostQ"として送信
-            gcs().send_text(MAV_SEVERITY_INFO, "PostQ=%.4f,%.4f,%.4f,%.4f",
-                            _attitude_target.q1,
-                            _attitude_target.q2,
-                            _attitude_target.q3,
-                            _attitude_target.q4);
-        }
-    }
-    // ==================================================================
-
-    // This represents a quaternion rotation in NED frame to the body
+    // 1) Get current body‐frame orientation (NED→body)
     Quaternion attitude_body;
     _ahrs.get_quat_body_to_ned(attitude_body);
 
-    // This vector represents the angular error to rotate the thrust vector using x and y and heading using z
+    // 2) Compute attitude error (thrust‐vector and heading)
     Vector3f attitude_error;
-    thrust_heading_rotation_angles(_attitude_target, attitude_body, attitude_error, _thrust_angle_rad, _thrust_error_angle_rad);
+    thrust_heading_rotation_angles(
+        _attitude_target,
+        attitude_body,
+        attitude_error,
+        _thrust_angle_rad,
+        _thrust_error_angle_rad
+    );
 
-    // Compute the angular velocity corrections in the body frame from the attitude error
+    // 3) PD control: from attitude error to desired body‐frame ang. vel.
     Vector3f ang_vel_body_rads = update_ang_vel_target_from_att_error(attitude_error);
 
-    // ensure angular velocity does not go over configured limits
-    ang_vel_limit(ang_vel_body_rads, radians(_ang_vel_roll_max_degs), radians(_ang_vel_pitch_max_degs), radians(_ang_vel_yaw_max_degs));
+    // 4) Saturate per‐axis angular velocity to configured limits
+    ang_vel_limit(
+        ang_vel_body_rads,
+        radians(_ang_vel_roll_max_degs),
+        radians(_ang_vel_pitch_max_degs),
+        radians(_ang_vel_yaw_max_degs)
+    );
 
-    // rotation from the target frame to the body frame
-    Quaternion rotation_target_to_body = attitude_body.inverse() * _attitude_target;
-
-    // target angle velocity vector in the body frame
-    Vector3f ang_vel_body_feedforward = rotation_target_to_body * _ang_vel_target_rads;
+    // 5) Feed-forward: rotation from target to body, then project _ang_vel_target
+    Quaternion q_err = attitude_body.inverse() * _attitude_target;
+    Vector3f ang_vel_ff = q_err * _ang_vel_target_rads;
     Vector3f gyro = get_latest_gyro();
-    // Correct the thrust vector and smoothly add feedforward and yaw input
+
     _feedforward_scalar = 1.0f;
     if (_thrust_error_angle_rad > AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD * 2.0f) {
+        // large thrust error: ignore feed-forward yaw
         ang_vel_body_rads.z = gyro.z;
-    } else if (_thrust_error_angle_rad > AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD) {
-        _feedforward_scalar = (1.0f - (_thrust_error_angle_rad - AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD) / AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD);
-        ang_vel_body_rads.x += ang_vel_body_feedforward.x * _feedforward_scalar;
-        ang_vel_body_rads.y += ang_vel_body_feedforward.y * _feedforward_scalar;
-        ang_vel_body_rads.z += ang_vel_body_feedforward.z;
-        ang_vel_body_rads.z = gyro.z * (1.0 - _feedforward_scalar) + ang_vel_body_rads.z * _feedforward_scalar;
-    } else {
-        ang_vel_body_rads += ang_vel_body_feedforward;
+    }
+    else if (_thrust_error_angle_rad > AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD) {
+        // blend feed-forward vs. gyro based on thrust error angle
+        _feedforward_scalar = 1.0f
+            - (_thrust_error_angle_rad - AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD)
+              / AC_ATTITUDE_THRUST_ERROR_ANGLE_RAD;
+        ang_vel_body_rads.x += ang_vel_ff.x * _feedforward_scalar;
+        ang_vel_body_rads.y += ang_vel_ff.y * _feedforward_scalar;
+        ang_vel_body_rads.z  = gyro.z * (1.0f - _feedforward_scalar)
+            + ang_vel_ff.z * _feedforward_scalar;
+    }
+    else {
+        // small thrust error: full feed-forward
+        ang_vel_body_rads += ang_vel_ff;
     }
 
-    // Record error to handle EKF resets
+    // 6) Record attitude‐error quaternion for EKF reset handling
     _attitude_ang_error = attitude_body.inverse() * _attitude_target;
-    // finally update the attitude target
+
+    // 7) Set final desired body‐frame angular velocity
     _ang_vel_body_rads = ang_vel_body_rads;
 }
 
