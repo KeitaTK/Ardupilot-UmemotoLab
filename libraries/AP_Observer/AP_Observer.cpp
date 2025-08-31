@@ -40,7 +40,6 @@ void AP_Observer::update() {
 
     if ((++counter % 10) == 0) {
         // デバッグメッセージが必要な場合は以下のコメントを外す
-        /*
         gcs().send_text(MAV_SEVERITY_INFO,
             "EF=%.3f,%.3f,%.3f",
             current_filtered_force.x,
@@ -58,7 +57,6 @@ void AP_Observer::update() {
             "Gain=%.2f",
             _correction_gain.get()
         );
-        */
     }
 }
 
