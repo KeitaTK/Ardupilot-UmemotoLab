@@ -38,7 +38,7 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(payload);
     last_update_ms          = AP_HAL::millis();
 
-    if ((++counter % 10) == 0) {
+    if ((++counter % 100) == 0) {
         // デバッグメッセージが必要な場合は以下のコメントを外す
         gcs().send_text(MAV_SEVERITY_INFO,
             "EF=%.3f,%.3f,%.3f",

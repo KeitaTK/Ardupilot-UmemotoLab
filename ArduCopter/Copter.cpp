@@ -167,6 +167,9 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
 #if AP_COPTER_AHRS_AUTO_TRIM_ENABLED
     SCHED_TASK_CLASS(RC_Channels_Copter,   &copter.g2.rc_channels,      auto_trim_run,   10,  75,  30),
 #endif
+
+    SCHED_TASK(observer_update,       100,    50,  31), // 推力推定
+
 #if AP_RANGEFINDER_ENABLED
     SCHED_TASK(read_rangefinder,      20,    100,  33),
 #endif
@@ -204,7 +207,6 @@ const AP_Scheduler::Task Copter::scheduler_tasks[] = {
     SCHED_TASK(gpsglitch_check,       10,     50,  90),
     SCHED_TASK(takeoff_check,         50,     50,  91),
     SCHED_TASK(my_module_update,      1,    100,  92),  // カスタムプログラム
-    SCHED_TASK(observer_update,       100,    100,  92), // 推力推定
 
 #if AP_LANDINGGEAR_ENABLED
     SCHED_TASK(landinggear_update,    10,     75,  93),
