@@ -2,8 +2,10 @@
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
+#include <AP_Observer/AP_Observer.h>
 
 extern const AP_HAL::HAL& hal;
+extern AP_Observer ap_observer;
 
 #if APM_BUILD_TYPE(APM_BUILD_ArduPlane)
  // default gains for Plane
