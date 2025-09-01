@@ -891,22 +891,24 @@ void AC_AttitudeControl::update_attitude_target()
     _attitude_target *= attitude_target_update;
     _attitude_target.normalize();
 
-    // 2) AP_Observer から補正クオータニオンを取得
+    // 2) AP_Observer から補正クオータニオンを取得して出力
     Quaternion pending_correction = ap_observer.get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
-                    "DBG_CORR=%.4f,%.4f,%.4f,%.4f",
-                    pending_correction.q1,
-                    pending_correction.q2,
-                    pending_correction.q3,
-                    pending_correction.q4);
+        "DBG_CORR111=%.4f,%.4f,%.4f,%.4f",
+        pending_correction.q1,
+        pending_correction.q2,
+        pending_correction.q3,
+        pending_correction.q4);
+
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr111=%p", (void*)&ap_observer);
 
     // デバッグ：最終更新からの経過時間を表示
     uint32_t since = ap_observer.get_update_age_ms();
-    gcs().send_text(MAV_SEVERITY_INFO,
-                    "OBSV_AGE=%lums", since);
+    gcs().send_text(MAV_SEVERITY_INFO, "OBSV_AGE=%lums", since);
 
     // 3) 補正が有効なら姿勢に乗算して反映
     if (ap_observer.is_correction_valid()) {
+        // AP_Observer から補正クオータニオンを直接取得
         Quaternion correction = ap_observer.get_correction_quaternion();
         _attitude_target = correction * _attitude_target;
         _attitude_target.normalize();

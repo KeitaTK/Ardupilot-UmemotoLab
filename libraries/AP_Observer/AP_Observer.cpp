@@ -48,6 +48,20 @@ void AP_Observer::update() {
         last_update_ms
     );
 
+    Quaternion pending_correction =  ap_observer.get_correction_quaternion();
+    // Quaternion pending_correction =  get_correction_quaternion();
+    gcs().send_text(MAV_SEVERITY_INFO,
+        "DBG_CORR222=%.4f,%.4f,%.4f,%.4f",
+        pending_correction.q1,
+        pending_correction.q2,
+        pending_correction.q3,
+        pending_correction.q4);
+
+    // gcs().send_text(MAV_SEVERITY_INFO,
+    // "ADDR_CORR=%p", &(ap_observer.current_correction_quat));
+
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr222=%p", &ap_observer);
+
     // if ((++counter % 100) == 0) {
     //     // デバッグメッセージが必要な場合は以下のコメントを外す
     //     gcs().send_text(MAV_SEVERITY_INFO,
@@ -73,7 +87,7 @@ void AP_Observer::update() {
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
     float mag = force.length();
     if (mag < FORCE_THRESHOLD) {
-        return Quaternion(1, 0, 0, 0);
+        return Quaternion(10, 0, 0, 0);
     }
 
     float correction_gain = _correction_gain.get();
