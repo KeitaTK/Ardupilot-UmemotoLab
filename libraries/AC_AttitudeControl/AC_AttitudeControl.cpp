@@ -1,12 +1,11 @@
 #include "AC_AttitudeControl.h"
+#include "Copter.h"  
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
 #include <AP_Observer/AP_Observer.h>
-#include "Copter.h"
 
 extern const AP_HAL::HAL& hal;
-extern Copter copter;
 
 #if APM_BUILD_TYPE(APM_BUILD_ArduPlane)
  // default gains for Plane
@@ -862,8 +861,9 @@ void AC_AttitudeControl::update_attitude_target()
     _attitude_target *= attitude_target_update;
     _attitude_target.normalize();
 
-    // 2) AP_Observer から補正クォータニオンを取得（統一してcopter.observerを使用）
-    Quaternion pending_correction = copter.observer.get_correction_quaternion();
+    // 2) AP_Observer から補正クォータニオンを取得（アクセサ経由で取得）
+    AP_Observer &obs = copter.get_observer();
+    Quaternion pending_correction = obs.get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
                    "DBG_CORR111=%.4f,%.4f,%.4f,%.4f",
                    pending_correction.q1,
@@ -872,16 +872,17 @@ void AC_AttitudeControl::update_attitude_target()
                    pending_correction.q4);
 
     // デバッグ：最終更新からの経過時間を表示
-    uint32_t since = copter.observer.get_update_age_ms();
+    uint32_t since = obs.get_update_age_ms();
     gcs().send_text(MAV_SEVERITY_INFO, "OBSV_AGE=%lums", since);
 
     // 3) 補正が有効なら姿勢に乗算して反映
-    if (copter.observer.is_correction_valid()) {
-        Quaternion correction = copter.observer.get_correction_quaternion();
+    if (obs.is_correction_valid()) {
+        Quaternion correction = obs.get_correction_quaternion();
         _attitude_target = correction * _attitude_target;
         _attitude_target.normalize();
     }
 }
+
 
 
 

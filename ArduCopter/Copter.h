@@ -240,6 +240,8 @@ public:
         bool valid;         // データの有効性フラグ
         uint32_t timestamp; // 最後の更新時刻
     } external_coords;
+    // Observer へのアクセス用アクセサ
+    AP_Observer& get_observer() { return observer; }
 
 private:
 
