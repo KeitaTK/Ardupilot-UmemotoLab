@@ -38,26 +38,36 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(payload);
     last_update_ms          = AP_HAL::millis();
 
-    if ((++counter % 100) == 0) {
-        // デバッグメッセージが必要な場合は以下のコメントを外す
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "EF=%.3f,%.3f,%.3f",
-            current_filtered_force.x,
-            current_filtered_force.y,
-            current_filtered_force.z
-        );
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "Q=%.6f,%.6f,%.6f,%.6f",
-            current_correction_quat.q1,
-            current_correction_quat.q2,
-            current_correction_quat.q3,
-            current_correction_quat.q4
-        );
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "Gain=%.2f",
-            _correction_gain.get()
-        );
-    }
+    // 追加デバッグ：更新直後の値を出力
+    gcs().send_text(MAV_SEVERITY_INFO,
+        "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ms=%lu",
+        current_correction_quat.q1,
+        current_correction_quat.q2,
+        current_correction_quat.q3,
+        current_correction_quat.q4,
+        last_update_ms
+    );
+
+    // if ((++counter % 100) == 0) {
+    //     // デバッグメッセージが必要な場合は以下のコメントを外す
+    //     gcs().send_text(MAV_SEVERITY_INFO,
+    //         "EF=%.3f,%.3f,%.3f",
+    //         current_filtered_force.x,
+    //         current_filtered_force.y,
+    //         current_filtered_force.z
+    //     );
+    //     gcs().send_text(MAV_SEVERITY_INFO,
+    //         "Q=%.6f,%.6f,%.6f,%.6f",
+    //         current_correction_quat.q1,
+    //         current_correction_quat.q2,
+    //         current_correction_quat.q3,
+    //         current_correction_quat.q4
+    //     );
+    //     gcs().send_text(MAV_SEVERITY_INFO,
+    //         "Gain=%.2f",
+    //         _correction_gain.get()
+    //     );
+    // }
 }
 
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {

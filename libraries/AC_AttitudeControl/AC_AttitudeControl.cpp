@@ -853,7 +853,36 @@ Quaternion AC_AttitudeControl::attitude_from_thrust_vector(Vector3f thrust_vecto
     return thrust_vec_quat*yaw_quat;
 }
 
-// 補正クオータニオンを作用
+// // 補正クオータニオンを作用
+// void AC_AttitudeControl::update_attitude_target()
+// {
+//     // 1) 元の角速度積分による目標姿勢更新
+//     Quaternion attitude_target_update;
+//     attitude_target_update.from_axis_angle(_ang_vel_target_rads * _dt);
+//     _attitude_target *= attitude_target_update;
+//     _attitude_target.normalize();
+
+//     // 2) AP_Observer から補正クオータニオンを取得
+//     //    既存のインスタンスを使うか、シングルトン等から取得
+//     extern AP_Observer ap_observer;  // 例：外部宣言
+
+//     Quaternion pending_correction = ap_observer.get_correction_quaternion();
+//     gcs().send_text(MAV_SEVERITY_INFO,
+//                     "DBG_CORR=%.4f,%.4f,%.4f,%.4f",
+//                     pending_correction.q1,
+//                     pending_correction.q2,
+//                     pending_correction.q3,
+//                     pending_correction.q4);
+
+
+//     if (ap_observer.is_correction_valid()) {
+//         Quaternion correction = ap_observer.get_correction_quaternion();
+//         // 3) 補正を乗算して反映
+//         _attitude_target = correction * _attitude_target;
+//         _attitude_target.normalize();
+//     }
+// }
+
 void AC_AttitudeControl::update_attitude_target()
 {
     // 1) 元の角速度積分による目標姿勢更新
@@ -863,9 +892,6 @@ void AC_AttitudeControl::update_attitude_target()
     _attitude_target.normalize();
 
     // 2) AP_Observer から補正クオータニオンを取得
-    //    既存のインスタンスを使うか、シングルトン等から取得
-    extern AP_Observer ap_observer;  // 例：外部宣言
-
     Quaternion pending_correction = ap_observer.get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
                     "DBG_CORR=%.4f,%.4f,%.4f,%.4f",
@@ -874,14 +900,19 @@ void AC_AttitudeControl::update_attitude_target()
                     pending_correction.q3,
                     pending_correction.q4);
 
+    // デバッグ：最終更新からの経過時間を表示
+    uint32_t since = ap_observer.get_update_age_ms();
+    gcs().send_text(MAV_SEVERITY_INFO,
+                    "OBSV_AGE=%lums", since);
 
+    // 3) 補正が有効なら姿勢に乗算して反映
     if (ap_observer.is_correction_valid()) {
         Quaternion correction = ap_observer.get_correction_quaternion();
-        // 3) 補正を乗算して反映
         _attitude_target = correction * _attitude_target;
         _attitude_target.normalize();
     }
 }
+
 
 void AC_AttitudeControl::attitude_controller_run_quat()
 {
