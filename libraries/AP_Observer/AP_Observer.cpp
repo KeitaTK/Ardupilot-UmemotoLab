@@ -1,6 +1,6 @@
 #include "AP_Observer.h"
-
-AP_Observer ap_observer;
+#include "Copter.h"
+extern Copter copter;
 
 // パラメータテーブル定義
 const AP_Param::GroupInfo AP_Observer::var_info[] = {
@@ -48,7 +48,7 @@ void AP_Observer::update() {
         last_update_ms
     );
 
-    Quaternion pending_correction =  ap_observer.get_correction_quaternion();
+    Quaternion pending_correction =  copter.observer.get_correction_quaternion();
     // Quaternion pending_correction =  get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
         "DBG_CORR222=%.4f,%.4f,%.4f,%.4f",
@@ -60,7 +60,7 @@ void AP_Observer::update() {
     // gcs().send_text(MAV_SEVERITY_INFO,
     // "ADDR_CORR=%p", &(ap_observer.current_correction_quat));
 
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr222=%p", &ap_observer);
+    // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr222=%p", &ap_observer);
 
     // if ((++counter % 100) == 0) {
     //     // デバッグメッセージが必要な場合は以下のコメントを外す
