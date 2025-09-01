@@ -3,9 +3,10 @@
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
 #include <AP_Observer/AP_Observer.h>
+#include "Copter.h"
 
 extern const AP_HAL::HAL& hal;
-extern AP_Observer ap_observer;
+extern Copter copter;
 
 #if APM_BUILD_TYPE(APM_BUILD_ArduPlane)
  // default gains for Plane
@@ -892,7 +893,7 @@ void AC_AttitudeControl::update_attitude_target()
     _attitude_target.normalize();
 
     // 2) AP_Observer から補正クオータニオンを取得して出力
-    Quaternion pending_correction = ap_observer.get_correction_quaternion();
+    Quaternion pending_correction = copter.observer.get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
         "DBG_CORR111=%.4f,%.4f,%.4f,%.4f",
         pending_correction.q1,

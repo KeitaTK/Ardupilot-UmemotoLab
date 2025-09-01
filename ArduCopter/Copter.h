@@ -533,7 +533,7 @@ private:
 #endif
 
     AP_MyModule my_module;
-    // AP_Observer observer;
+    AP_Observer observer;
 
     // Landing Gear Controller
 #if AP_LANDINGGEAR_ENABLED
