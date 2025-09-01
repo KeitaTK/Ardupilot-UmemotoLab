@@ -11,7 +11,7 @@ def build(bld):
         depends=[
             'AP_HAL',
             # 'AP_Vehicle',
-            'AP_Motors'
+            'AP_Motors',
             'AP_Param',
             'AP_Common',
             'AP_Math'

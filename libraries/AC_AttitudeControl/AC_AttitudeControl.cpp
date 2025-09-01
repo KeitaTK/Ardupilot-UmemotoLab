@@ -854,36 +854,6 @@ Quaternion AC_AttitudeControl::attitude_from_thrust_vector(Vector3f thrust_vecto
     return thrust_vec_quat*yaw_quat;
 }
 
-// // 補正クオータニオンを作用
-// void AC_AttitudeControl::update_attitude_target()
-// {
-//     // 1) 元の角速度積分による目標姿勢更新
-//     Quaternion attitude_target_update;
-//     attitude_target_update.from_axis_angle(_ang_vel_target_rads * _dt);
-//     _attitude_target *= attitude_target_update;
-//     _attitude_target.normalize();
-
-//     // 2) AP_Observer から補正クオータニオンを取得
-//     //    既存のインスタンスを使うか、シングルトン等から取得
-//     extern AP_Observer ap_observer;  // 例：外部宣言
-
-//     Quaternion pending_correction = ap_observer.get_correction_quaternion();
-//     gcs().send_text(MAV_SEVERITY_INFO,
-//                     "DBG_CORR=%.4f,%.4f,%.4f,%.4f",
-//                     pending_correction.q1,
-//                     pending_correction.q2,
-//                     pending_correction.q3,
-//                     pending_correction.q4);
-
-
-//     if (ap_observer.is_correction_valid()) {
-//         Quaternion correction = ap_observer.get_correction_quaternion();
-//         // 3) 補正を乗算して反映
-//         _attitude_target = correction * _attitude_target;
-//         _attitude_target.normalize();
-//     }
-// }
-
 void AC_AttitudeControl::update_attitude_target()
 {
     // 1) 元の角速度積分による目標姿勢更新
@@ -892,29 +862,27 @@ void AC_AttitudeControl::update_attitude_target()
     _attitude_target *= attitude_target_update;
     _attitude_target.normalize();
 
-    // 2) AP_Observer から補正クオータニオンを取得して出力
+    // 2) AP_Observer から補正クォータニオンを取得（統一してcopter.observerを使用）
     Quaternion pending_correction = copter.observer.get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
-        "DBG_CORR111=%.4f,%.4f,%.4f,%.4f",
-        pending_correction.q1,
-        pending_correction.q2,
-        pending_correction.q3,
-        pending_correction.q4);
-
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr111=%p", (void*)&ap_observer);
+                   "DBG_CORR111=%.4f,%.4f,%.4f,%.4f",
+                   pending_correction.q1,
+                   pending_correction.q2,
+                   pending_correction.q3,
+                   pending_correction.q4);
 
     // デバッグ：最終更新からの経過時間を表示
-    uint32_t since = ap_observer.get_update_age_ms();
+    uint32_t since = copter.observer.get_update_age_ms();
     gcs().send_text(MAV_SEVERITY_INFO, "OBSV_AGE=%lums", since);
 
     // 3) 補正が有効なら姿勢に乗算して反映
-    if (ap_observer.is_correction_valid()) {
-        // AP_Observer から補正クオータニオンを直接取得
-        Quaternion correction = ap_observer.get_correction_quaternion();
+    if (copter.observer.is_correction_valid()) {
+        Quaternion correction = copter.observer.get_correction_quaternion();
         _attitude_target = correction * _attitude_target;
         _attitude_target.normalize();
     }
 }
+
 
 
 void AC_AttitudeControl::attitude_controller_run_quat()
@@ -1182,52 +1150,6 @@ void AC_AttitudeControl::reset_yaw_target_and_rate(bool reset_rate)
         euler_rate_to_ang_vel(_attitude_target, _euler_rate_target_rads, _ang_vel_target_rads);
     }
 }
-
-//　ここに補正しても意味ない
-// void AC_AttitudeControl::reset_yaw_target_and_rate(bool reset_rate)
-// {
-//     // 1) 現在の機体ヨー角との差分を適用して目標姿勢を更新
-//     float yaw_shift = _ahrs.yaw - _euler_angle_target_rad.z;
-//     Quaternion attitude_target_update;
-//     attitude_target_update.from_axis_angle(Vector3f{0.0f, 0.0f, yaw_shift});
-//     _attitude_target = attitude_target_update * _attitude_target;
-//     _attitude_target.normalize();
-
-//     // 2) AP_Observer から補正クォータニオンを取得し適用
-//     extern AP_Observer ap_observer;
-//     if (ap_observer.is_correction_valid()) {
-//         // 補正前を保存
-//         Quaternion before = _attitude_target;
-//         // 補正適用
-//         Quaternion correction = ap_observer.get_correction_quaternion();
-//         _attitude_target = correction * _attitude_target;
-//         _attitude_target.normalize();
-
-//         // 3) 1 Hz間隔で GCS に PreQ/PostQ を送信
-//         uint32_t now = AP_HAL::millis();
-//         if (now - _last_correction_msg_ms >= 1000) {
-//             _last_correction_msg_ms = now;
-//             // 補正前
-//             gcs().send_text(MAV_SEVERITY_INFO,
-//                 "PreQ=%.3f,%.3f,%.3f,%.3f",
-//                 before.q1, before.q2, before.q3, before.q4
-//             );
-//             // 補正後
-//             gcs().send_text(MAV_SEVERITY_INFO,
-//                 "PostQ=%.3f,%.3f,%.3f,%.3f",
-//                 _attitude_target.q1, _attitude_target.q2, _attitude_target.q3, _attitude_target.q4
-//             );
-//         }
-//     }
-
-//     // 4) レートリセット処理
-//     if (reset_rate) {
-//         // ヨーレートをゼロに
-//         _euler_rate_target_rads.z = 0.0f;
-//         // フィードフォワード用体軸角速度に変換
-//         euler_rate_to_ang_vel(_attitude_target, _euler_rate_target_rads, _ang_vel_target_rads);
-//     }
-// }
 
 
 // Shifts the target attitude to maintain the current error in the event of an EKF reset
