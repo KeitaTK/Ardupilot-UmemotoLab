@@ -7,13 +7,25 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Gain for attitude correction based on external force estimation
     // @Range: 0.0 100
     // @User: Advanced
-    AP_GROUPINFO("CORR_GAIN", 0, AP_Observer, _correction_gain, 0.3f),
+    AP_GROUPINFO("CORR_GAIN",     0, AP_Observer, _correction_gain,   0.3f),
+
+    // @Param: FORCE_FILT_FREQ
+    // @DisplayName: Force Estimate Filter Cutoff Frequency
+    // @Description: Low pass filter cutoff frequency for external force estimate
+    // @Range: 0.1 50
+    // @Units: Hz
+    // @User: Advanced
+    AP_GROUPINFO("FORCE_FILT_FREQ",1, AP_Observer, _force_filter_freq, 5.0f),
 
     AP_GROUPEND
 };
 
 void AP_Observer::init() const {
-    // counter は非constメンバーなのでここでは初期化しない
+    // 定数Δt版ローパスフィルタ初期化
+    const float sample_rate_hz = 400.0f;                  // 制御ループ周波数に合わせて調整
+    const float cutoff_hz       = _force_filter_freq.get();
+    _force_filter.set_cutoff_frequency(sample_rate_hz, cutoff_hz);
+
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized");
 }
 
@@ -24,6 +36,7 @@ void AP_Observer::update() {
         return;
     }
 
+    // スロットル→推力→加速度→外力推定
     float throttle = motors->get_throttle_out();
     float thrust   = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
     Vector3f accel = AP::ins().get_accel();
@@ -32,56 +45,17 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
 
-    current_filtered_force  = payload;
-    current_correction_quat = calculate_correction_from_force(payload);
-    last_update_ms          = AP_HAL::millis();
+    // 外力推定値をローパスフィルタ
+    current_filtered_force = _force_filter.apply(payload);
 
-    // // 追加デバッグ：更新直後の値を出力
-    // gcs().send_text(MAV_SEVERITY_INFO,
-    //     "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ms=%lu",
-    //     current_correction_quat.q1,
-    //     current_correction_quat.q2,
-    //     current_correction_quat.q3,
-    //     current_correction_quat.q4,
-    //     last_update_ms
-    // );
+    // フィルタ後の外力でクオータニオン補正を計算
+    current_correction_quat = calculate_correction_from_force(current_filtered_force);
+    current_correction_quat.normalize();
 
-    // Quaternion pending_correction = get_correction_quaternion();
-    // // Quaternion pending_correction =  get_correction_quaternion();
-    // gcs().send_text(MAV_SEVERITY_INFO,
-    //     "DBG_CORR222=%.4f,%.4f,%.4f,%.4f",
-    //     pending_correction.q1,
-    //     pending_correction.q2,
-    //     pending_correction.q3,
-    //     pending_correction.q4);
-
-    // gcs().send_text(MAV_SEVERITY_INFO,
-    // "ADDR_CORR=%p", &(ap_observer.current_correction_quat));
-
-    // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr222=%p", &ap_observer);
-
-    // if ((++counter % 100) == 0) {
-    //     // デバッグメッセージが必要な場合は以下のコメントを外す
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "EF=%.3f,%.3f,%.3f",
-    //         current_filtered_force.x,
-    //         current_filtered_force.y,
-    //         current_filtered_force.z
-    //     );
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "Q=%.6f,%.6f,%.6f,%.6f",
-    //         current_correction_quat.q1,
-    //         current_correction_quat.q2,
-    //         current_correction_quat.q3,
-    //         current_correction_quat.q4
-    //     );
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "Gain=%.2f",
-    //         _correction_gain.get()
-    //     );
-    // }
+    last_update_ms = AP_HAL::millis();
 }
 
+// 外力推定値からクオータニオン補正を生成
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
     float mag = force.length();
     if (mag < FORCE_THRESHOLD) {
@@ -90,13 +64,12 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
 
     float correction_gain = _correction_gain.get();
     float roll  =  force.y * correction_gain / UAV_mass;
-    float pitch =  -force.x * correction_gain / UAV_mass;
+    float pitch = -force.x * correction_gain / UAV_mass;
 
-    roll = constrain_value(roll, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
+    roll  = constrain_value(roll,  -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
     pitch = constrain_value(pitch, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
 
     Quaternion q;
     q.from_euler(roll, pitch, 0.0f);
-    q.normalize();
     return q;
 }

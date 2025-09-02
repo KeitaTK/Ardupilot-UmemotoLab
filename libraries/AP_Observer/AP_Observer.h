@@ -6,6 +6,7 @@
 #include <AP_InertialSensor/AP_InertialSensor.h>
 #include <AP_Motors/AP_Motors.h>
 #include <GCS_MAVLink/GCS.h>
+#include <Filter/LowPassFilter.h>
 
 class AP_Observer {
 public:
@@ -31,6 +32,7 @@ public:
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];
 
+
 private:
     uint32_t    counter;
     Vector3f    current_filtered_force;
@@ -40,7 +42,13 @@ private:
     // 補正計算用
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
 
-    // パラメータ
+    // 外力フィルタ用パラメータ
+    AP_Float    _force_filter_freq;    // カットオフ周波数 (Hz)
+
+    // 外力フィルタ（定数Δt版・Vector3f型）
+    mutable LowPassFilterConstDtVector3f _force_filter;
+
+
     AP_Float    _correction_gain;
 
     // 定数
