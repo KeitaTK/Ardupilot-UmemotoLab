@@ -12,10 +12,6 @@
 #include <AC_PID/AC_P.h>
 #include <AP_Vehicle/AP_MultiCopter.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
-#include <AP_Observer/AP_Observer.h>
-
-class Copter;
-extern Copter copter;
 
 
 #define AC_ATTITUDE_CONTROL_ANGLE_P                     4.5f             // default angle P gain for roll, pitch and yaw
@@ -76,6 +72,9 @@ public:
 
     // Empty destructor to suppress compiler warning
     virtual ~AC_AttitudeControl() {}
+
+    // 外部補正クォータニオンを設定する
+    void set_correction_quaternion(const Quaternion& correction);
 
     // set_dt / get_dt - dt is the time since the last time the attitude controllers were updated
     // _dt should be set based on the time of the last IMU read used by these controllers
@@ -630,6 +629,10 @@ protected:
     AP_Motors&          _motors;
 
     static AC_AttitudeControl *_singleton;
+
+private:
+    // 外部補正用メンバ
+    Quaternion _external_correction;
 
 public:
     // structure for angle and/or rate target
