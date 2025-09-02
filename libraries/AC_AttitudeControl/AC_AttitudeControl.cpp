@@ -1,5 +1,4 @@
 #include "AC_AttitudeControl.h"
-#include "Copter.h"  
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
@@ -853,37 +852,29 @@ Quaternion AC_AttitudeControl::attitude_from_thrust_vector(Vector3f thrust_vecto
     return thrust_vec_quat*yaw_quat;
 }
 
-void AC_AttitudeControl::update_attitude_target()
-{
-    // 1) 元の角速度積分による目標姿勢更新
-    Quaternion attitude_target_update;
-    attitude_target_update.from_axis_angle(_ang_vel_target_rads * _dt);
-    _attitude_target *= attitude_target_update;
-    _attitude_target.normalize();
+void AC_AttitudeControl::set_correction_quaternion(const Quaternion& correction) {
+    _external_correction = correction;
 
-    // 2) AP_Observer から補正クォータニオンを取得（アクセサ経由で取得）
-    AP_Observer &obs = copter.get_observer();
-    Quaternion pending_correction = obs.get_correction_quaternion();
     gcs().send_text(MAV_SEVERITY_INFO,
-                   "DBG_CORR111=%.4f,%.4f,%.4f,%.4f",
-                   pending_correction.q1,
-                   pending_correction.q2,
-                   pending_correction.q3,
-                   pending_correction.q4);
-
-    // デバッグ：最終更新からの経過時間を表示
-    uint32_t since = obs.get_update_age_ms();
-    gcs().send_text(MAV_SEVERITY_INFO, "OBSV_AGE=%lums", since);
-
-    // 3) 補正が有効なら姿勢に乗算して反映
-    if (obs.is_correction_valid()) {
-        Quaternion correction = obs.get_correction_quaternion();
-        _attitude_target = correction * _attitude_target;
-        _attitude_target.normalize();
-    }
+        "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ",
+        _external_correction.q1,
+        _external_correction.q1,
+        _external_correction.q1,
+        _external_correction.q1
+    );
 }
 
+void AC_AttitudeControl::update_attitude_target() {
+    // 1) 基本姿勢更新
+    Quaternion delta;
+    delta.from_axis_angle(_ang_vel_target_rads * _dt);
+    _attitude_target *= delta;
+    _attitude_target.normalize();
 
+    // 2) 外部補正を常に適用
+    _attitude_target = _external_correction * _attitude_target;
+    _attitude_target.normalize();
+}
 
 
 void AC_AttitudeControl::attitude_controller_run_quat()

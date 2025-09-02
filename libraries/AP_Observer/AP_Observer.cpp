@@ -36,24 +36,24 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(payload);
     last_update_ms          = AP_HAL::millis();
 
-    // 追加デバッグ：更新直後の値を出力
-    gcs().send_text(MAV_SEVERITY_INFO,
-        "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ms=%lu",
-        current_correction_quat.q1,
-        current_correction_quat.q2,
-        current_correction_quat.q3,
-        current_correction_quat.q4,
-        last_update_ms
-    );
+    // // 追加デバッグ：更新直後の値を出力
+    // gcs().send_text(MAV_SEVERITY_INFO,
+    //     "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ms=%lu",
+    //     current_correction_quat.q1,
+    //     current_correction_quat.q2,
+    //     current_correction_quat.q3,
+    //     current_correction_quat.q4,
+    //     last_update_ms
+    // );
 
-    Quaternion pending_correction = get_correction_quaternion();
-    // Quaternion pending_correction =  get_correction_quaternion();
-    gcs().send_text(MAV_SEVERITY_INFO,
-        "DBG_CORR222=%.4f,%.4f,%.4f,%.4f",
-        pending_correction.q1,
-        pending_correction.q2,
-        pending_correction.q3,
-        pending_correction.q4);
+    // Quaternion pending_correction = get_correction_quaternion();
+    // // Quaternion pending_correction =  get_correction_quaternion();
+    // gcs().send_text(MAV_SEVERITY_INFO,
+    //     "DBG_CORR222=%.4f,%.4f,%.4f,%.4f",
+    //     pending_correction.q1,
+    //     pending_correction.q2,
+    //     pending_correction.q3,
+    //     pending_correction.q4);
 
     // gcs().send_text(MAV_SEVERITY_INFO,
     // "ADDR_CORR=%p", &(ap_observer.current_correction_quat));
@@ -85,7 +85,7 @@ void AP_Observer::update() {
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
     float mag = force.length();
     if (mag < FORCE_THRESHOLD) {
-        return Quaternion(10, 0, 0, 0);
+        return Quaternion(1, 0, 0, 0);
     }
 
     float correction_gain = _correction_gain.get();
