@@ -969,10 +969,13 @@ void Copter::my_module_update() {
 
 void Copter::observer_update() {
     observer.update();
-    
-    // 補正が有効なら AC_AttitudeControl に渡す
-    if (observer.is_correction_valid()) {
-        attitude_control->set_correction_quaternion(observer.get_correction_quaternion());
+
+    // Observer が新しい補正を計算したタイミングでのみ取り込む
+    uint32_t obs_ms = observer.get_last_update_ms();
+    if (obs_ms != _last_obs_update_ms && observer.is_correction_valid()) {
+        _last_obs_update_ms = obs_ms;
+        _current_correction = observer.get_correction_quaternion();
+        attitude_control->set_correction_quaternion(_current_correction);
     }
 }
 

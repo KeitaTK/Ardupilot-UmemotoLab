@@ -271,6 +271,9 @@ private:
     // helper function to get inertially interpolated rangefinder height.
     bool get_rangefinder_height_interpolated_cm(int32_t& ret) const;
 
+    uint32_t   _last_obs_update_ms = 0;
+    Quaternion _current_correction;
+
 #if AP_RANGEFINDER_ENABLED
     class SurfaceTracking {
     public:

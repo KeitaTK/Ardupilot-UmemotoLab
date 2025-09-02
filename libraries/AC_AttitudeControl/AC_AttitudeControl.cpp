@@ -852,18 +852,23 @@ Quaternion AC_AttitudeControl::attitude_from_thrust_vector(Vector3f thrust_vecto
     return thrust_vec_quat*yaw_quat;
 }
 
+// 10Hzで補正クオータニオンを更新、送信する
 void AC_AttitudeControl::set_correction_quaternion(const Quaternion& correction) {
     _external_correction = correction;
 
-    gcs().send_text(MAV_SEVERITY_INFO,
-        "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ",
-        _external_correction.q1,
-        _external_correction.q1,
-        _external_correction.q1,
-        _external_correction.q1
-    );
+    if ((++counter % 10) == 0) {
+
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ",
+            _external_correction.q1,
+            _external_correction.q2,
+            _external_correction.q3,
+            _external_correction.q4
+        );
+    }
 }
 
+// 目標姿勢に補正をかける
 void AC_AttitudeControl::update_attitude_target() {
     // 1) 基本姿勢更新
     Quaternion delta;
