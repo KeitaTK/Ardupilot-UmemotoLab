@@ -633,6 +633,7 @@ protected:
 private:
     // 外部補正用メンバ
     Quaternion _external_correction;
+    uint32_t    counter;
 
 public:
     // structure for angle and/or rate target
