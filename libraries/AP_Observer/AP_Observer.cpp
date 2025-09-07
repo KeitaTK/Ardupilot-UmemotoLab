@@ -22,7 +22,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
 
 void AP_Observer::init() const {
     // 定数Δt版ローパスフィルタ初期化
-    const float sample_rate_hz = 400.0f;                  // 制御ループ周波数に合わせて調整
+    const float sample_rate_hz = 100.0f;                  // 制御ループ周波数に合わせて調整
     const float cutoff_hz       = _force_filter_freq.get();
     _force_filter.set_cutoff_frequency(sample_rate_hz, cutoff_hz);
 
