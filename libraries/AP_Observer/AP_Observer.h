@@ -9,7 +9,7 @@
 
 class AP_Observer {
 public:
-    void init();
+    void init() const;
     void update();
 
     // ゲッター関数
@@ -40,13 +40,7 @@ private:
     // 補正計算用
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
 
-    // 外力フィルタ用パラメータ
-    AP_Float    _force_filter_freq;    // カットオフ周波数 (Hz)
-
-    // 一時遅れフィルタの状態
-    Vector3f    previous_force;        // 前回のフィルタ出力
-    float       alpha;                 // フィルタ係数
-
+    // パラメータ
     AP_Float    _correction_gain;
 
     // 定数
