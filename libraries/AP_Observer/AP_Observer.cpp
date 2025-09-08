@@ -29,8 +29,10 @@ void AP_Observer::init() {
         gcs().send_text(MAV_SEVERITY_WARNING, "AP_Observer: Invalid filter frequency");
         return;
     }
-    
-    _force_filter.set_cutoff_frequency(sample_rate_hz, cutoff_hz);
+
+    // フィルタ係数の計算
+    alpha = 1.0f / (1.0f + (sample_rate_hz / (2.0f * M_PI * cutoff_hz)));
+    previous_force = Vector3f();  // 初期化
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized");
 }
 
@@ -50,8 +52,9 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
 
-    // 外力推定値をローパスフィルタ
-    current_filtered_force = _force_filter.apply(payload);
+    // 外力推定値を一時遅れフィルタ
+    current_filtered_force = payload * alpha + previous_force * (1.0f - alpha);
+    previous_force = current_filtered_force;
 
     // フィルタ後の外力でクオータニオン補正を計算
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
