@@ -6,11 +6,10 @@
 #include <AP_InertialSensor/AP_InertialSensor.h>
 #include <AP_Motors/AP_Motors.h>
 #include <GCS_MAVLink/GCS.h>
-#include <Filter/LowPassFilter.h>
 
 class AP_Observer {
 public:
-    void init() ;
+    void init();
     void update();
 
     // ゲッター関数
@@ -32,7 +31,6 @@ public:
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];
 
-
 private:
     uint32_t    counter;
     Vector3f    current_filtered_force;
@@ -45,9 +43,9 @@ private:
     // 外力フィルタ用パラメータ
     AP_Float    _force_filter_freq;    // カットオフ周波数 (Hz)
 
-    // 外力フィルタ（定数Δt版・Vector3f型）
-    LowPassFilterConstDtVector3f _force_filter;
-
+    // 一時遅れフィルタの状態
+    Vector3f    previous_force;        // 前回のフィルタ出力
+    float       alpha;                 // フィルタ係数
 
     AP_Float    _correction_gain;
 
