@@ -20,25 +20,30 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     AP_GROUPEND
 };
 
-void AP_Observer::init() const {
-    // 定数Δt版ローパスフィルタ初期化
-    const float sample_rate_hz = 100.0f;                  // 制御ループ周波数に合わせて調整
-    const float cutoff_hz       = _force_filter_freq.get();
+void AP_Observer::init() {
+    const float sample_rate_hz = 100.0f;  // 100Hzに変更
+    const float cutoff_hz = _force_filter_freq.get();
+    
+    // パラメータ妥当性チェック
+    if (cutoff_hz <= 0 || cutoff_hz > 50) {
+        gcs().send_text(MAV_SEVERITY_WARNING, "AP_Observer: Invalid filter frequency");
+        return;
+    }
+    
     _force_filter.set_cutoff_frequency(sample_rate_hz, cutoff_hz);
-
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized");
 }
 
 void AP_Observer::update() {
     AP_Motors* motors = AP::motors();
     if (!motors) {
-        gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: motors nullptr");
+        gcs().send_text(MAV_SEVERITY_WARNING, "AP_Observer: motors nullptr");  // WARNINGに変更
         return;
     }
 
     // スロットル→推力→加速度→外力推定
     float throttle = motors->get_throttle_out();
-    float thrust   = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
+    float thrust = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
     Vector3f accel = AP::ins().get_accel();
     Vector3f payload;
     payload.x = UAV_mass * accel.x;
