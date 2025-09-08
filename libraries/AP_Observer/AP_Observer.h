@@ -10,7 +10,7 @@
 
 class AP_Observer {
 public:
-    void init() const;
+    void init() ;
     void update();
 
     // ゲッター関数
@@ -46,7 +46,7 @@ private:
     AP_Float    _force_filter_freq;    // カットオフ周波数 (Hz)
 
     // 外力フィルタ（定数Δt版・Vector3f型）
-    mutable LowPassFilterConstDtVector3f _force_filter;
+    LowPassFilterConstDtVector3f _force_filter;
 
 
     AP_Float    _correction_gain;
