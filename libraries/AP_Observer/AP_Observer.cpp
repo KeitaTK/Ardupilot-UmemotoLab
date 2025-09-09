@@ -117,7 +117,7 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     }
 
     float correction_gain = _correction_gain.get();
-    float roll  =  -force.y * correction_gain / UAV_mass;
+    float roll  =  force.y * correction_gain / UAV_mass;
     float pitch =  -force.x * correction_gain / UAV_mass;
 
     roll = constrain_value(roll, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
