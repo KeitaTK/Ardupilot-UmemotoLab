@@ -58,8 +58,10 @@ void AP_Observer::update() {
         );
     }
 
-    current_filtered_force  = payload;
-    current_correction_quat = calculate_correction_from_force(payload);
+    // フィルタ後の値をVector3fに格納
+    Vector3f filtered_payload(payload_x_filtered, payload_y_filtered, payload_z_filtered);
+    current_filtered_force  = filtered_payload;
+    current_correction_quat = calculate_correction_from_force(filtered_payload);
     last_update_ms          = AP_HAL::millis();
 
     // // 追加デバッグ：更新直後の値を出力
