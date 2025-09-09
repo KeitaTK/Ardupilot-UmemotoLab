@@ -37,18 +37,28 @@ private:
     Quaternion  current_correction_quat;
     uint32_t    last_update_ms = 0;   // 最終補正計算時刻
 
+    // ローパスフィルタ用の状態変数
+    float       payload_x_filtered = 0.0f;
+    float       payload_y_filtered = 0.0f;
+    float       payload_z_filtered = 0.0f;
+    bool        filter_initialized = false;
+
     // 補正計算用
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
+
+    // ローパスフィルタ用の関数
+    float apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const;
 
     // パラメータ
     AP_Float    _correction_gain;
 
     // 定数
     static constexpr uint32_t TIMEOUT_MS            = 500;    // タイムアウト値を500msに設定
-    static constexpr float    FORCE_THRESHOLD      = 0.2f;
-    static constexpr float    MAX_CORRECTION_ANGLE = 0.5f;
-    static constexpr float    g                    = 9.7985f;
-    static constexpr float    THRUST_SCALE         = 6.3157f;
-    static constexpr float    THRUST_OFFSET        = -0.9995f;
-    static constexpr float    UAV_mass             = 1.4f;
+    static constexpr float    FORCE_THRESHOLD       = 0.2f;
+    static constexpr float    MAX_CORRECTION_ANGLE  = 0.5f;
+    static constexpr float    g                     = 9.7985f;
+    static constexpr float    THRUST_SCALE          = 6.3157f;
+    static constexpr float    THRUST_OFFSET         = -0.9995f;
+    static constexpr float    UAV_mass              = 1.4f;
+    static constexpr float    FILTER_CUTOFF_FREQ    = 5.0f;    // ローパスフィルタのカットオフ周波数 [Hz]
 };

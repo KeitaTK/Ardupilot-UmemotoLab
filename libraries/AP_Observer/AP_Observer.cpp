@@ -32,6 +32,32 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
 
+    // ローパスフィルタの適用
+    float dt = 0.01f; // 100Hz実行のため、固定で0.01s
+    
+    // 初回の場合の処理
+    if (!filter_initialized) {
+        payload_x_filtered = payload.x;
+        payload_y_filtered = payload.y;
+        payload_z_filtered = payload.z;
+        filter_initialized = true;
+    } else {
+        // ローパスフィルタを適用
+        payload_x_filtered = apply_lowpass_filter(payload.x, payload_x_filtered, dt, FILTER_CUTOFF_FREQ);
+        payload_y_filtered = apply_lowpass_filter(payload.y, payload_y_filtered, dt, FILTER_CUTOFF_FREQ);
+        payload_z_filtered = apply_lowpass_filter(payload.z, payload_z_filtered, dt, FILTER_CUTOFF_FREQ);
+    }
+
+    // デバッグメッセージ：フィルタ後の値を出力
+    if ((++counter % 100) == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "PL_FILT=%.3f,%.3f,%.3f",
+            payload_x_filtered,
+            payload_y_filtered,
+            payload_z_filtered
+        );
+    }
+
     current_filtered_force  = payload;
     current_correction_quat = calculate_correction_from_force(payload);
     last_update_ms          = AP_HAL::millis();
@@ -99,4 +125,25 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     q.from_euler(roll, pitch, 0.0f);
     q.normalize();
     return q;
+}
+
+float AP_Observer::apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const {
+    // 一次遅れローパスフィルタの実装
+    // RC = 1 / (2 * π * cutoff_freq)
+    // α = dt / (RC + dt)
+    // output = α * input + (1 - α) * previous_output
+    
+    float RC = 1.0f / (2.0f * M_PI * cutoff_freq);
+    float alpha = dt / (RC + dt);
+    
+    // αを0.0から1.0の範囲に制限
+    alpha = constrain_value(alpha, 0.0f, 1.0f);
+    
+    // フィルタ計算
+    float filtered_output = alpha * input + (1.0f - alpha) * state;
+    
+    // 状態を更新
+    state = filtered_output;
+    
+    return filtered_output;
 }
