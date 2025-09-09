@@ -60,5 +60,5 @@ private:
     static constexpr float    THRUST_SCALE          = 6.3157f;
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
-    static constexpr float    FILTER_CUTOFF_FREQ    = 10.0f;    // ローパスフィルタのカットオフ周波数 [Hz]
+    static constexpr float    FILTER_CUTOFF_FREQ    = 20.0f;    // ローパスフィルタのカットオフ周波数 [Hz]
 };
