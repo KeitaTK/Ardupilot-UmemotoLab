@@ -52,6 +52,8 @@ private:
 
     // 揺れ制御のゲイン
     AP_Float    _correction_gain;
+    // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）
+    AP_Float    _filter_cutoff_freq;
 
     // 定数
     static constexpr uint32_t TIMEOUT_MS            = 500;
@@ -61,5 +63,4 @@ private:
     static constexpr float    THRUST_SCALE          = 6.3157f;
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
-    static constexpr float    FILTER_CUTOFF_FREQ    = 20.0f;    // ローパスフィルタのカットオフ周波数 [Hz]
 };
