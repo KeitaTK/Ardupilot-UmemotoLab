@@ -972,10 +972,18 @@ void Copter::observer_update() {
 
     // Observer が新しい補正を計算したタイミングでのみ取り込む
     uint32_t obs_ms = observer.get_last_update_ms();
+    // if (obs_ms != _last_obs_update_ms && observer.is_correction_valid()) {
+    //     _last_obs_update_ms = obs_ms;
+    //     _current_correction = observer.get_correction_quaternion();
+    //     attitude_control->set_correction_quaternion(_current_correction);
+    // }
+    
+    // 補正位置が更新された場合に取り込む
     if (obs_ms != _last_obs_update_ms && observer.is_correction_valid()) {
         _last_obs_update_ms = obs_ms;
-        _current_correction = observer.get_correction_quaternion();
-        attitude_control->set_correction_quaternion(_current_correction);
+        external_coords.position = observer.get_correction_position();
+        external_coords.valid = true;
+        external_coords.timestamp = obs_ms;
     }
 }
 

@@ -852,21 +852,21 @@ Quaternion AC_AttitudeControl::attitude_from_thrust_vector(Vector3f thrust_vecto
     return thrust_vec_quat*yaw_quat;
 }
 
-// 10Hzで補正クオータニオンを更新、送信する
-void AC_AttitudeControl::set_correction_quaternion(const Quaternion& correction) {
-    _external_correction = correction;
+// // 10Hzで補正クオータニオンを更新、送信する
+// void AC_AttitudeControl::set_correction_quaternion(const Quaternion& correction) {
+//     _external_correction = correction;
 
-    if ((++counter % 10) == 0) {
+//     if ((++counter % 10) == 0) {
 
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ",
-            _external_correction.q1,
-            _external_correction.q2,
-            _external_correction.q3,
-            _external_correction.q4
-        );
-    }
-}
+//         gcs().send_text(MAV_SEVERITY_INFO,
+//             "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ",
+//             _external_correction.q1,
+//             _external_correction.q2,
+//             _external_correction.q3,
+//             _external_correction.q4
+//         );
+//     }
+// }
 
 // 目標姿勢に補正をかける
 void AC_AttitudeControl::update_attitude_target() {
@@ -877,8 +877,8 @@ void AC_AttitudeControl::update_attitude_target() {
     _attitude_target.normalize();
 
     // 2) 外部補正を常に適用
-    _attitude_target = _external_correction * _attitude_target;
-    _attitude_target.normalize();
+    // _attitude_target = _external_correction * _attitude_target;
+    // _attitude_target.normalize();
 }
 
 

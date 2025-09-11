@@ -27,7 +27,7 @@ void AP_Observer::init(){
     _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
 
     current_filtered_force = Vector3f();
-    current_correction_quat = Quaternion(1,0,0,0);
+    // current_correction_quat = Quaternion(1,0,0,0);
     last_update_ms = 0;
     _payload_filtered = Vector3f();
     filter_initialized = true;
@@ -54,20 +54,22 @@ void AP_Observer::update() {
     _payload_filtered = _payload_filter.apply(payload);
 
     current_filtered_force = _payload_filtered;
-    current_correction_quat = calculate_correction_from_force(_payload_filtered);
-    last_update_ms = AP_HAL::millis();
+    // current_correction_quat = calculate_correction_from_force(_payload_filtered); // クオータニオン補正は無効化
+    correction_position = calculate_correction_position(_payload_filtered); // 補正位置を生成
 
-    // // デバッグメッセージ：フィルタ後の値を出力
-    // if ((++counter % 100) == 0) {
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "PL_FILT=%.3f,%.3f,%.3f",
-    //         _payload_filtered.x,
-    //         _payload_filtered.y,
-    //         _payload_filtered.z
-    //     );
-    // }
+    // 補正位置を100回に一回デバックメッセージで送信
+    if ((++counter % 100) == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+                         "OBS_pos=%.6f,%.6f,%.6f",
+                         correction_position.x,
+                         correction_position.y,
+                         correction_position.z);
+    }
+
+    last_update_ms = AP_HAL::millis();
 }
-    
+
+// 補正クオータニオンを計算
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
     float mag = force.length();
     if (mag < FORCE_THRESHOLD) {
@@ -85,4 +87,14 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     q.from_euler(roll, pitch, 0.0f);
     q.normalize();
     return q;
+}
+
+
+// 補正位置を計算
+Vector3f AP_Observer::calculate_correction_position(const Vector3f& force) const {
+    float gain = _correction_gain.get();
+    float x = constrain_value(force.x * gain, -MAX_CORRECTION_POS, MAX_CORRECTION_POS);
+    float y = constrain_value(force.y * gain, -MAX_CORRECTION_POS, MAX_CORRECTION_POS);
+    // 前後・左右のみ、上下は0
+    return Vector3f(x, y, 0.0f);
 }
