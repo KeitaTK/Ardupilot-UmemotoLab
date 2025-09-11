@@ -1,20 +1,38 @@
 #include "AP_Observer.h"
 
 // パラメータテーブル定義
+// 実際にpymavlinkから呼び出すときは接頭か自動生成される。
+// 例えば、CORR_GAIN -> OBS_CORR_GAIN のように変換される。どんな名前かは調べる
 const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Param: CORR_GAIN
     // @DisplayName: Observer Correction Gain
     // @Description: Gain for attitude correction based on external force estimation
-    // @Range: 0.0 100
+    // @Range: 0.0 1.0
     // @User: Advanced
-    AP_GROUPINFO("CORR_GAIN", 0, AP_Observer, _correction_gain, 0.3f),
+    AP_GROUPINFO("CORR_GAIN", 0, AP_Observer, _correction_gain, 0.004f),
+    // @Param: OBS_FILT_CUTOFF
+    // @DisplayName: Observer Filter Cutoff Frequency
+    // @Description: Low-pass filter cutoff frequency [Hz]
+    // @Range: 1.0 100.0
+    // @User: Advanced
+    AP_GROUPINFO("FILT_CUTOFF", 1, AP_Observer, _filter_cutoff_freq, 20.0f),
 
     AP_GROUPEND
 };
 
-void AP_Observer::init() const {
-    // counter は非constメンバーなのでここでは初期化しない
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized");
+void AP_Observer::init(){
+    AP_Param::setup_object_defaults(this, var_info);
+
+    float sample_freq = 100.0f; // サンプリング周波数 [Hz]
+    _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
+
+    current_filtered_force = Vector3f();
+    current_correction_quat = Quaternion(1,0,0,0);
+    last_update_ms = 0;
+    _payload_filtered = Vector3f();
+    filter_initialized = true;
+
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
 
 void AP_Observer::update() {
@@ -32,84 +50,24 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
 
-    // ローパスフィルタの適用
-    float dt = 0.01f; // 100Hz実行のため、固定で0.01s
-    
-    // 初回の場合の処理
-    if (!filter_initialized) {
-        payload_x_filtered = payload.x;
-        payload_y_filtered = payload.y;
-        payload_z_filtered = payload.z;
-        filter_initialized = true;
-    } else {
-        // ローパスフィルタを適用
-        payload_x_filtered = apply_lowpass_filter(payload.x, payload_x_filtered, dt, FILTER_CUTOFF_FREQ);
-        payload_y_filtered = apply_lowpass_filter(payload.y, payload_y_filtered, dt, FILTER_CUTOFF_FREQ);
-        payload_z_filtered = apply_lowpass_filter(payload.z, payload_z_filtered, dt, FILTER_CUTOFF_FREQ);
-    }
+    // 固定カットオフでフィルタ適用
+    _payload_filtered = _payload_filter.apply(payload);
 
-    // デバッグメッセージ：フィルタ後の値を出力
-    if ((++counter % 100) == 0) {
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "PL_FILT=%.3f,%.3f,%.3f",
-            payload_x_filtered,
-            payload_y_filtered,
-            payload_z_filtered
-        );
-    }
+    current_filtered_force = _payload_filtered;
+    current_correction_quat = calculate_correction_from_force(_payload_filtered);
+    last_update_ms = AP_HAL::millis();
 
-    // フィルタ後の値をVector3fに格納
-    Vector3f filtered_payload(payload_x_filtered, payload_y_filtered, payload_z_filtered);
-    current_filtered_force  = filtered_payload;
-    current_correction_quat = calculate_correction_from_force(filtered_payload);
-    last_update_ms          = AP_HAL::millis();
-
-    // // 追加デバッグ：更新直後の値を出力
-    // gcs().send_text(MAV_SEVERITY_INFO,
-    //     "OBSV_UPD Q=%.6f,%.6f,%.6f,%.6f ms=%lu",
-    //     current_correction_quat.q1,
-    //     current_correction_quat.q2,
-    //     current_correction_quat.q3,
-    //     current_correction_quat.q4,
-    //     last_update_ms
-    // );
-
-    // Quaternion pending_correction = get_correction_quaternion();
-    // // Quaternion pending_correction =  get_correction_quaternion();
-    // gcs().send_text(MAV_SEVERITY_INFO,
-    //     "DBG_CORR222=%.4f,%.4f,%.4f,%.4f",
-    //     pending_correction.q1,
-    //     pending_correction.q2,
-    //     pending_correction.q3,
-    //     pending_correction.q4);
-
-    // gcs().send_text(MAV_SEVERITY_INFO,
-    // "ADDR_CORR=%p", &(ap_observer.current_correction_quat));
-
-    // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer addr222=%p", &ap_observer);
-
+    // // デバッグメッセージ：フィルタ後の値を出力
     // if ((++counter % 100) == 0) {
-    //     // デバッグメッセージが必要な場合は以下のコメントを外す
     //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "EF=%.3f,%.3f,%.3f",
-    //         current_filtered_force.x,
-    //         current_filtered_force.y,
-    //         current_filtered_force.z
-    //     );
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "Q=%.6f,%.6f,%.6f,%.6f",
-    //         current_correction_quat.q1,
-    //         current_correction_quat.q2,
-    //         current_correction_quat.q3,
-    //         current_correction_quat.q4
-    //     );
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "Gain=%.2f",
-    //         _correction_gain.get()
+    //         "PL_FILT=%.3f,%.3f,%.3f",
+    //         _payload_filtered.x,
+    //         _payload_filtered.y,
+    //         _payload_filtered.z
     //     );
     // }
 }
-
+    
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
     float mag = force.length();
     if (mag < FORCE_THRESHOLD) {
@@ -127,25 +85,4 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     q.from_euler(roll, pitch, 0.0f);
     q.normalize();
     return q;
-}
-
-float AP_Observer::apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const {
-    // 一次遅れローパスフィルタの実装
-    // RC = 1 / (2 * π * cutoff_freq)
-    // α = dt / (RC + dt)
-    // output = α * input + (1 - α) * previous_output
-    
-    float RC = 1.0f / (2.0f * M_PI * cutoff_freq);
-    float alpha = dt / (RC + dt);
-    
-    // αを0.0から1.0の範囲に制限
-    alpha = constrain_value(alpha, 0.0f, 1.0f);
-    
-    // フィルタ計算
-    float filtered_output = alpha * input + (1.0f - alpha) * state;
-    
-    // 状態を更新
-    state = filtered_output;
-    
-    return filtered_output;
 }
