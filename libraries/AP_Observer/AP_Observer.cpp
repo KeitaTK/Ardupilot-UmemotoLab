@@ -1,4 +1,6 @@
 #include "AP_Observer.h"
+#include <AP_AHRS/AP_AHRS.h>
+
 
 // パラメータテーブル定義
 // 実際にpymavlinkから呼び出すときは接頭か自動生成される。
@@ -17,14 +19,18 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FILT_CUTOFF", 1, AP_Observer, _filter_cutoff_freq, 20.0f),
 
+
     AP_GROUPEND
 };
+
 
 void AP_Observer::init(){
     AP_Param::setup_object_defaults(this, var_info);
 
+
     float sample_freq = 100.0f; // サンプリング周波数 [Hz]
     _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
+
 
     current_filtered_force = Vector3f();
     // current_correction_quat = Quaternion(1,0,0,0);
@@ -32,8 +38,10 @@ void AP_Observer::init(){
     _payload_filtered = Vector3f();
     filter_initialized = true;
 
+
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
+
 
 void AP_Observer::update() {
     AP_Motors* motors = AP::motors();
@@ -41,6 +49,7 @@ void AP_Observer::update() {
         gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: motors nullptr");
         return;
     }
+
 
     float throttle = motors->get_throttle_out();
     float thrust   = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
@@ -50,12 +59,15 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
 
+
     // 固定カットオフでフィルタ適用
     _payload_filtered = _payload_filter.apply(payload);
+
 
     current_filtered_force = _payload_filtered;
     // current_correction_quat = calculate_correction_from_force(_payload_filtered); // クオータニオン補正は無効化
     correction_position = calculate_correction_position(_payload_filtered); // 補正位置を生成
+
 
     // 補正位置を100回に一回デバックメッセージで送信
     if ((++counter % 100) == 0) {
@@ -66,8 +78,10 @@ void AP_Observer::update() {
                          correction_position.z);
     }
 
+
     last_update_ms = AP_HAL::millis();
 }
+
 
 // 補正クオータニオンを計算
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
@@ -76,12 +90,15 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
         return Quaternion(1, 0, 0, 0);
     }
 
+
     float correction_gain = _correction_gain.get();
     float roll  =  force.y * correction_gain / UAV_mass;
     float pitch =  -force.x * correction_gain / UAV_mass;
 
+
     roll = constrain_value(roll, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
     pitch = constrain_value(pitch, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
+
 
     Quaternion q;
     q.from_euler(roll, pitch, 0.0f);
@@ -90,11 +107,16 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
 }
 
 
+
 // 補正位置を計算
 Vector3f AP_Observer::calculate_correction_position(const Vector3f& force) const {
     float gain = _correction_gain.get();
     float x = constrain_value(force.x * gain, -MAX_CORRECTION_POS, MAX_CORRECTION_POS);
     float y = constrain_value(force.y * gain, -MAX_CORRECTION_POS, MAX_CORRECTION_POS);
-    // 前後・左右のみ、上下は0
-    return Vector3f(x, y, 0.0f);
+    
+    // 機体座標系ベクトルを作成（前後・左右のみ、上下は0）
+    Vector3f body_vec(x, y, 0.0f);
+    
+    // body_to_earth()を使用してNED座標系に変換
+    return AP::ahrs().body_to_earth(body_vec);
 }
