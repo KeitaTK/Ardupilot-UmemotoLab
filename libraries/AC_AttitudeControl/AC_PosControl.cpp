@@ -2,9 +2,10 @@
 #include "AC_PosControl.h"
 #include <AP_Math/AP_Math.h>
 #include <AP_Logger/AP_Logger.h>
-#include <AP_Motors/AP_Motors.h>    // motors library
+#include <AP_Motors/AP_Motors.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
+#include <GCS_MAVLink/GCS.h> // ← ここを修正
 
 extern const AP_HAL::HAL& hal;
 
@@ -366,6 +367,17 @@ AC_PosControl::AC_PosControl(AP_AHRS_View& ahrs, const AP_InertialNav& inav,
 ///     The function alters the input velocity to be the velocity that the system could reach zero acceleration in the minimum time.
 void AC_PosControl::input_pos_NEU_cm(const Vector3p& pos_neu_cm, float pos_terrain_target_u_cm, float terrain_buffer_cm)
 {
+    // デバッグ用: 補正値を100回に1回GCSへ送信
+    static uint32_t debug_counter = 0;
+    if (_external_position_correction_valid && (++debug_counter % 100) == 0) {
+         gcs().send_text(MAV_SEVERITY_INFO,
+                 "OBS_pos=%.6f,%.6f,%.6f",
+                 (double)_external_position_correction.x,
+                 (double)_external_position_correction.y,
+                 (double)_external_position_correction.z
+         );
+    }
+
     // Terrain following velocity scalar must be calculated before we remove the position offset
     const float offset_u_scaler = pos_terrain_U_scaler(pos_terrain_target_u_cm, terrain_buffer_cm);
     set_pos_terrain_target_U_cm(pos_terrain_target_u_cm);
@@ -954,7 +966,7 @@ void AC_PosControl::update_offsets_U()
 
     // update position, velocity, acceleration offsets for this iteration
     postype_t p_offset_u_cm = _pos_offset_neu_cm.z;
-    update_pos_vel_accel(p_offset_u_cm, _vel_offset_neu_cms.z, _accel_offset_neu_cmss.z, _dt, MIN(_limit_vector.z, 0.0f), _p_pos_u.get_error(), _pid_vel_u.get_error());
+    update_pos_vel_accel(p_offset_u_cm, _vel_offset_target_neu_cms.z, _accel_offset_target_neu_cmss.z, _dt, MIN(_limit_vector.z, 0.0f), _p_pos_u.get_error(), _pid_vel_u.get_error());
     _pos_offset_neu_cm.z = p_offset_u_cm;
 
     // input shape vertical position, velocity and acceleration offsets

@@ -69,14 +69,14 @@ void AP_Observer::update() {
     correction_position = calculate_correction_position(_payload_filtered); // 補正位置を生成
 
 
-    // 補正位置を100回に一回デバックメッセージで送信
-    if ((++counter % 100) == 0) {
-        gcs().send_text(MAV_SEVERITY_INFO,
-                         "OBS_pos=%.6f,%.6f,%.6f",
-                         correction_position.x,
-                         correction_position.y,
-                         correction_position.z);
-    }
+    // // 補正位置を100回に一回デバックメッセージで送信
+    // if ((++counter % 100) == 0) {
+    //     gcs().send_text(MAV_SEVERITY_INFO,
+    //                      "OBS_pos=%.6f,%.6f,%.6f",
+    //                      correction_position.x,
+    //                      correction_position.y,
+    //                      correction_position.z);
+    // }
 
 
     last_update_ms = AP_HAL::millis();

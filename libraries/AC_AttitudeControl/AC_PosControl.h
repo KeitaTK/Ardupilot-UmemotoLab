@@ -452,7 +452,7 @@ public:
     void set_disturb_pos_NE_cm(Vector2f disturb_pos) {_disturb_pos_ne_cm = disturb_pos;}
 
     // set_disturb_vel_NE_cms - set the velocity disturbance in the north east plane
-    void set_disturb_vel_NE_cms(Vector2f disturb_vel) {_disturb_vel_ne_cms = disturb_vel;}
+    void set_disturb_vel_NE_cms(Vector2f disturb_vel) { _disturb_vel_ne_cms = disturb_vel;}
 
     static const struct AP_Param::GroupInfo var_info[];
 
@@ -605,4 +605,18 @@ private:
 
     // singleton
     static AC_PosControl *_singleton;
+
+public:
+    // 外部補正位置をセットする
+    void set_external_position_correction(const Vector3f& pos, uint32_t timestamp) {
+        _external_position_correction = pos;
+        _external_position_correction_valid = true;
+        _external_position_correction_timestamp = timestamp;
+    }
+
+protected:
+    // 外部補正位置関連
+    Vector3f _external_position_correction = Vector3f();
+    bool _external_position_correction_valid = false;
+    uint32_t _external_position_correction_timestamp = 0;
 };
