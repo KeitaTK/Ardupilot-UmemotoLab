@@ -660,6 +660,25 @@ void AC_PosControl::update_NE_controller()
     // update the position, velocity and acceleration offsets
     update_offsets_NE();
 
+    // --- 外部補正値を目標位置に一時的に加算（累積しない） ---
+    if (_external_position_correction_valid) {
+        Vector3f corr = _external_position_correction * 100.0f; // m→cm
+        _pos_desired_neu_cm.x += corr.x;
+        _pos_desired_neu_cm.y += corr.y;
+
+        // 100回に1回だけデバッグメッセージを送信
+        static uint32_t debug_counter = 0;
+        if ((++debug_counter % 100) == 0) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "OBS_pos=%.6f,%.6f,%.6f",
+                (double)_external_position_correction.x,
+                (double)_external_position_correction.y,
+                (double)_external_position_correction.z
+            );
+        }
+        _external_position_correction_valid = false; // 一度だけ反映
+    }
+
     // Position Controller
 
     _pos_target_neu_cm.xy() = _pos_desired_neu_cm.xy() + _pos_offset_neu_cm.xy();
@@ -720,16 +739,16 @@ void AC_PosControl::update_NE_controller()
 
     // gcs().send_text(MAV_SEVERITY_INFO, "input_pos_NEU_cm called");
     
-    // // デバッグ用: 補正値を100回に1回GCSへ送信
-    static uint32_t debug_counter = 0;
-    if (_external_position_correction_valid && (++debug_counter % 100) == 0) {
-         gcs().send_text(MAV_SEVERITY_INFO,
-                 "OBS_pos=%.6f,%.6f,%.6f",
-                 (double)_external_position_correction.x,
-                 (double)_external_position_correction.y,
-                 (double)_external_position_correction.z
-         );
-    }
+    // // // デバッグ用: 補正値を100回に1回GCSへ送信
+    // static uint32_t debug_counter = 0;
+    // if (_external_position_correction_valid && (++debug_counter % 100) == 0) {
+    //      gcs().send_text(MAV_SEVERITY_INFO,
+    //              "OBS_pos=%.6f,%.6f,%.6f",
+    //              (double)_external_position_correction.x,
+    //              (double)_external_position_correction.y,
+    //              (double)_external_position_correction.z
+    //      );
+    // }
 }
 
 
@@ -1202,7 +1221,7 @@ void AC_PosControl::init_offsets_U()
 bool AC_PosControl::set_posvelaccel_offset(const Vector3f &pos_offset_NED, const Vector3f &vel_offset_NED, const Vector3f &accel_offset_NED)
 {
     set_posvelaccel_offset_target_NE_cm(pos_offset_NED.topostype().xy() * 100.0, vel_offset_NED.xy() * 100.0, accel_offset_NED.xy() * 100.0);
-    set_posvelaccel_offset_target_U_cm(-pos_offset_NED.topostype().z * 100.0, -vel_offset_NED.z * 100, -accel_offset_NED.z * 100.0);
+    set_posvelaccel_offset_target_U_cm(-pos_offset_NED.topostype().z * 100.0, -vel_offset_NED.z * 100, -accel_offset_NED.z *  100.0);
     return true;
 }
 
@@ -1402,7 +1421,7 @@ void AC_PosControl::write_log()
 
         // log down and terrain offsets if they are being used
         if (!is_zero(_pos_offset_neu_cm.z)) {
-            Write_PSOD(-_pos_offset_target_neu_cm.z, -_pos_offset_neu_cm.z, -_vel_offset_target_neu_cms.z, -_vel_offset_neu_cms.z, -_accel_offset_target_neu_cmss.z, -_accel_offset_neu_cmss.z);
+            Write_PSOD(-_pos_offset_target_neu_cm.z, -_pos_offset_neu_cm.z, -_vel_offset_target_neu_cms.z, -_vel_offset_neu_cms.z, -_accel_offset_target_neu_cmss.z, -_accel_offset_target_neu_cmss.z);
         }
         if (!is_zero(_pos_terrain_u_cm)) {
             Write_PSOT(-_pos_terrain_target_u_cm, -_pos_terrain_u_cm, 0, -_vel_terrain_u_cms, 0, -_accel_terrain_u_cmss);
