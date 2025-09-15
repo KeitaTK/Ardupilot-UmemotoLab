@@ -975,14 +975,15 @@ void Copter::observer_update() {
     if (obs_ms != _last_obs_update_ms && observer.is_correction_valid()) {
         _last_obs_update_ms = obs_ms;
         Vector3f corr_pos = observer.get_correction_position();
-        // AC_PosControlへ補正値を渡す
+        // NED→NEU変換（z軸反転）
+        corr_pos.z = -corr_pos.z;
         if (pos_control) {
             pos_control->set_external_position_correction(corr_pos, obs_ms);
         }
-        // 必要なら外部座標にも保存
-        external_coords.position = corr_pos;
-        external_coords.valid = true;
-        external_coords.timestamp = obs_ms;
+        // // 必要なら外部座標にも保存
+        // external_coords.position = corr_pos;
+        // external_coords.valid = true;
+        // external_coords.timestamp = obs_ms;
     }
 }
 

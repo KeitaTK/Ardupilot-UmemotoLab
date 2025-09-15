@@ -5,8 +5,6 @@
 #include <AP_Motors/AP_Motors.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
-#include <GCS_MAVLink/GCS.h> // ← ここを修正
-
 extern const AP_HAL::HAL& hal;
 
 #if APM_BUILD_TYPE(APM_BUILD_ArduPlane)
@@ -367,17 +365,6 @@ AC_PosControl::AC_PosControl(AP_AHRS_View& ahrs, const AP_InertialNav& inav,
 ///     The function alters the input velocity to be the velocity that the system could reach zero acceleration in the minimum time.
 void AC_PosControl::input_pos_NEU_cm(const Vector3p& pos_neu_cm, float pos_terrain_target_u_cm, float terrain_buffer_cm)
 {
-    // デバッグ用: 補正値を100回に1回GCSへ送信
-    static uint32_t debug_counter = 0;
-    if (_external_position_correction_valid && (++debug_counter % 100) == 0) {
-         gcs().send_text(MAV_SEVERITY_INFO,
-                 "OBS_pos=%.6f,%.6f,%.6f",
-                 (double)_external_position_correction.x,
-                 (double)_external_position_correction.y,
-                 (double)_external_position_correction.z
-         );
-    }
-
     // Terrain following velocity scalar must be calculated before we remove the position offset
     const float offset_u_scaler = pos_terrain_U_scaler(pos_terrain_target_u_cm, terrain_buffer_cm);
     set_pos_terrain_target_U_cm(pos_terrain_target_u_cm);
@@ -730,6 +717,19 @@ void AC_PosControl::update_NE_controller()
     // reset the disturbance from system ID mode to zero
     _disturb_pos_ne_cm.zero();
     _disturb_vel_ne_cms.zero();
+
+    // gcs().send_text(MAV_SEVERITY_INFO, "input_pos_NEU_cm called");
+    
+    // // デバッグ用: 補正値を100回に1回GCSへ送信
+    static uint32_t debug_counter = 0;
+    if (_external_position_correction_valid && (++debug_counter % 100) == 0) {
+         gcs().send_text(MAV_SEVERITY_INFO,
+                 "OBS_pos=%.6f,%.6f,%.6f",
+                 (double)_external_position_correction.x,
+                 (double)_external_position_correction.y,
+                 (double)_external_position_correction.z
+         );
+    }
 }
 
 

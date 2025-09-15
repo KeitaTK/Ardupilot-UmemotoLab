@@ -13,6 +13,8 @@
 #include <AP_InertialNav/AP_InertialNav.h>  // Inertial Navigation library
 #include <AP_Scripting/AP_Scripting_config.h>
 #include "AC_AttitudeControl.h"     // Attitude control library
+#include <GCS_MAVLink/GCS.h>
+
 
 #include <AP_Logger/LogStructure.h>
 
