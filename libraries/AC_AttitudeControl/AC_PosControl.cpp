@@ -660,17 +660,17 @@ void AC_PosControl::update_NE_controller()
     // update the position, velocity and acceleration offsets
     update_offsets_NE();
 
-    // --- 外部補正値を目標位置に一時的に加算（累積しない） ---
+    // --- 外部補正値を目標加速度に一時的に加算（累積しない） ---
     if (_external_position_correction_valid) {
-        Vector3f corr = _external_position_correction * 100.0f; // m→cm
-        _pos_desired_neu_cm.x += corr.x;
-        _pos_desired_neu_cm.y += corr.y;
+        // そのまま加算（単位: m/s^2 → cm/s^2 への変換なし）
+        _accel_desired_neu_cmss.x += _external_position_correction.x;
+        _accel_desired_neu_cmss.y += _external_position_correction.y;
 
         // 100回に1回だけデバッグメッセージを送信
         static uint32_t debug_counter = 0;
         if ((++debug_counter % 100) == 0) {
             gcs().send_text(MAV_SEVERITY_INFO,
-                "OBS_pos=%.6f,%.6f,%.6f",
+                "OBS_accel=%.6f,%.6f,%.6f",
                 (double)_external_position_correction.x,
                 (double)_external_position_correction.y,
                 (double)_external_position_correction.z
