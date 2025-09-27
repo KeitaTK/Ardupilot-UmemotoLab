@@ -7,6 +7,7 @@
 #include <AP_Motors/AP_Motors.h>
 #include <GCS_MAVLink/GCS.h>
 #include <Filter/LowPassFilter2p.h>
+#include <AP_Logger/AP_Logger.h>  // ← これを追加
 
 class AP_Observer {
 public:
@@ -35,14 +36,17 @@ public:
 private:
     uint32_t    counter = 0;
     Vector3f    current_filtered_force = Vector3f();
-    Quaternion  current_correction_quat = Quaternion(1,0,0,0); // 単位クォータニオンで初期化
-    uint32_t    last_update_ms = 0;   // 最終補正計算時刻
-
+    Quaternion  current_correction_quat = Quaternion(1,0,0,0);
+    uint32_t    last_update_ms = 0;
 
     // ローパスフィルタ
     LowPassFilter2pVector3f _payload_filter;
     Vector3f _payload_filtered = Vector3f();
     bool filter_initialized = false;
+
+    // ログ用
+    uint32_t _last_log_ms = 0;
+    void log_filtered_force();
 
     // 補正計算用
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
@@ -63,4 +67,5 @@ private:
     static constexpr float    THRUST_SCALE          = 6.3157f;
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
+    static constexpr uint32_t LOG_INTERVAL_MS       = 20;  // 50Hz (20ms間隔)
 };

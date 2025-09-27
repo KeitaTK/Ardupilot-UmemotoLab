@@ -31,8 +31,12 @@ void AP_Observer::init(){
     last_update_ms = 0;
     _payload_filtered = Vector3f();
     filter_initialized = true;
+    
+    // ログ記録用変数の初期化
+    _last_log_ms = 0;
 
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter, logging enabled", 
+                    _filter_cutoff_freq.get());
 }
 
 void AP_Observer::update() {
@@ -57,6 +61,9 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(_payload_filtered);
     last_update_ms = AP_HAL::millis();
 
+    // フィルタ後の力をログに記録
+    log_filtered_force();
+
     // // デバッグメッセージ：フィルタ後の値を出力
     // if ((++counter % 100) == 0) {
     //     gcs().send_text(MAV_SEVERITY_INFO,
@@ -66,6 +73,25 @@ void AP_Observer::update() {
     //         _payload_filtered.z
     //     );
     // }
+}
+
+// ログ記録用の関数を追加
+void AP_Observer::log_filtered_force() {
+    uint32_t now_ms = AP_HAL::millis();
+    if (now_ms - _last_log_ms < LOG_INTERVAL_MS) {
+        return;  // 20ms間隔＝50Hz
+    }
+    _last_log_ms = now_ms;
+
+    // メッセージ名: "FILT" (4文字以内)
+    // フィールド: "Fx,Fy,Fz" (タイムスタンプは自動付加)
+    // フォーマット: "fff" (float×3)
+    AP::logger().Write("FILT",
+                       "Fx,Fy,Fz",
+                       "fff",
+                       current_filtered_force.x,
+                       current_filtered_force.y,
+                       current_filtered_force.z);
 }
     
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
