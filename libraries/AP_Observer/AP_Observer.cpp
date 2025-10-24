@@ -61,10 +61,6 @@ void AP_Observer::init() {
 
     // RLS初期化
     init_rls();
-
-    gcs().send_text(MAV_SEVERITY_INFO, 
-        "AP_Observer: initialized with %.1fHz filter, RLS freq=%.2f, pred=%.1fms", 
-        _filter_cutoff_freq.get(), _rls_frequency.get(), _prediction_time_ms.get());
 }
 
 void AP_Observer::init_rls() {
@@ -82,8 +78,6 @@ void AP_Observer::init_rls() {
     rls_initialized = false;
     data_count = 0;
     rls_start_time_ms = AP_HAL::millis();
-    
-    gcs().send_text(MAV_SEVERITY_INFO, "RLS: Cold start initialization");
 }
 
 void AP_Observer::update() {
