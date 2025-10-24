@@ -120,15 +120,17 @@ void AP_Observer::update() {
 
     // デバッグ出力（外部設定可能な間隔）
     if ((++counter % (uint32_t)_debug_output_interval.get()) == 0) {
+        uint32_t send_time_ms = AP_HAL::millis();
         if (rls_initialized) {
             gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS: F_curr=[%.3f,%.3f,%.3f] F_pred=[%.3f,%.3f,%.3f] Δt=%.1fms",
+                "RLS: F_curr=[%.3f,%.3f,%.3f] F_pred=[%.3f,%.3f,%.3f] Δt=%.1fms time=%lu",
                 rls_current_force.x, rls_current_force.y, rls_current_force.z,
                 rls_predicted_force.x, rls_predicted_force.y, rls_predicted_force.z,
-                _prediction_time_ms.get());
+                _prediction_time_ms.get(),
+                send_time_ms);
         } else {
             gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS: Cold start %lu/%lu", data_count, MIN_DATA_FOR_RLS);
+                "RLS: Cold start %lu/%lu time=%lu", data_count, MIN_DATA_FOR_RLS, send_time_ms);
         }
     }
 }
