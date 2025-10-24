@@ -37,6 +37,12 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("PRED_TIME", 4, AP_Observer, _prediction_time_ms, 100.0f),
 
+    // @Param: DEBUG_INTERVAL
+    // @DisplayName: Observer Debug Output Interval
+    // @Description: Interval for debug message output (cycles)
+    // @Range: 1 1000
+    // @User: Advanced
+    AP_GROUPINFO("DEBUG_INTERVAL", 5, AP_Observer, _debug_output_interval, 10.0f),
     AP_GROUPEND
 };
 
@@ -112,8 +118,8 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
     last_update_ms = AP_HAL::millis();
 
-    // デバッグ出力
-    if ((++counter % 200) == 0) {
+    // デバッグ出力（外部設定可能な間隔）
+    if ((++counter % (uint32_t)_debug_output_interval.get()) == 0) {
         if (rls_initialized) {
             gcs().send_text(MAV_SEVERITY_INFO,
                 "RLS: F_curr=[%.3f,%.3f,%.3f] F_pred=[%.3f,%.3f,%.3f] Δt=%.1fms",
@@ -122,7 +128,7 @@ void AP_Observer::update() {
                 _prediction_time_ms.get());
         } else {
             gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS: Cold start %d/%d", data_count, MIN_DATA_FOR_RLS);
+                "RLS: Cold start %lu/%lu", data_count, MIN_DATA_FOR_RLS);
         }
     }
 }
@@ -132,7 +138,7 @@ void AP_Observer::handle_cold_start(const Vector3f& measured_force) {
     
     if (data_count >= MIN_DATA_FOR_RLS) {
         rls_initialized = true;
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS: Initialization complete after %d samples", data_count);
+        gcs().send_text(MAV_SEVERITY_INFO, "RLS: Initialization complete after %lu samples", data_count);
     }
 }
 
@@ -141,7 +147,6 @@ void AP_Observer::update_rls(const Vector3f& measured_force) {
     uint32_t current_time_ms = AP_HAL::millis();
     float t_current = (current_time_ms - rls_start_time_ms) * 1e-3f;  // 現在時刻[s]
     float delta_t = _prediction_time_ms.get() * 1e-3f;               // 予測時間[s]
-    float t_future = t_current + delta_t;                            // 未来時刻[s]
     
     // 現在時刻の入力ベクトル（学習用）
     Vector3f x_current = get_input_vector(t_current);
@@ -179,8 +184,7 @@ Vector3f AP_Observer::get_input_vector(float t) const {
 
 Vector3f AP_Observer::get_prediction_vector(float t_current, float delta_t) const {
     float omega = 2.0f * M_PI * _rls_frequency.get();
-    float t_pred = t_current + delta_t;  // 予測時刻
-    
+
     // 三角関数の加法定理を使用して効率的に計算 [web:71]
     // sin(ω(t+Δt)) = sin(ωt)cos(ωΔt) + cos(ωt)sin(ωΔt)
     // cos(ω(t+Δt)) = cos(ωt)cos(ωΔt) - sin(ωt)sin(ωΔt)
@@ -197,40 +201,34 @@ Vector3f AP_Observer::get_prediction_vector(float t_current, float delta_t) cons
 }
 
 void AP_Observer::update_rls_axis(Vector3f& theta, const Vector3f& x_vec, float y_measured) {
-    // 予測値計算
     float y_predicted = theta.dot(x_vec);
     float error = y_measured - y_predicted;
     
-    // ゲインベクトル計算: K = P*x / (λ + x'*P*x)
     Vector3f P_x = P_matrix * x_vec;
     float denominator = _lambda_forget.get() + x_vec.dot(P_x);
     
-    // 数値安定性チェック
     if (denominator < MIN_DENOMINATOR) {
-        return;  // 更新をスキップ
+        return;
     }
     
     Vector3f gain = P_x / denominator;
-    
-    // パラメータ更新: θ[n] = θ[n-1] + K * error
     theta += gain * error;
     
-    // 共分散行列更新: P[n] = (P[n-1] - K*x'*P[n-1]) / λ
-    // 外積計算用のヘルパー
-    Matrix3f K_xT_P;
+    // 正しい外積計算 k * x^T
+    Matrix3f K_xT;
     for (uint8_t i = 0; i < 3; i++) {
         for (uint8_t j = 0; j < 3; j++) {
-            K_xT_P(i,j) = gain(i) * P_x(j);
+            K_xT[i][j] = gain[i] * x_vec[j];
         }
     }
-    
+    Matrix3f K_xT_P = K_xT * P_matrix;
     P_matrix = (P_matrix - K_xT_P) / _lambda_forget.get();
 }
 
 bool AP_Observer::check_matrix_stability() {
     // P行列の対角成分をチェック（簡易版条件数）
-    float max_diag = MAX(MAX(P_matrix(0,0), P_matrix(1,1)), P_matrix(2,2));
-    float min_diag = MIN(MIN(P_matrix(0,0), P_matrix(1,1)), P_matrix(2,2));
+    float max_diag = MAX(MAX(P_matrix[0][0], P_matrix[1][1]), P_matrix[2][2]);
+    float min_diag = MIN(MIN(P_matrix[0][0], P_matrix[1][1]), P_matrix[2][2]);
     
     if (min_diag <= 0 || (max_diag / min_diag) > MAX_CONDITION_NUMBER) {
         return false;
