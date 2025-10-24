@@ -38,6 +38,9 @@ public:
     // RLS状態取得
     bool is_rls_active() const { return rls_initialized; }
 
+    // デバッグ出力間隔ゲッター
+    uint32_t get_debug_output_interval() const { return _debug_output_interval.get(); }
+
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];
 
@@ -80,6 +83,7 @@ private:
     AP_Float    _lambda_forget;             // 忘却係数
     AP_Float    _rls_frequency;             // 推定する周期性の周波数 [Hz]
     AP_Float    _prediction_time_ms;        // 予測時間 Δt [ms]
+    AP_Float    _debug_output_interval;     // デバッグ出力間隔（外部設定可能、初期値10）
 
     // 定数
     static constexpr uint32_t TIMEOUT_MS               = 500;
