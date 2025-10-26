@@ -1,3 +1,4 @@
+#include <cmath>
 #include "AP_Observer.h"
 
 // パラメータテーブル定義
@@ -48,6 +49,32 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
 
 void AP_Observer::init() {
     AP_Param::setup_object_defaults(this, var_info);
+
+    const float correction_gain = _correction_gain.get();
+    const float filter_cutoff   = _filter_cutoff_freq.get();
+    const float lambda_forget   = _lambda_forget.get();
+    const float rls_frequency   = _rls_frequency.get();
+    const float prediction_ms   = _prediction_time_ms.get();
+    const float debug_interval  = _debug_output_interval.get();
+
+    const bool params_valid =
+        std::isfinite(correction_gain) &&
+        std::isfinite(filter_cutoff) &&
+        std::isfinite(lambda_forget) &&
+        std::isfinite(rls_frequency) &&
+        std::isfinite(prediction_ms) &&
+        std::isfinite(debug_interval) &&
+        (filter_cutoff > 0.0f) &&
+        (lambda_forget > 0.0f && lambda_forget <= 1.0f) &&
+        (rls_frequency > 0.0f) &&
+        (prediction_ms > 0.0f) &&
+        (debug_interval >= 1.0f);
+
+    if (!params_valid) {
+        filter_initialized = false;
+        rls_initialized = false;
+        return;
+    }
 
     float sample_freq = 100.0f;
     _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
