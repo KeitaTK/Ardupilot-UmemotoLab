@@ -86,8 +86,9 @@ void AP_Observer::init() {
     _payload_filtered = Vector3f();
     filter_initialized = true;
 
-    // RLS初期化
-    init_rls();
+    // RLS初期化は段階導入のため一時的に無効化
+    // init_rls();
+    rls_initialized = false;
 }
 
 void AP_Observer::init_rls() {
@@ -126,34 +127,34 @@ void AP_Observer::update() {
     // 従来のフィルタ（常に動作）
     _payload_filtered = _payload_filter.apply(measured_force);
 
-    // RLS処理
-    if (!rls_initialized) {
-        handle_cold_start(measured_force);
-        current_filtered_force = _payload_filtered;  // フォールバック
-    } else {
-        update_rls(measured_force);
-        // 予測値を姿勢補正に使用（先読み制御）[web:66][web:69]
-        current_filtered_force = rls_predicted_force;
-    }
+    // RLS処理は段階導入のため一時的に無効化
+    // if (!rls_initialized) {
+    //     handle_cold_start(measured_force);
+    //     current_filtered_force = _payload_filtered;  // フォールバック
+    // } else {
+    //     update_rls(measured_force);
+    //     current_filtered_force = rls_predicted_force;
+    // }
+    current_filtered_force = _payload_filtered;
 
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
     last_update_ms = AP_HAL::millis();
 
-    // デバッグ出力（外部設定可能な間隔）
-    if ((++counter % (uint32_t)_debug_output_interval.get()) == 0) {
-        uint32_t send_time_ms = AP_HAL::millis();
-        if (rls_initialized) {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS: F_curr=[%.3f,%.3f,%.3f] F_pred=[%.3f,%.3f,%.3f] Δt=%.1fms time=%lu",
-                rls_current_force.x, rls_current_force.y, rls_current_force.z,
-                rls_predicted_force.x, rls_predicted_force.y, rls_predicted_force.z,
-                _prediction_time_ms.get(),
-                send_time_ms);
-        } else {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS: Cold start %lu/%lu time=%lu", data_count, MIN_DATA_FOR_RLS, send_time_ms);
-        }
-    }
+    // デバッグ出力（RLS 機能は無効化中）
+    // if ((++counter % (uint32_t)_debug_output_interval.get()) == 0) {
+    //     uint32_t send_time_ms = AP_HAL::millis();
+    //     if (rls_initialized) {
+    //         gcs().send_text(MAV_SEVERITY_INFO,
+    //             "RLS: F_curr=[%.3f,%.3f,%.3f] F_pred=[%.3f,%.3f,%.3f] Δt=%.1fms time=%lu",
+    //             rls_current_force.x, rls_current_force.y, rls_current_force.z,
+    //             rls_predicted_force.x, rls_predicted_force.y, rls_predicted_force.z,
+    //             _prediction_time_ms.get(),
+    //             send_time_ms);
+    //     } else {
+    //         gcs().send_text(MAV_SEVERITY_INFO,
+    //             "RLS: Cold start %lu/%lu time=%lu", data_count, MIN_DATA_FOR_RLS, send_time_ms);
+    //     }
+    // }
 }
 
 void AP_Observer::handle_cold_start(const Vector3f& measured_force) {
