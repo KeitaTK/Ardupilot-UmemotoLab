@@ -29,6 +29,10 @@ public:
         return AP_HAL::millis() - last_update_ms;
     }
 
+    // RLS関連のゲッター関数
+    Vector3f get_rls_parameters() const { return rls_theta; }
+    bool is_rls_initialized() const { return rls_initialized; }
+
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];
 
@@ -38,16 +42,28 @@ private:
     Quaternion  current_correction_quat = Quaternion(1,0,0,0); // 単位クォータニオンで初期化
     uint32_t    last_update_ms = 0;   // 最終補正計算時刻
 
-
     // ローパスフィルタ
     LowPassFilter2pVector3f _payload_filter;
     Vector3f _payload_filtered = Vector3f();
     bool filter_initialized = false;
 
-    // 補正計算用
-    Quaternion calculate_correction_from_force(const Vector3f& force) const;
+    // RLS (Recursive Least Squares) 関連
+    static constexpr uint8_t RLS_PARAM_SIZE = 3;  // x, y, z方向のパラメータ
+    Vector3f rls_theta;                           // 推定パラメータ θ[n]
+    float rls_P[RLS_PARAM_SIZE][RLS_PARAM_SIZE];  // 共分散行列 P[n]
+    bool rls_initialized = false;
+    uint32_t rls_sample_count = 0;
 
-    // ローパスフィルタ用の関数
+    // RLS用のパラメータ
+    AP_Float _rls_forgetting_factor;   // λ (忘却係数)
+    AP_Float _rls_initial_covariance;  // 初期共分散値
+    
+    // RLS関数
+    void rls_init();
+    void rls_update(const Vector3f& x_input, const Vector3f& y_output);
+    
+    // 既存の関数
+    Quaternion calculate_correction_from_force(const Vector3f& force) const;
     float apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const;
 
     // 揺れ制御のゲイン
@@ -63,4 +79,10 @@ private:
     static constexpr float    THRUST_SCALE          = 6.3157f;
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
+    
+    // RLS関連定数
+    static constexpr float    RLS_MIN_LAMBDA        = 0.9f;
+    static constexpr float    RLS_MAX_LAMBDA        = 0.9999f;
+    static constexpr float    RLS_MIN_COVARIANCE    = 0.001f;
+    static constexpr float    RLS_MAX_COVARIANCE    = 1000.0f;
 };
