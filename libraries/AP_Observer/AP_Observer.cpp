@@ -50,31 +50,13 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
 void AP_Observer::init() {
     AP_Param::setup_object_defaults(this, var_info);
 
-    const float correction_gain = _correction_gain.get();
-    const float filter_cutoff   = _filter_cutoff_freq.get();
-    const float lambda_forget   = _lambda_forget.get();
-    const float rls_frequency   = _rls_frequency.get();
-    const float prediction_ms   = _prediction_time_ms.get();
-    const float debug_interval  = _debug_output_interval.get();
-
-    const bool params_valid =
-        std::isfinite(correction_gain) &&
-        std::isfinite(filter_cutoff) &&
-        std::isfinite(lambda_forget) &&
-        std::isfinite(rls_frequency) &&
-        std::isfinite(prediction_ms) &&
-        std::isfinite(debug_interval) &&
-        (filter_cutoff > 0.0f) &&
-        (lambda_forget > 0.0f && lambda_forget <= 1.0f) &&
-        (rls_frequency > 0.0f) &&
-        (prediction_ms > 0.0f) &&
-        (debug_interval >= 1.0f);
-
-    if (!params_valid) {
-        filter_initialized = false;
-        rls_initialized = false;
-        return;
-    }
+    // 段階的切り戻しのためパラメータ検証を一時的に無効化
+    // const float correction_gain = _correction_gain.get();
+    // const float filter_cutoff   = _filter_cutoff_freq.get();
+    // const float lambda_forget   = _lambda_forget.get();
+    // const float rls_frequency   = _rls_frequency.get();
+    // const float prediction_ms   = _prediction_time_ms.get();
+    // const float debug_interval  = _debug_output_interval.get();
 
     float sample_freq = 100.0f;
     _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
@@ -115,16 +97,16 @@ void AP_Observer::update() {
         return;
     }
 
-    // 外力計算（既存コード）
-    float throttle = motors->get_throttle_out();
-    float thrust   = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
+    // 外力計算のうちスロットル由来の推力補正を一時停止
+    // float throttle = motors->get_throttle_out();
+    // float thrust   = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
     Vector3f accel = AP::ins().get_accel();
     Vector3f measured_force;
     measured_force.x = UAV_mass * accel.x;
     measured_force.y = UAV_mass * accel.y;
-    measured_force.z = UAV_mass * accel.z - thrust;
+    measured_force.z = UAV_mass * accel.z;
+    // measured_force.z -= thrust;
 
-    // 従来のフィルタ（常に動作）
     _payload_filtered = _payload_filter.apply(measured_force);
 
     // RLS処理は段階導入のため一時的に無効化
