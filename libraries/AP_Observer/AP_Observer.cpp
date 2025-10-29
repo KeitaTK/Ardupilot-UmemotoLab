@@ -85,6 +85,10 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     
     float lambda = constrain_value(_rls_forgetting_factor.get(), RLS_MIN_LAMBDA, RLS_MAX_LAMBDA);
     
+    // デバッグ用：最初の軸の詳細情報を記録
+    static uint32_t debug_counter = 0;
+    bool do_debug = (++debug_counter % 100) == 0;
+    
     // 各軸に対して独立にRLSを実行
     for (uint8_t axis = 0; axis < 3; axis++) {
         // 入力ベクトル x[n] (この場合は1次元)
@@ -108,6 +112,9 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         
         // 入力が十分小さい場合はスキップ
         if (fabsf(x_n) < 1e-6f) {
+            if (do_debug && axis == 0) {
+                gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: x_n too small (%.6f)", axis, x_n);
+            }
             continue;
         }
         
@@ -127,6 +134,9 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         
         // 数値安定性のチェック
         if (fabsf(denominator) < 1e-12f) {
+            if (do_debug && axis == 0) {
+                gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: denom too small (%.9f)", axis, denominator);
+            }
             continue;
         }
         
@@ -140,6 +150,22 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         
         // 共分散行列の数値安定性確保
         P_new = constrain_value(P_new, RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
+        
+        // デバッグ出力（X軸のみ）
+        if (do_debug && axis == 0) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "RLS[%d]: x_n=%.4f y_n=%.4f θ_p=%.4f",
+                axis, x_n, y_n, theta_prev
+            );
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "RLS[%d]: err=%.4f K=%.6f θ_n=%.4f",
+                axis, prediction_error, gain, theta_new
+            );
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "RLS[%d]: P_p=%.3f P_n=%.3f λ=%.4f",
+                axis, P_prev, P_new, lambda
+            );
+        }
         
         // 結果を保存
         switch (axis) {
@@ -186,14 +212,25 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(_payload_filtered);
     last_update_ms = AP_HAL::millis();
 
-    // デバッグメッセージはコメントアウト
-    // if ((++counter % 100) == 0) {
-    //     gcs().send_text(MAV_SEVERITY_INFO,
-    //         "PL_FILT=%.3f,%.3f,%.3f RLS_θ=%.3f,%.3f,%.3f",
-    //         _payload_filtered.x, _payload_filtered.y, _payload_filtered.z,
-    //         rls_theta.x, rls_theta.y, rls_theta.z
-    //     );
-    // }
+    // デバッグメッセージ - RLS診断用
+    if ((++counter % 50) == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "Observer: PL_FILT=%.3f,%.3f,%.3f",
+            _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
+        );
+    }
+    if ((counter % 50) == 25) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "RLS: θ=%.4f,%.4f,%.4f",
+            rls_theta.x, rls_theta.y, rls_theta.z
+        );
+    }
+    if ((counter % 100) == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "RLS_IN: accel=%.4f,%.4f,%.4f",
+            accel.x, accel.y, accel.z
+        );
+    }
 }
     
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
