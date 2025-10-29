@@ -57,7 +57,6 @@ void AP_Observer::init() {
 
 void AP_Observer::rls_init() {
     // パラメータの範囲チェックと制限
-    float lambda = constrain_value(_rls_forgetting_factor.get(), RLS_MIN_LAMBDA, RLS_MAX_LAMBDA);
     float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
     
     // パラメータベクトル初期化
@@ -80,6 +79,7 @@ void AP_Observer::rls_init() {
 
 void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) {
     if (!rls_initialized) {
+        gcs().send_text(MAV_SEVERITY_WARNING, "RLS: not initialized!");
         return;
     }
     
@@ -87,7 +87,7 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     
     // デバッグ用：最初の軸の詳細情報を記録
     static uint32_t debug_counter = 0;
-    bool do_debug = (++debug_counter % 100) == 0;
+    bool do_debug = (++debug_counter % 50) == 0;  // より頻繁にデバッグ出力
     
     // 各軸に対して独立にRLSを実行
     for (uint8_t axis = 0; axis < 3; axis++) {
@@ -116,6 +116,11 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
                 gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: x_n too small (%.6f)", axis, x_n);
             }
             continue;
+        }
+        
+        if (do_debug && axis == 0) {
+            gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: x_n=%.4f y_n=%.4f P_prev=%.3f", 
+                axis, x_n, y_n, rls_P[axis][axis]);
         }
         
         // 予測誤差計算: e[n] = y[n] - x[n]^T * θ[n-1]
@@ -218,11 +223,19 @@ void AP_Observer::update() {
             "Observer: PL_FILT=%.3f,%.3f,%.3f",
             _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
         );
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "RLS_DIAG: init=%d samples=%lu", 
+            rls_initialized, (unsigned long)rls_sample_count
+        );
     }
     if ((counter % 50) == 25) {
         gcs().send_text(MAV_SEVERITY_INFO,
             "RLS: θ=%.4f,%.4f,%.4f",
             rls_theta.x, rls_theta.y, rls_theta.z
+        );
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "RLS_P: %.3f,%.3f,%.3f",
+            rls_P[0][0], rls_P[1][1], rls_P[2][2]
         );
     }
     if ((counter % 100) == 0) {
