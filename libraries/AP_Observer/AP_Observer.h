@@ -30,7 +30,10 @@ public:
     }
 
     // RLS関連のゲッター関数
-    Vector3f get_rls_parameters() const { return rls_theta; }
+    Vector3f get_rls_sin_coeff() const;      // A (sin係数)
+    Vector3f get_rls_cos_coeff() const;      // B (cos係数)
+    Vector3f get_rls_bias() const;           // C (定常偏差)
+    Vector3f get_predicted_force() const;    // Δt秒後の予測外力
     bool is_rls_initialized() const { return rls_initialized; }
 
     // パラメータ定義テーブル
@@ -48,19 +51,33 @@ private:
     bool filter_initialized = false;
 
     // RLS (Recursive Least Squares) 関連
-    static constexpr uint8_t RLS_PARAM_SIZE = 3;  // x, y, z方向のパラメータ
-    Vector3f rls_theta;                           // 推定パラメータ θ[n]
-    float rls_P[RLS_PARAM_SIZE][RLS_PARAM_SIZE];  // 共分散行列 P[n]
+    static constexpr uint8_t RLS_PARAM_SIZE = 3;  // [A:sin係数, B:cos係数, C:定常偏差]
+    static constexpr uint8_t RLS_NUM_AXES = 3;    // x, y, z軸
+    
+    // 各軸のRLSパラメータ [軸][パラメータ番号]
+    // パラメータ: [0]=A(sin), [1]=B(cos), [2]=C(定常偏差)
+    float rls_theta[RLS_NUM_AXES][RLS_PARAM_SIZE];
+    
+    // 各軸の共分散行列 [軸][行][列]
+    float rls_P[RLS_NUM_AXES][RLS_PARAM_SIZE][RLS_PARAM_SIZE];
+    
     bool rls_initialized = false;
     uint32_t rls_sample_count = 0;
+    uint32_t rls_start_time_ms = 0;  // RLS開始時刻
 
     // RLS用のパラメータ
     AP_Float _rls_forgetting_factor;   // λ (忘却係数)
     AP_Float _rls_initial_covariance;  // 初期共分散値
+    AP_Float _disturbance_freq;        // ω: 外乱周波数 [Hz]
+    AP_Float _prediction_time;         // Δt: 予測時間 [秒]
+    
+    // 予測用キャッシュ変数（計算量削減）
+    float _omega_rad;                  // ω [rad/s]
     
     // RLS関数
     void rls_init();
     void rls_update(const Vector3f& x_input, const Vector3f& y_output);
+    void update_prediction_cache();  // 予測用キャッシュ更新
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
