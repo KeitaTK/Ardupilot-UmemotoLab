@@ -21,7 +21,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Forgetting factor for Recursive Least Squares parameter estimation
     // @Range: 0.9 0.9999
     // @User: Advanced
-    AP_GROUPINFO("RLS_LAMBDA", 2, AP_Observer, _rls_forgetting_factor, 0.995f),
+    AP_GROUPINFO("RLS_LAMBDA", 2, AP_Observer, _rls_forgetting_factor, 0.98f),
     
     // @Param: RLS_COV_INIT
     // @DisplayName: RLS Initial Covariance
@@ -29,6 +29,20 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.001 1000.0
     // @User: Advanced
     AP_GROUPINFO("RLS_COV_INIT", 3, AP_Observer, _rls_initial_covariance, 100.0f),
+    
+    // @Param: DIST_FREQ
+    // @DisplayName: Disturbance Frequency
+    // @Description: Frequency of periodic disturbance for RLS estimation [Hz]
+    // @Range: 0.1 10.0
+    // @User: Advanced
+    AP_GROUPINFO("DIST_FREQ", 4, AP_Observer, _disturbance_freq, 0.6f),
+    
+    // @Param: PRED_TIME
+    // @DisplayName: Prediction Time
+    // @Description: Time ahead for force prediction [seconds]
+    // @Range: 0.0 0.5
+    // @User: Advanced
+    AP_GROUPINFO("PRED_TIME", 5, AP_Observer, _prediction_time, 0.01f),
 
     AP_GROUPEND
 };
@@ -50,6 +64,9 @@ void AP_Observer::init() {
 
     // RLS初期化
     rls_init();
+    
+    // 予測用キャッシュ初期化
+    update_prediction_cache();
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -59,21 +76,28 @@ void AP_Observer::rls_init() {
     // パラメータの範囲チェックと制限
     float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
     
-    // パラメータベクトル初期化
-    rls_theta.zero();
+    // 全軸のパラメータベクトル初期化
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            rls_theta[axis][i] = 0.0f;
+        }
+    }
     
-    // 共分散行列の初期化（対角行列）
-    for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-        for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
-            if (i == j) {
-                rls_P[i][j] = init_cov;  // 対角成分
-            } else {
-                rls_P[i][j] = 0.0f;      // 非対角成分
+    // 全軸の共分散行列初期化（対角行列）
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
+                if (i == j) {
+                    rls_P[axis][i][j] = init_cov;  // 対角成分
+                } else {
+                    rls_P[axis][i][j] = 0.0f;      // 非対角成分
+                }
             }
         }
     }
     
     rls_sample_count = 0;
+    rls_start_time_ms = AP_HAL::millis();  // 開始時刻を記録
     rls_initialized = true;
 }
 
@@ -85,103 +109,109 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     
     float lambda = constrain_value(_rls_forgetting_factor.get(), RLS_MIN_LAMBDA, RLS_MAX_LAMBDA);
     
-    // デバッグ用：最初の軸の詳細情報を記録
-    static uint32_t debug_counter = 0;
-    bool do_debug = (++debug_counter % 50) == 0;  // より頻繁にデバッグ出力
+    // 経過時間計算 [秒]
+    float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
     
-    // 各軸に対して独立にRLSを実行
-    for (uint8_t axis = 0; axis < 3; axis++) {
-        // 入力ベクトル x[n] (この場合は1次元)
-        float x_n = 0.0f;
+    // 角周波数 ω = 2πf [rad/s]
+    float omega = _disturbance_freq.get() * 2.0f * M_PI;
+    
+    // 入力ベクトル x[n] = [sin(ωt), cos(ωt), 1]
+    float x_extended[RLS_PARAM_SIZE];
+    x_extended[0] = sinf(omega * t);  // sin項
+    x_extended[1] = cosf(omega * t);  // cos項
+    x_extended[2] = 1.0f;             // 定常偏差項
+    
+    // デバッグ用
+    static uint32_t debug_counter = 0;
+    bool do_debug = (++debug_counter % 100) == 0;  // 100回に1回に変更
+    
+    // 各軸に対して独立にRLS実行
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        // 出力値 y[n]
         float y_n = 0.0f;
-        
         switch (axis) {
-            case 0: // X軸
-                x_n = x_input.x;
-                y_n = y_output.x;
-                break;
-            case 1: // Y軸  
-                x_n = x_input.y;
-                y_n = y_output.y;
-                break;
-            case 2: // Z軸
-                x_n = x_input.z;
-                y_n = y_output.z;
-                break;
+            case 0: y_n = y_output.x; break;
+            case 1: y_n = y_output.y; break;
+            case 2: y_n = y_output.z; break;
         }
         
-        // 入力が十分小さい場合はスキップ
-        if (fabsf(x_n) < 1e-6f) {
-            if (do_debug && axis == 0) {
-                gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: x_n too small (%.6f)", axis, x_n);
+        // 予測値計算: y_pred = x^T * θ
+        float y_pred = 0.0f;
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            y_pred += x_extended[i] * rls_theta[axis][i];
+        }
+        
+        // 予測誤差: e[n] = y[n] - y_pred
+        float prediction_error = y_n - y_pred;
+        
+        // P * x を計算
+        float P_x[RLS_PARAM_SIZE];
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            P_x[i] = 0.0f;
+            for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
+                P_x[i] += rls_P[axis][i][j] * x_extended[j];
             }
-            continue;
         }
         
-        if (do_debug && axis == 0) {
-            gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: x_n=%.4f y_n=%.4f P_prev=%.3f", 
-                axis, x_n, y_n, rls_P[axis][axis]);
+        // 分母計算: λ + x^T * P * x
+        float denominator = lambda;
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            denominator += x_extended[i] * P_x[i];
         }
         
-        // 予測誤差計算: e[n] = y[n] - x[n]^T * θ[n-1]
-        float theta_prev = 0.0f;
-        switch (axis) {
-            case 0: theta_prev = rls_theta.x; break;
-            case 1: theta_prev = rls_theta.y; break;
-            case 2: theta_prev = rls_theta.z; break;
-        }
-        
-        float prediction_error = y_n - x_n * theta_prev;
-        
-        // ゲイン計算: K[n] = P[n-1] * x[n] / (λ + x[n]^T * P[n-1] * x[n])
-        float P_prev = rls_P[axis][axis];
-        float denominator = lambda + x_n * P_prev * x_n;
-        
-        // 数値安定性のチェック
+        // 数値安定性チェック
         if (fabsf(denominator) < 1e-12f) {
             if (do_debug && axis == 0) {
-                gcs().send_text(MAV_SEVERITY_INFO, "RLS[%d]: denom too small (%.9f)", axis, denominator);
+                gcs().send_text(MAV_SEVERITY_WARNING, "RLS[%d]: denom=%.9f too small", axis, denominator);
             }
             continue;
         }
         
-        float gain = P_prev * x_n / denominator;
+        // ゲインベクトル: K = P * x / denom
+        float K[RLS_PARAM_SIZE];
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            K[i] = P_x[i] / denominator;
+        }
         
-        // パラメータ更新: θ[n] = θ[n-1] + K[n] * e[n]
-        float theta_new = theta_prev + gain * prediction_error;
+        // パラメータ更新: θ[n] = θ[n-1] + K * e
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            rls_theta[axis][i] += K[i] * prediction_error;
+        }
         
-        // 共分散行列更新: P[n] = (P[n-1] - K[n] * x[n]^T * P[n-1]) / λ
-        float P_new = (P_prev - gain * x_n * P_prev) / lambda;
-        
-        // 共分散行列の数値安定性確保
-        P_new = constrain_value(P_new, RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
+        // 共分散行列更新: P[n] = (P[n-1] - K * x^T * P[n-1]) / λ
+        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
+            for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
+                rls_P[axis][i][j] = (rls_P[axis][i][j] - K[i] * P_x[j]) / lambda;
+                // 数値安定性確保
+                rls_P[axis][i][j] = constrain_value(rls_P[axis][i][j], 
+                                                      RLS_MIN_COVARIANCE, 
+                                                      RLS_MAX_COVARIANCE);
+            }
+        }
         
         // デバッグ出力（X軸のみ）
         if (do_debug && axis == 0) {
             gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: x_n=%.4f y_n=%.4f θ_p=%.4f",
-                axis, x_n, y_n, theta_prev
+                "RLS[%d]: t=%.2fs ω=%.3f sin=%.3f cos=%.3f",
+                axis, t, omega, x_extended[0], x_extended[1]
             );
             gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: err=%.4f K=%.6f θ_n=%.4f",
-                axis, prediction_error, gain, theta_new
+                "RLS[%d]: y=%.3f y_pred=%.3f err=%.3f",
+                axis, y_n, y_pred, prediction_error
             );
             gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: P_p=%.3f P_n=%.3f λ=%.4f",
-                axis, P_prev, P_new, lambda
+                "RLS[%d]: A=%.3f B=%.3f C=%.3f",
+                axis, rls_theta[axis][0], rls_theta[axis][1], rls_theta[axis][2]
             );
         }
-        
-        // 結果を保存
-        switch (axis) {
-            case 0: rls_theta.x = theta_new; break;
-            case 1: rls_theta.y = theta_new; break;
-            case 2: rls_theta.z = theta_new; break;
-        }
-        rls_P[axis][axis] = P_new;
     }
     
     rls_sample_count++;
+}
+
+void AP_Observer::update_prediction_cache() {
+    // ω = 2πf [rad/s]
+    _omega_rad = _disturbance_freq.get() * 2.0f * M_PI;
 }
 
 void AP_Observer::update() {
@@ -207,41 +237,64 @@ void AP_Observer::update() {
     // フィルタ適用
     _payload_filtered = _payload_filter.apply(payload);
 
-    // RLS更新（加速度を入力、フィルタ後の力を出力として使用）
+    // RLS更新（時間ベースの周期外乱推定）
+    // 入力は使わず、フィルタ後の力を直接出力として使用
     if (rls_initialized) {
-        rls_update(accel, _payload_filtered);
+        Vector3f dummy_input;  // 使用しないダミー
+        rls_update(dummy_input, _payload_filtered);
+    }
+    
+    // パラメータ変更を検出してキャッシュ更新
+    static float last_freq = 0.0f;
+    static float last_pred_time = 0.0f;
+    if (fabsf(_disturbance_freq.get() - last_freq) > 0.001f || 
+        fabsf(_prediction_time.get() - last_pred_time) > 0.0001f) {
+        update_prediction_cache();
+        last_freq = _disturbance_freq.get();
+        last_pred_time = _prediction_time.get();
     }
 
-    // 既存の処理
-    current_filtered_force = _payload_filtered;
-    current_correction_quat = calculate_correction_from_force(_payload_filtered);
+    // 既存の処理：RLS予測外力を使用
+    current_filtered_force = get_predicted_force();  // Δt秒後の予測外力
+    current_correction_quat = calculate_correction_from_force(current_filtered_force);
     last_update_ms = AP_HAL::millis();
 
-    // デバッグメッセージ - RLS診断用
-    if ((++counter % 50) == 0) {
+    // デバッグメッセージ - RLS診断用（100回に1回に変更）
+    if ((++counter % 100) == 0) {
         gcs().send_text(MAV_SEVERITY_INFO,
             "Observer: PL_FILT=%.3f,%.3f,%.3f",
             _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
         );
         gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_DIAG: init=%d samples=%lu", 
-            rls_initialized, (unsigned long)rls_sample_count
+            "RLS_DIAG: init=%d samples=%lu ω=%.3f", 
+            rls_initialized, (unsigned long)rls_sample_count,
+            _omega_rad
         );
-    }
-    if ((counter % 50) == 25) {
+        // A (sin係数)
         gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS: θ=%.4f,%.4f,%.4f",
-            rls_theta.x, rls_theta.y, rls_theta.z
+            "RLS_A: %.3f,%.3f,%.3f",
+            rls_theta[0][0], rls_theta[1][0], rls_theta[2][0]
         );
+        // B (cos係数)
         gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_P: %.3f,%.3f,%.3f",
-            rls_P[0][0], rls_P[1][1], rls_P[2][2]
+            "RLS_B: %.3f,%.3f,%.3f",
+            rls_theta[0][1], rls_theta[1][1], rls_theta[2][1]
         );
-    }
-    if ((counter % 100) == 0) {
+        // C (定常偏差)
         gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_IN: accel=%.4f,%.4f,%.4f",
-            accel.x, accel.y, accel.z
+            "RLS_C: %.3f,%.3f,%.3f",
+            rls_theta[0][2], rls_theta[1][2], rls_theta[2][2]
+        );
+        // 共分散行列の対角成分（パラメータの不確実性）
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "RLS_P[0]: %.3f,%.3f,%.3f",
+            rls_P[0][0][0], rls_P[0][1][1], rls_P[0][2][2]
+        );
+        // 予測外力
+        Vector3f pred = get_predicted_force();
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "PRED_F: %.3f,%.3f,%.3f dt=%.3f",
+            pred.x, pred.y, pred.z, _prediction_time.get()
         );
     }
 }
@@ -263,4 +316,51 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     q.from_euler(roll, pitch, 0.0f);
     q.normalize();
     return q;
+}
+
+// RLSパラメータのゲッター関数
+Vector3f AP_Observer::get_rls_sin_coeff() const {
+    return Vector3f(rls_theta[0][0], rls_theta[1][0], rls_theta[2][0]);
+}
+
+Vector3f AP_Observer::get_rls_cos_coeff() const {
+    return Vector3f(rls_theta[0][1], rls_theta[1][1], rls_theta[2][1]);
+}
+
+Vector3f AP_Observer::get_rls_bias() const {
+    return Vector3f(rls_theta[0][2], rls_theta[1][2], rls_theta[2][2]);
+}
+
+Vector3f AP_Observer::get_predicted_force() const {
+    if (!rls_initialized) {
+        return _payload_filtered;  // 初期化前は通常の外力を返す
+    }
+    
+    // 現在時刻 [秒]
+    float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+    
+    // Δt秒後の位相 ω(t+Δt) [rad]
+    float omega_t_dt = _omega_rad * (t + _prediction_time.get());
+    
+    // Δt秒後のsin/cos値を直接計算
+    float sin_omega_t_dt = sinf(omega_t_dt);
+    float cos_omega_t_dt = cosf(omega_t_dt);
+    
+    // 各軸の予測外力計算: F_pred = A·sin(ω(t+Δt)) + B·cos(ω(t+Δt)) + C
+    Vector3f predicted;
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        float A = rls_theta[axis][0];  // sin係数
+        float B = rls_theta[axis][1];  // cos係数
+        float C = rls_theta[axis][2];  // 定常偏差
+        
+        float force = A * sin_omega_t_dt + B * cos_omega_t_dt + C;
+        
+        switch (axis) {
+            case 0: predicted.x = force; break;
+            case 1: predicted.y = force; break;
+            case 2: predicted.z = force; break;
+        }
+    }
+    
+    return predicted;
 }
