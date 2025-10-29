@@ -259,43 +259,49 @@ void AP_Observer::update() {
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
     last_update_ms = AP_HAL::millis();
 
-    // デバッグメッセージ - RLS診断用（100回に1回に変更）
-    if ((++counter % 100) == 0) {
+    // デバッグメッセージ - 簡潔な形式（10回に1回）
+    if ((++counter % 10) == 0) {
+        // 経過時間 [秒]
+        float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+        
+        // タイムスタンプ付き元の外力
         gcs().send_text(MAV_SEVERITY_INFO,
-            "Observer: PL_FILT=%.3f,%.3f,%.3f",
-            _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
+            "t=%.2f PL: %.3f %.3f %.3f",
+            t, _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
+        );
+        
+        // RLS推定パラメータ（XY軸のみ）
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "A: %.3f %.3f",
+            rls_theta[0][0], rls_theta[1][0]
         );
         gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_DIAG: init=%d samples=%lu ω=%.3f", 
-            rls_initialized, (unsigned long)rls_sample_count,
-            _omega_rad
+            "B: %.3f %.3f",
+            rls_theta[0][1], rls_theta[1][1]
         );
-        // A (sin係数)
         gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_A: %.3f,%.3f,%.3f",
-            rls_theta[0][0], rls_theta[1][0], rls_theta[2][0]
+            "C: %.3f %.3f",
+            rls_theta[0][2], rls_theta[1][2]
         );
-        // B (cos係数)
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_B: %.3f,%.3f,%.3f",
-            rls_theta[0][1], rls_theta[1][1], rls_theta[2][1]
-        );
-        // C (定常偏差)
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_C: %.3f,%.3f,%.3f",
-            rls_theta[0][2], rls_theta[1][2], rls_theta[2][2]
-        );
-        // 共分散行列の対角成分（パラメータの不確実性）
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "RLS_P[0]: %.3f,%.3f,%.3f",
-            rls_P[0][0][0], rls_P[0][1][1], rls_P[0][2][2]
-        );
+        
         // 予測外力
         Vector3f pred = get_predicted_force();
         gcs().send_text(MAV_SEVERITY_INFO,
-            "PRED_F: %.3f,%.3f,%.3f dt=%.3f",
-            pred.x, pred.y, pred.z, _prediction_time.get()
+            "PRED: %.3f %.3f %.3f",
+            pred.x, pred.y, pred.z
         );
+        
+        // 共分散行列（コメントアウト）
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "P[0]: %.3f %.3f %.3f",
+        //     rls_P[0][0][0], rls_P[0][1][1], rls_P[0][2][2]
+        // );
+        
+        // RLS診断情報（コメントアウト）
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "RLS: init=%d samples=%lu ω=%.3f", 
+        //     rls_initialized, (unsigned long)rls_sample_count, _omega_rad
+        // );
     }
 }
     
