@@ -234,8 +234,9 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
 
-    // フィルタ適用
-    _payload_filtered = _payload_filter.apply(payload);
+    // フィルタ適用（無効化）
+    // _payload_filtered = _payload_filter.apply(payload);
+    _payload_filtered = payload; // フィルタなしで生データを使用
 
     // RLS更新（時間ベースの周期外乱推定）
     // 入力は使わず、フィルタ後の力を直接出力として使用
