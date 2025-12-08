@@ -876,8 +876,9 @@ void AC_AttitudeControl::update_attitude_target() {
     _attitude_target *= delta;
     _attitude_target.normalize();
 
-    // 2) 外部補正を常に適用
-    _attitude_target = _external_correction * _attitude_target;
+    // 2) 外部補正を常に適用（機体座標系での補正）
+    // 順序重要: target * correction = 機体座標系で補正適用
+    _attitude_target = _attitude_target * _external_correction;
     _attitude_target.normalize();
 }
 
