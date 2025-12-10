@@ -1,4 +1,4 @@
-#include "AC_AttitudeControl.h"
+_attitude_target = _external_correction * _attitude_target;  // 間違い#include "AC_AttitudeControl.h"
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Vehicle/AP_Vehicle_Type.h>
 #include <AP_Scheduler/AP_Scheduler.h>
@@ -877,7 +877,7 @@ void AC_AttitudeControl::update_attitude_target() {
     _attitude_target.normalize();
 
     // 2) 外部補正を常に適用（機体座標系での補正）
-    // 順序重要: target * correction = 機体座標系で補正適用
+    // 順序重要: target * correction = Ned系に機体座標系で補正適用することでNed系目標姿勢を得る
     _attitude_target = _attitude_target * _external_correction;
     _attitude_target.normalize();
 }
