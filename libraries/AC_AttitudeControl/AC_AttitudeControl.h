@@ -75,6 +75,9 @@ public:
 
     // 外部補正クォータニオンを設定する
     void set_correction_quaternion(const Quaternion& correction);
+    
+    // 外部補正をオイラー角形式で設定する（累積しない方式用）
+    void set_correction_euler(const Vector3f& correction_euler);
 
     // set_dt / get_dt - dt is the time since the last time the attitude controllers were updated
     // _dt should be set based on the time of the last IMU read used by these controllers
@@ -633,6 +636,7 @@ protected:
 private:
     // 外部補正用メンバ
     Quaternion _external_correction;
+    Vector3f _external_correction_euler;  // オイラー角形式の補正（累積しない方式用）
     uint32_t    counter;
 
 public:

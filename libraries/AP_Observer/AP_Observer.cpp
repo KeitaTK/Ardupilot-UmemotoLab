@@ -258,6 +258,7 @@ void AP_Observer::update() {
     // 既存の処理：RLS予測外力を使用
     current_filtered_force = get_predicted_force();  // Δt秒後の予測外力
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
+    current_correction_euler = calculate_correction_euler_from_force(current_filtered_force);
     last_update_ms = AP_HAL::millis();
 
     // デバッグメッセージ - 簡潔な形式（10回に1回）
@@ -323,6 +324,24 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     q.from_euler(roll, pitch, 0.0f);
     q.normalize();
     return q;
+}
+
+// オイラー角形式で補正値を計算（ヨー角は常に0）
+Vector3f AP_Observer::calculate_correction_euler_from_force(const Vector3f& force) const {
+    float mag = force.length();
+    if (mag < FORCE_THRESHOLD) {
+        return Vector3f(0, 0, 0);
+    }
+
+    float correction_gain = _correction_gain.get();
+    float roll  =  force.y * correction_gain / UAV_mass;
+    float pitch = -force.x * correction_gain / UAV_mass;
+
+    roll = constrain_value(roll, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
+    pitch = constrain_value(pitch, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
+
+    // ヨー角は常に0.0fに固定
+    return Vector3f(roll, pitch, 0.0f);
 }
 
 // RLSパラメータのゲッター関数
