@@ -15,6 +15,7 @@ public:
 
     // ゲッター関数
     Quaternion get_correction_quaternion() const { return current_correction_quat; }
+    Vector3f get_correction_euler() const { return current_correction_euler; }
 
     // 補正が最後に計算された時刻を取得
     uint32_t get_last_update_ms() const { return last_update_ms; }
@@ -43,6 +44,7 @@ private:
     uint32_t    counter = 0;
     Vector3f    current_filtered_force = Vector3f();
     Quaternion  current_correction_quat = Quaternion(1,0,0,0); // 単位クォータニオンで初期化
+    Vector3f    current_correction_euler = Vector3f(0,0,0);    // オイラー角形式の補正値(Roll,Pitch,Yaw)
     uint32_t    last_update_ms = 0;   // 最終補正計算時刻
 
     // ローパスフィルタ
@@ -81,6 +83,7 @@ private:
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
+    Vector3f calculate_correction_euler_from_force(const Vector3f& force) const;
     float apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const;
 
     // 揺れ制御のゲイン
