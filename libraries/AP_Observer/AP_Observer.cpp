@@ -302,6 +302,9 @@ void AP_Observer::update() {
     current_correction_euler = calculate_correction_euler_from_force(current_filtered_force);
     last_update_ms = AP_HAL::millis();
 
+    // ログをSDカードに記録（毎回記録）
+    Write_Observer_Log();
+    
     // デバッグメッセージ - 簡潔な形式（10回に1回）
     if ((++counter % 10) == 0) {
         // 経過時間 [秒]
@@ -544,4 +547,36 @@ void AP_Observer::phase_correction_update() {
         "PhaseCorr: slope=%.4f ideal=%.4f err=%.4f corr=%.4f",
         slope, ideal_slope, phase_error, phase_correction
     );
+}
+
+// ログをSDカードに記録
+void AP_Observer::Write_Observer_Log() {
+#if HAL_LOGGING_ENABLED
+    AP_Logger *logger = AP_Logger::get_singleton();
+    if (logger == nullptr) {
+        return;
+    }
+    
+    Vector3f pred = get_predicted_force();
+    
+    // ログメッセージをカスタムフォーマットで書き込み
+    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, PhC
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,PhC",
+                  "sNNNNNNNNNNNNr", "F-------------",
+                  "Qfffffffffffff",
+                  AP_HAL::micros64(),
+                  _payload_filtered.x,
+                  _payload_filtered.y,
+                  _payload_filtered.z,
+                  rls_theta[0][0],  // sin係数 X軸
+                  rls_theta[1][0],  // sin係数 Y軸
+                  rls_theta[0][1],  // cos係数 X軸
+                  rls_theta[1][1],  // cos係数 Y軸
+                  rls_theta[0][2],  // 定常偏差 X軸
+                  rls_theta[1][2],  // 定常偏差 Y軸
+                  pred.x,
+                  pred.y,
+                  pred.z,
+                  phase_correction);
+#endif
 }
