@@ -354,6 +354,24 @@ struct PACKED log_Rate_Thread_Dt {
     float dtMin;
 };
 
+struct PACKED log_Observer {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    float payload_x;
+    float payload_y;
+    float payload_z;
+    float A_x;
+    float A_y;
+    float B_x;
+    float B_y;
+    float C_x;
+    float C_y;
+    float pred_x;
+    float pred_y;
+    float pred_z;
+    float phase_correction;
+};
+
 // Write a Guided mode position target
 // pos_target is lat, lon, alt OR offset from ekf origin in cm
 // terrain should be 0 if pos_target.z is alt-above-ekf-origin, 1 if alt-above-terrain
@@ -568,6 +586,26 @@ const struct LogStructure Copter::log_structure[] = {
 
     { LOG_RATE_THREAD_DT_MSG, sizeof(log_Rate_Thread_Dt),
       "RTDT", "Qffff", "TimeUS,dt,dtAvg,dtMax,dtMin", "sssss", "F----" , true },
+
+// @LoggerMessage: OBSV
+// @Description: Observer RLS parameters and predictions
+// @Field: TimeUS: Time since system startup
+// @Field: PLX: Payload force X-axis
+// @Field: PLY: Payload force Y-axis
+// @Field: PLZ: Payload force Z-axis
+// @Field: AX: RLS sin coefficient X-axis
+// @Field: AY: RLS sin coefficient Y-axis
+// @Field: BX: RLS cos coefficient X-axis
+// @Field: BY: RLS cos coefficient Y-axis
+// @Field: CX: RLS bias X-axis
+// @Field: CY: RLS bias Y-axis
+// @Field: PRX: Predicted force X-axis
+// @Field: PRY: Predicted force Y-axis
+// @Field: PRZ: Predicted force Z-axis
+// @Field: PhC: Phase correction
+
+    { LOG_OBSERVER_MSG, sizeof(log_Observer),
+      "OBSV", "Qfffffffffffff", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,PhC", "sNNNNNNNNNNNNr", "F-------------" , true },
 
 };
 

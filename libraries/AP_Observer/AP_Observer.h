@@ -7,6 +7,7 @@
 #include <AP_Motors/AP_Motors.h>
 #include <GCS_MAVLink/GCS.h>
 #include <Filter/LowPassFilter2p.h>
+#include <AP_Logger/AP_Logger.h>
 
 class AP_Observer {
 public:
@@ -36,6 +37,9 @@ public:
     Vector3f get_rls_bias() const;           // C (定常偏差)
     Vector3f get_predicted_force() const;    // Δt秒後の予測外力
     bool is_rls_initialized() const { return rls_initialized; }
+    
+    // ログ記録関数
+    void Write_Observer_Log();
 
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];
