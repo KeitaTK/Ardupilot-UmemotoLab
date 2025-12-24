@@ -506,8 +506,8 @@ void AP_Observer::phase_correction_update() {
         return;
     }
     
-    // バッファが十分に溜まっていない場合はスキップ
-    if (phase_buffer_count < 10) {  // 最低10個のデータが必要
+    // バッファが満杯になるまで待つ（100サンプル = 1秒分）
+    if (phase_buffer_count < PHASE_BUFFER_SIZE) {
         return;
     }
     
@@ -518,34 +518,42 @@ void AP_Observer::phase_correction_update() {
         sorted_buffer[i] = phase_buffer[idx];
     }
     
-    // 線形近似で傾きを計算
-    float slope = linear_fit_slope(sorted_buffer, phase_buffer_count);
+    // 線形近似で傾きを計算（100サンプル全て使用）
+    float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
     
     // 理想的な傾き（設定された周波数から計算）
     // 1ループあたりの理想的な位相変化 = ω * dt
     // dt = 0.01秒（100Hzサンプリングを想定）
     float ideal_slope = _omega_rad * 0.01f;
     
+    // 実測周波数を計算 [Hz]
+    // slope [rad/sample] → frequency [Hz]
+    float estimated_freq = slope / (2.0f * M_PI * 0.01f);
+    
     // 位相誤差（傾きの差）
     float slope_error = slope - ideal_slope;
     
-    // バッファ期間全体での位相ずれを計算
+    // バッファ期間全体での位相ずれを計算（1秒分）
     // phase_error = slope_error * (データ点数 - 1)
-    float phase_error = slope_error * (phase_buffer_count - 1);
+    float phase_error = slope_error * (PHASE_BUFFER_SIZE - 1);
     
     // 閾値チェック：誤差が閾値以下なら補正しない
     if (fabsf(phase_error) <= _phase_correction_threshold.get()) {
-        // 補正量をリセット（閾値以下なら補正不要）
+        // デバッグメッセージ：補正不要
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "PhaseCorr: err=%.4f est_freq=%.4f (no correction)",
+            phase_error, estimated_freq
+        );
         return;
     }
     
-    // 補正量を累積
+    // 補正量を一気に修正（累積ではなく、誤差分を直接加算）
     phase_correction += phase_error;
     
-    // デバッグメッセージ：補正量を送信
+    // デバッグメッセージ：位相誤差と推定周波数を送信
     gcs().send_text(MAV_SEVERITY_INFO,
-        "PhaseCorr: slope=%.4f ideal=%.4f err=%.4f corr=%.4f",
-        slope, ideal_slope, phase_error, phase_correction
+        "PhaseCorr: err=%.4f est_freq=%.4f Hz corr=%.4f",
+        phase_error, estimated_freq, phase_correction
     );
 }
 

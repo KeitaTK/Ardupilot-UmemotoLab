@@ -85,13 +85,13 @@ private:
     AP_Float _phase_correction_threshold; // 位相補正を適用する閾値 [rad]
     
     // 位相補正用の変数
-    static constexpr uint8_t PHASE_BUFFER_SIZE = 20;  // 位相データバッファのサイズ
-    float phase_buffer[PHASE_BUFFER_SIZE];            // 位相データバッファ
-    uint8_t phase_buffer_index;                       // バッファの現在のインデックス
-    uint8_t phase_buffer_count;                       // バッファ内の有効データ数
-    float previous_phase;                             // 前回の位相 [rad]
-    float phase_correction;                           // 累積位相補正量 [rad]
-    bool phase_initialized;                           // 位相初期化フラグ
+    static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 位相データバッファのサイズ（1秒分）
+    float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
+    uint8_t phase_buffer_index;                        // バッファの現在のインデックス
+    uint8_t phase_buffer_count;                        // バッファ内の有効データ数
+    float previous_phase;                              // 前回の位相 [rad]
+    float phase_correction;                            // 累積位相補正量 [rad]
+    bool phase_initialized;                            // 位相初期化フラグ
     
     // RLS関数
     void rls_init();
