@@ -566,12 +566,29 @@ void AP_Observer::Write_Observer_Log() {
     }
     
     Vector3f pred = get_predicted_force();
-    
+
+    // 位相補正用の最新データを計算
+    float err = 0.0f;
+    float est_freq = 0.0f;
+    // 位相バッファが満杯のときのみ計算
+    if (phase_buffer_count == PHASE_BUFFER_SIZE) {
+        float sorted_buffer[PHASE_BUFFER_SIZE];
+        for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
+            uint8_t idx = (phase_buffer_index - PHASE_BUFFER_SIZE + i + PHASE_BUFFER_SIZE) % PHASE_BUFFER_SIZE;
+            sorted_buffer[i] = phase_buffer[idx];
+        }
+        float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
+        float ideal_slope = _omega_rad * 0.01f;
+        est_freq = slope / (2.0f * M_PI * 0.01f);
+        float slope_error = slope - ideal_slope;
+        err = slope_error * (PHASE_BUFFER_SIZE - 1);
+    }
+
     // ログメッセージをカスタムフォーマットで書き込み
-    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, PhC
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,PhC",
-                  "sNNNNNNNNNNNNr", "F-------------",
-                  "Qfffffffffffff",
+    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, ERR, EST_FREQ, CORR
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,EST_FREQ,CORR",
+                  "sNNNNNNNNNNNNfff", "F---------------",
+                  "Qfffffffffffffff",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -585,6 +602,8 @@ void AP_Observer::Write_Observer_Log() {
                   pred.x,
                   pred.y,
                   pred.z,
+                  err,
+                  est_freq,
                   phase_correction);
 #endif
 }
