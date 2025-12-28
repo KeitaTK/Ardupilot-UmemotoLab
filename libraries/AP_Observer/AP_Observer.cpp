@@ -291,8 +291,8 @@ void AP_Observer::update() {
         last_pred_time = _prediction_time.get();
     }
     
-    // 100ループごとに位相補正を更新
-    if ((counter % 100) == 0) {
+    // 100回目のループで位相補正を実行（バッファが満杯になる）
+    if ((counter % 100) == 99) {  // 0-indexed なので99回目=100回目
         phase_correction_update();
     }
 
@@ -503,11 +503,16 @@ float AP_Observer::linear_fit_slope(const float* buffer, uint8_t count) {
 void AP_Observer::phase_correction_update() {
     // 位相補正が無効の場合は何もしない
     if (_phase_correction_enabled.get() == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO, "PhaseCorr: disabled");
         return;
     }
     
-    // バッファが満杯になるまで待つ（100サンプル = 1秒分）
+    // バッファが満杯でない場合は警告して終了
     if (phase_buffer_count < PHASE_BUFFER_SIZE) {
+        gcs().send_text(MAV_SEVERITY_WARNING,
+            "PhaseCorr: buffer not full (%d/%d)",
+            phase_buffer_count, PHASE_BUFFER_SIZE
+        );
         return;
     }
     
@@ -539,10 +544,10 @@ void AP_Observer::phase_correction_update() {
     
     // 閾値チェック：誤差が閾値以下なら補正しない
     if (fabsf(phase_error) <= _phase_correction_threshold.get()) {
-        // デバッグメッセージ：補正不要
+        // デバッグメッセージ：補正不要だが、現在の累積補正量と推定周波数は送信
         gcs().send_text(MAV_SEVERITY_INFO,
-            "PhaseCorr: err=%.4f est_freq=%.4f (no correction)",
-            phase_error, estimated_freq
+            "PhaseCorr: err=%.4f est_freq=%.4f Hz corr=%.4f (no correction)",
+            phase_error, estimated_freq, phase_correction
         );
         return;
     }
