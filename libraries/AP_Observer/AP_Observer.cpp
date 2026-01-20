@@ -118,6 +118,19 @@ void AP_Observer::rls_init() {
     rls_initialized = true;
 }
 
+void AP_Observer::reset_frequency_estimation() {
+    // RLS周波数推定パラメータをリセット
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Resetting frequency estimation");
+    
+    // RLSパラメータと共分散行列の再初期化
+    rls_init();
+    
+    // 位相補正の再初期化
+    phase_correction_init();
+    
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Frequency estimation reset complete");
+}
+
 void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) {
     if (!rls_initialized) {
         gcs().send_text(MAV_SEVERITY_WARNING, "RLS: not initialized!");

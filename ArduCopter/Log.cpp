@@ -369,6 +369,8 @@ struct PACKED log_Observer {
     float pred_x;
     float pred_y;
     float pred_z;
+    float phase_error;
+    float estimated_freq;
     float phase_correction;
 };
 
@@ -602,10 +604,12 @@ const struct LogStructure Copter::log_structure[] = {
 // @Field: PRX: Predicted force X-axis
 // @Field: PRY: Predicted force Y-axis
 // @Field: PRZ: Predicted force Z-axis
-// @Field: PhC: Phase correction
+// @Field: ERR: Phase error
+// @Field: EST_FREQ: Estimated frequency
+// @Field: CORR: Phase correction
 
     { LOG_OBSERVER_MSG, sizeof(log_Observer),
-      "OBSV", "Qfffffffffffff", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,PhC", "sNNNNNNNNNNNNr", "F-------------" , true },
+      "OBSV", "Qfffffffffffffff", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,EST_FREQ,CORR", "sNNNNNNNNNNNNrHz", "F--------------F" , true },
 
 };
 

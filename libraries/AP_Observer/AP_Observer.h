@@ -40,6 +40,9 @@ public:
     
     // ログ記録関数
     void Write_Observer_Log();
+    
+    // RLS周波数推定のリセット（アーム時に呼び出し）
+    void reset_frequency_estimation();
 
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];

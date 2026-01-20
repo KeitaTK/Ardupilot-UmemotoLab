@@ -764,6 +764,9 @@ bool AP_Arming_Copter::arm(const AP_Arming::Method method, const bool do_arming_
     // perf monitor ignores delay due to arming
     AP::scheduler().perf_info.ignore_this_loop();
 
+    // Observer の周波数推定をリセット
+    copter.observer.reset_frequency_estimation();
+
     // flag exiting this function
     in_arm_motors = false;
 
