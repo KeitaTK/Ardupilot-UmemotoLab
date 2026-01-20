@@ -603,9 +603,9 @@ void AP_Observer::Write_Observer_Log() {
     }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, ERR, EST_FREQ, CORR
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,EST_FREQ,CORR",
-                  "sNNNNNNNNNNNNfff", "F---------------",
+    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, ERR, FREQ, CORR
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,FREQ,CORR",
+                  "s------------rzr", "F---------------",
                   "Qfffffffffffffff",
                   AP_HAL::micros64(),
                   _payload_filtered.x,

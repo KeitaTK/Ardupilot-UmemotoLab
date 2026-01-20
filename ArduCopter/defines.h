@@ -89,8 +89,8 @@ enum LoggingParameters {
      LOG_SYSIDD_MSG,
      LOG_SYSIDS_MSG,
      LOG_GUIDED_ATTITUDE_TARGET_MSG,
-     LOG_RATE_THREAD_DT_MSG,
-     LOG_OBSERVER_MSG
+     LOG_RATE_THREAD_DT_MSG
+     // Note: LOG_OBSERVER_MSG removed - OBSV uses dynamic logging in AP_Observer
 };
 
 #define MASK_LOG_ATTITUDE_FAST          (1<<0)
