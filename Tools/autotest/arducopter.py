@@ -70,7 +70,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         return os.path.realpath(__file__)
 
     def default_speedup(self):
-        return 100
+        return 400  # Increased from 100 for faster testing with 23-core CPU (was 100->200->300->400)
 
     def set_current_test_name(self, name):
         self.current_test_name_directory = "ArduCopter_Tests/" + name + "/"

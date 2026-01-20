@@ -71,6 +71,8 @@ MOT_THST_EXPO   0.65
 MOT_THST_HOVER  0.39
 MOT_BAT_VOLT_MIN 9.6
 MOT_BAT_VOLT_MAX 12.8
+# Simulation speedup for faster autotest execution (increased from 100 to 300)
+SIM_SPEEDUP     300
 # flightmodes
 # switch 1 Circle
 # switch 2 LAND
