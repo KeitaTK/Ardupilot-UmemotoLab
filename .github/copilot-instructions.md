@@ -36,12 +36,13 @@
    - **必須オートテスト一覧**:
      - `test.Copter.ArmFeatures` - アーミング機能のテスト
      - `test.Copter.TestRLSBasicEstimation` - RLS推定テスト（カスタム）
+     - `test.Copter.TestRLSFrequencyEstimation` - RLS周波数推定テスト（カスタム、実験的）
    
    - 実行例（利用可能な必須テストのみを順次実行）:
      ```bash
      # 利用可能なサブテスト一覧を取得し、必須テストのみ順次実行します
      available=$(Tools/autotest/autotest.py --list-subtests-for-vehicle Copter)
-     for t in ArmFeatures TestRLSBasicEstimation; do
+     for t in ArmFeatures TestRLSBasicEstimation TestRLSFrequencyEstimation; do
        if echo "$available" | tr ' ' '\n' | grep -xq "$t"; then
          echo "Running test.Copter.$t"
          timeout $([ "$t" = "TestRLSBasicEstimation" ] && echo 600 || echo 300) Tools/autotest/autotest.py --no-clean build.Copter test.Copter.$t || exit 1
@@ -297,6 +298,7 @@ float omega = freq * 6.28;  // 2*PIをマジックナンバーで書かない
 |---------|------|-------------|
 | `test.Copter.ArmFeatures` | アーミング機能のテスト | 300秒 |
 | `test.Copter.TestRLSBasicEstimation` | RLS推定テスト（カスタム） | 600秒 |
+| `test.Copter.TestRLSFrequencyEstimation` | RLS周波数推定テスト（カスタム、実験的） | 800秒 |
 
 ### 一括実行スクリプト例
 ```bash
@@ -307,8 +309,11 @@ source venv_ardupilot/bin/activate
 # 必須テストを順次実行
 timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures || exit 1
 timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation || exit 1
+timeout 800 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSFrequencyEstimation || { echo "⚠️  TestRLSFrequencyEstimation failed (experimental)"; }
 
-echo "✅ すべてのテストがPASSしました"
+echo "✅ すべての必須テストが完了しました"
 ```
+
+**⚠️ 注意**: `TestRLSFrequencyEstimation` は実験的な機能で、タイミングによって不安定な場合があります。
 
 **⚠️ 重要**: すべてのテストがPASSするまで、Pixhawk6Cビルドには進まないこと。

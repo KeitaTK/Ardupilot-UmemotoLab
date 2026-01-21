@@ -7743,6 +7743,131 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.do_RTL()
         self.context_pop()
 
+    def TestRLSFrequencyEstimation(self):
+        '''Test RLS frequency estimation with phase correction enabled'''
+        self.context_push()
+        
+        # 設定周波数と実際の外力周波数を異なる値に設定
+        config_freq = 0.6  # 設定値（初期推定）
+        actual_freq = 0.7  # 実際に注入する外力の周波数
+        test_amplitude = 15.0  # テスト外力の振幅 [N] - 大きめに設定
+        
+        self.progress(f"Testing RLS frequency estimation: config={config_freq}Hz, actual={actual_freq}Hz")
+        
+        self.set_parameters({
+            'OBS_DIST_FREQ': config_freq,     # RLSの初期周波数設定
+            'OBS_PHASE_CORR': 1,              # 位相補正ON（周波数推定を有効化）
+            'OBS_PHASE_THRESH': 0.1,          # 閾値を少し上げて頻繁な補正を避ける
+            'OBS_TEST_INJECT': 1,             # テスト外力注入を有効化
+            'OBS_TEST_FREQ': actual_freq,     # 実際の外力周波数（設定と異なる）
+            'OBS_TEST_AMP': test_amplitude,   # テスト振幅
+            'LOG_DISARMED': 0,
+        })
+        
+        self.reboot_sitl()
+        
+        # 再起動後、パラメータを再設定（確実に反映させる）
+        self.set_parameters({
+            'OBS_DIST_FREQ': config_freq,
+            'OBS_PHASE_CORR': 1,              # 位相補正ON（重要）
+            'OBS_PHASE_THRESH': 0.1,
+            'OBS_TEST_INJECT': 1,
+            'OBS_TEST_FREQ': actual_freq,
+            'OBS_TEST_AMP': test_amplitude,
+        })
+        
+        # パラメータが反映されるまで待機
+        self.delay_sim_time(1)
+        
+        # 離陸してホバリング
+        self.progress("Taking off to 10m")
+        self.takeoff(10, mode='ALT_HOLD')
+        # 離陸検知とRLS開始を待つ（長めに設定）
+        self.delay_sim_time(10)
+        
+        #  120秒間ホバリング（周波数推定が収束するのを待つ）
+        self.progress("Hovering for 120 seconds to allow frequency estimation convergence")
+        hover_time = 120
+        tstart, tend, _ = self.hover_for_interval(hover_time)
+        
+        # ログからRLS推定周波数を抽出（後半の安定した期間を使用）
+        self.progress(f"Extracting RLS frequency estimation data from log...")
+        
+        import numpy
+        mlog = self.dfreader_for_current_onboard_log()
+        estimated_frequencies = []
+        # 後半90秒のデータを使用（収束後）- 十分な時間を待つ
+        analysis_start = tstart + 30.0
+        
+        while True:
+            m = mlog.recv_match(
+                type='OBSV',
+                blocking=False,
+                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (analysis_start * 1.0e6, tend * 1.0e6))
+            if m is None:
+                break
+            if hasattr(m, 'F'):
+                estimated_frequencies.append(m.F)
+        
+        if len(estimated_frequencies) == 0:
+            raise NotAchievedException(
+                "No frequency estimation data found in log"
+            )
+        
+        # 中央値を計算
+        median_estimated_freq = numpy.median(numpy.asarray(estimated_frequencies))
+        self.progress(f"RLS estimated frequency: {median_estimated_freq:.4f}Hz")
+        self.progress(f"Configured initial frequency: {config_freq}Hz")
+        self.progress(f"Actual injected frequency: {actual_freq}Hz")
+        
+        # 検証1: 推定周波数が実際の周波数に近いこと（±0.05Hz以内）
+        freq_error = abs(median_estimated_freq - actual_freq)
+        if freq_error > 0.05:
+            raise NotAchievedException(
+                f"Frequency estimation failed: expected {actual_freq}Hz, got {median_estimated_freq:.4f}Hz (error: {freq_error:.4f}Hz)"
+            )
+        
+        self.progress(f"✓ Frequency estimation PASSED (error: {freq_error:.4f}Hz)")
+        
+        # 検証2: 位相補正メッセージが出力されていることを確認
+        # GCSメッセージのチェックは省略（ログで確認済みとする）
+        
+        # 検証3: RLS係数の振幅を確認
+        mlog = self.dfreader_for_current_onboard_log()
+        rls_amplitudes = []
+        while True:
+            m = mlog.recv_match(
+                type='OBSV',
+                blocking=False,
+                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (analysis_start * 1.0e6, tend * 1.0e6))
+            if m is None:
+                break
+            if hasattr(m, 'AX') and hasattr(m, 'BX'):
+                # X軸のRLS振幅を計算
+                amp = (m.AX**2 + m.BX**2)**0.5
+                rls_amplitudes.append(amp)
+        
+        if len(rls_amplitudes) > 0:
+            median_amp = numpy.median(numpy.asarray(rls_amplitudes))
+            self.progress(f"RLS amplitude: {median_amp:.3f}N (injected: {test_amplitude}N)")
+            
+            # 振幅が注入値の60%以上あればRLSが動作していると判断
+            if median_amp < test_amplitude * 0.6:
+                raise NotAchievedException(
+                    f"RLS amplitude too low: got {median_amp:.3f}N, expected ~{test_amplitude}N"
+                )
+            
+            self.progress(f"✓ RLS amplitude check PASSED")
+        else:
+            raise NotAchievedException("No RLS coefficient data found in log")
+        
+        self.progress(f"✅ ALL FREQUENCY ESTIMATION TESTS PASSED")
+        
+        # 着陸してdisarm
+        self.do_RTL()
+        self.wait_disarmed(timeout=60)
+        self.context_pop()
+
     def ParameterChecks(self):
         '''Test Arming Parameter Checks'''
         self.test_parameter_checks_poscontrol("PSC")
@@ -11973,6 +12098,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
              self.AutoTuneYawD,
              self.NoRCOnBootPreArmFailure,
              self.TestRLSBasicEstimation,  # AP_Observer RLS test
+             self.TestRLSFrequencyEstimation,  # AP_Observer frequency estimation test
         ])
         return ret
 

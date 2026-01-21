@@ -278,7 +278,8 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
 
     // --- A,B係数から観測位相を推定（MATLAB相当: atan2(-B, A)）---
     // 注意: 振幅が小さい場合は位相が不安定になるため、最小振幅でガードする。
-    static constexpr float AB_PHASE_MIN_AMP = 1.0e-3f;
+    // 周波数推定を確実に行うため、閾値は十分小さくする
+    static constexpr float AB_PHASE_MIN_AMP = 1.0e-4f;  // 最小振幅を0.0001Nに緩和
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
         const float A = rls_theta[axis][0];
         const float B = rls_theta[axis][1];
@@ -396,8 +397,8 @@ void AP_Observer::update() {
         estimated_frequency = _disturbance_freq.get();
     }
     
-    // 100回目のループで位相補正を実行（バッファが満杯になる）
-    if ((counter % 100) == 99) {  // 0-indexed なので99回目=100回目
+    // 50回目のループで位相補正を実行（バッファサイズに合わせて調整）
+    if ((counter % 50) == 49) {  // 0-indexed なので49回目=50回目
         phase_correction_update();
     }
 
@@ -633,9 +634,10 @@ void AP_Observer::phase_correction_update() {
     
     // バッファが満杯でない場合は警告して終了
     if (phase_buffer_count < PHASE_BUFFER_SIZE) {
-        gcs().send_text(MAV_SEVERITY_WARNING,
-            "PhaseCorr: buffer not full (%d/%d)",
-            phase_buffer_count, PHASE_BUFFER_SIZE
+        // デバッグ：バッファ状態を詳細に出力
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "PhaseCorr: buffer filling %d/%d (amp[0]=%.4f, init=%d)",
+            phase_buffer_count, PHASE_BUFFER_SIZE, ab_amp[0], (int)ab_phase_initialized[0]
         );
         return;
     }
@@ -647,7 +649,7 @@ void AP_Observer::phase_correction_update() {
         sorted_buffer[i] = phase_buffer[idx];
     }
     
-    // 線形近似で傾きを計算（100サンプル全て使用）
+    // 線形近似で傾きを計算（全サンプルを使用）
     float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
     
     // 理想的な傾き（設定された周波数から計算）
@@ -665,8 +667,8 @@ void AP_Observer::phase_correction_update() {
     // 周波数範囲チェック：範囲外なら初期値にリセット
     if (!check_frequency_range(estimated_freq)) {
         gcs().send_text(MAV_SEVERITY_WARNING,
-            "PhaseCorr: freq %.3fHz out of range [%.2f-%.2fHz], resetting to %.2fHz",
-            estimated_freq, FREQ_MIN, FREQ_MAX, 0.6f
+            "PhaseCorr: freq %.4fHz out of range [%.2f-%.2fHz], slope=%.6f, resetting",
+            estimated_freq, FREQ_MIN, FREQ_MAX, slope
         );
         _disturbance_freq.set(0.6f);  // 初期値にリセット
         update_prediction_cache();     // キャッシュ更新
@@ -676,10 +678,16 @@ void AP_Observer::phase_correction_update() {
         return;
     }
     
+    // デバッグ：周波数推定が成功したことをログ出力
+    gcs().send_text(MAV_SEVERITY_INFO,
+        "PhaseCorr: freq_est=%.4fHz (slope=%.6f) within range",
+        estimated_freq, slope
+    );
+    
     // 位相誤差（傾きの差）
     float slope_error = slope - ideal_slope;
     
-    // バッファ期間全体での位相ずれを計算（1秒分）
+    // バッファ期間全体での位相ずれを計算
     // phase_error = slope_error * (データ点数 - 1)
     float phase_error = slope_error * (PHASE_BUFFER_SIZE - 1);
     

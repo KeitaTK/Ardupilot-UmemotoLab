@@ -93,7 +93,7 @@ private:
     AP_Float _phase_correction_threshold; // 位相補正を適用する閾値 [rad]
     
     // 位相補正用の変数
-    static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 位相データバッファのサイズ（1秒分）
+    static constexpr uint8_t PHASE_BUFFER_SIZE = 50;   // 位相データバッファのサイズ（0.5秒分に短縮）
     float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
     uint8_t phase_buffer_index;                        // バッファの現在のインデックス
     uint8_t phase_buffer_count;                        // バッファ内の有効データ数
