@@ -92,9 +92,7 @@ private:
     float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
     uint8_t phase_buffer_index;                        // バッファの現在のインデックス
     uint8_t phase_buffer_count;                        // バッファ内の有効データ数
-    float previous_phase;                              // 前回の位相 [rad]
     float phase_correction;                            // 累積位相補正量 [rad]
-    bool phase_initialized;                            // 位相初期化フラグ
 
     // A,B係数から推定した観測位相（MATLAB相当）
     // phi_obs_axis = atan2(-B, A) をアンラップして連続化したもの

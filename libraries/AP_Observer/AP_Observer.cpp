@@ -153,24 +153,8 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     // 角周波数 ω = 2πf [rad/s]
     float omega = _disturbance_freq.get() * 2.0f * M_PI;
     
-    // 位相計算（補正を適用）
+    // 時間ベース位相計算（RLS入力用、補正を適用）
     float phase = omega * t - phase_correction;
-    
-    // 位相のアンラップとバッファ更新
-    if (!phase_initialized) {
-        previous_phase = phase;
-        phase_initialized = true;
-    } else {
-        phase = unwrap_phase(previous_phase, phase);
-        previous_phase = phase;
-    }
-    
-    // 位相バッファに追加
-    phase_buffer[phase_buffer_index] = phase;
-    phase_buffer_index = (phase_buffer_index + 1) % PHASE_BUFFER_SIZE;
-    if (phase_buffer_count < PHASE_BUFFER_SIZE) {
-        phase_buffer_count++;
-    }
     
     // 入力ベクトル x[n] = [sin(phase), cos(phase), 1]
     float x_extended[RLS_PARAM_SIZE];
@@ -291,6 +275,18 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
             }
             ab_phase_unwrapped[axis] += dphi;
             ab_phase_prev_wrapped[axis] = phi_wrapped;
+        }
+    }
+    
+    // 観測位相（X軸）を位相バッファに追加（位相補正計算用）
+    // 振幅が十分大きい場合のみバッファに追加
+    // 注：初期化前や振幅が小さい場合でも、デフォルト値（0.0）をバッファに追加して
+    //     バッファカウントを進める（位相補正タイミングを維持するため）
+    if (ab_phase_initialized[0]) {
+        phase_buffer[phase_buffer_index] = ab_phase_unwrapped[0];
+        phase_buffer_index = (phase_buffer_index + 1) % PHASE_BUFFER_SIZE;
+        if (phase_buffer_count < PHASE_BUFFER_SIZE) {
+            phase_buffer_count++;
         }
     }
     
@@ -504,9 +500,7 @@ Vector3f AP_Observer::get_predicted_force() const {
 void AP_Observer::phase_correction_init() {
     phase_buffer_index = 0;
     phase_buffer_count = 0;
-    previous_phase = 0.0f;
     phase_correction = 0.0f;
-    phase_initialized = false;
 
     // A,B由来位相もリセット
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
