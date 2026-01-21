@@ -1,155 +1,224 @@
 # ArduPilot Project - Copilot Custom Instructions
 
-## プロジェクト概要
-このプロジェクトはArduPilotベースのドローン制御システムで、実装はardupiltoの実装方法を準拠して実装を行ってください。必要なら、Web 検索やほかのリソースを使用して、ArduPilotプロジェクトに関する情報を取得してください。
+## 📋 プロジェクト概要
+このプロジェクトはArduPilotベースのドローン制御システムです。
+- 実装はArduPilotの公式実装方法に準拠してください
+- 必要に応じてWeb検索やリソースを活用し、ArduPilot公式情報を参照してください
 
-## 開発ワークフロー
+---
+
+## 🚀 開発ワークフロー
 
 ### 標準的な修正・検証フロー
-コード修正を行う際は、以下の手順を**必ず順番通りに**実行してください：
+コード修正を行う際は、以下の手順を**必ず順番通りに**実行してください。
 
-#### フェーズ1: SITL開発・検証
-1. **コード修正**: 必要な変更を実装
-2. **コード検証**: 
+#### ⚡ フェーズ1: SITL開発・検証
+
+1. **コード修正**
+   - 必要な変更を実装
+
+2. **コード検証**
    - 変数名・型が数学的に正しいか確認
    - プログラムのお作法（C++、組み込み）に準拠しているか確認
    - ArduPilotのコーディング規約に準拠しているか確認
-3. **SITLビルド**: `./waf -j$(nproc) copter` でコンパイル（ボード指定なし）
-4. **オートテスト**: `Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures` でテスト実行
-5. **バグ修正ループ**: テストが失敗する場合、ステップ1に戻って修正を繰り返す
 
-#### フェーズ2: ハードウェアターゲット（Pixhawk6C）ビルド
-SITLテストがすべてPASSした後、以下を実行：
+3. **仮想環境有効化**（**必須・毎回実行**）
+   ```bash
+   source venv_ardupilot/bin/activate
+   ```
 
-6. **Pixhawk6C向け完全クリーンビルド（推奨）**:
-  ```bash
-  cd /home/umemoto/UMEMOTO2
-  rm -rf build/
-  ./waf configure --board Pixhawk6C
-  ./waf -j$(nproc) copter
-  ```
-7. **ビルドエラー対応**: エラーが出た場合、フェーズ1に戻って修正
+4. **SITLビルド**
+   ```bash
+   ./waf -j$(nproc) copter
+   ```
 
-**重要**: フェーズ1がクリアするまで、フェーズ2には進まないこと
+5. **オートテスト実行**（下記の必須テストを実行）
+   - **必須オートテスト一覧**:
+     - `test.Copter.ArmFeatures` - アーミング機能のテスト
+     - `test.Copter.TestRLSBasicEstimation` - RLS推定テスト（カスタム）
+   
+   - 実行例（利用可能な必須テストのみを順次実行）:
+     ```bash
+     # 利用可能なサブテスト一覧を取得し、必須テストのみ順次実行します
+     available=$(Tools/autotest/autotest.py --list-subtests-for-vehicle Copter)
+     for t in ArmFeatures TestRLSBasicEstimation; do
+       if echo "$available" | tr ' ' '\n' | grep -xq "$t"; then
+         echo "Running test.Copter.$t"
+         timeout $([ "$t" = "TestRLSBasicEstimation" ] && echo 600 || echo 300) Tools/autotest/autotest.py --no-clean build.Copter test.Copter.$t || exit 1
+       else
+         echo "Skipping test.Copter.$t (not available)"
+       fi
+     done
+     ```
 
-### コマンド例
+6. **バグ修正ループ**
+   - テストが失敗する場合、ステップ1に戻って修正を繰り返す
+   - **すべてのテストがPASSするまで次のフェーズに進まないこと**
+
+---
+
+#### 🎯 フェーズ2: ハードウェアターゲット（Pixhawk6C）ビルド
+
+**前提条件**: フェーズ1のすべてのオートテストがPASSしていること
+
+1. **Pixhawk6C向け完全クリーンビルド**（推奨）
+   ```bash
+   cd /home/umemoto/UMEMOTO2
+   rm -rf build/
+   ./waf configure --board Pixhawk6C
+   ./waf -j$(nproc) copter
+   ```
+
+2. **ビルドエラー対応**
+   - エラーが出た場合、フェーズ1に戻って修正
+
+**⚠️ 重要**: フェーズ1がクリアするまで、フェーズ2には進まないこと
+
+---
+
+### 📝 よく使うコマンド集
+
+#### フェーズ1: SITL開発
 ```bash
-# === フェーズ1: SITL開発 ===
-# SITLビルド（ボード指定なし）
-cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter
+# 仮想環境有効化（各セッション毎に必須）
+cd /home/memoto/Ardupilot-UmemotoLab && source venv_ardupilot/bin/activate
 
-# オートテスト実行
-cd /home/umemoto/UMEMOTO2 && timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures
+# SITLビルド
+./waf -j$(nproc) copter
+
+# 必須オートテストをすべて実行（存在するテストのみを実行）
+available=$(Tools/autotest/autotest.py --list-subtests-for-vehicle Copter)
+for t in ArmFeatures TestRLSBasicEstimation; do
+  if echo "$available" | tr ' ' '\n' | grep -xq "$t"; then
+    echo "Running test.Copter.$t"
+    timeout $([ "$t" = "TestRLSBasicEstimation" ] && echo 600 || echo 300) Tools/autotest/autotest.py --no-clean build.Copter test.Copter.$t || exit 1
+  else
+    echo "Skipping test.Copter.$t (not available)"
+  fi
+done
 
 # エラー確認用（出力を絞る）
-cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -30
-cd /home/umemoto/UMEMOTO2 && timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures 2>&1 | grep -E "(PASSED|FAILED)" | tail -10
+./waf -j$(nproc) copter 2>&1 | tail -30
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures 2>&1 | grep -E "(PASSED|FAILED)" | tail -10
+```
 
-# === フェーズ2: Pixhawk6Cビルド（SITLテストPASS後のみ） ===
+#### フェーズ2: Pixhawk6Cビルド（SITLテストPASS後のみ）
+```bash
 # 完全クリーンビルド（推奨）
-cd /home/umemoto/UMEMOTO2 && rm -rf build/ && ./waf configure --board Pixhawk6C && ./waf -j$(nproc) copter
+rm -rf build/ && ./waf configure --board Pixhawk6C && ./waf -j$(nproc) copter
 
-# Pixhawk6Cビルドエラー確認用
+# ビルドエラー確認用
 cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
 ```
 
-## プロジェクト固有のルール
+---
+
+## 🔧 プロジェクト固有のルール
 
 ### AP_Observer ライブラリの開発
 - **ファイル場所**: `libraries/AP_Observer/`
 - **主要ファイル**: `AP_Observer.cpp`, `AP_Observer.h`
 - **ログフォーマット**: ArduPilotのログラベル長制限（厳格）に注意
-  - ログフィールド名は短く（2-3文字推奨）
+  - ログラベル名: 最大4文字（厳守）
+  - ログフィールド名: 2-3文字推奨
   - フィールド数は最小限に抑える
 
 ### コーディングスタイル
-- C++11以降の機能は使用可能だが、組み込みシステム向けに最適化
-- 動的メモリ確保は避ける（スタック配列を使用）
+- C++11以降の機能は使用可能（組み込みシステム向けに最適化）
+- **動的メモリ確保は避ける**（スタック配列または静的配列を使用）
 - `constexpr`を積極的に使用
 - デバッグメッセージは`gcs().send_text()`を使用
 - ログ出力は`AP_Logger`の`Write()`メソッドを使用
 
 ### ビルド制約
 - Pixhawk6Cボードをターゲットとする場合、フラッシュメモリ制約に注意
-- 未使用変数は必ず削除（コンパイル警告がエラー扱い）
+- **未使用変数は必ず削除**（コンパイル警告がエラー扱い）
 - インクルードは必要最小限に
 
 ### テスト要件
-- 修正後は必ずArmFeaturesテストを実行
-- テストがPASSするまでデバッグと修正を繰り返す
+- 修正後は**必ず全ての必須オートテストを実行**
+- テストがすべてPASSするまでデバッグと修正を繰り返す
 - ログ出力量は既存と同等レベルに維持
 
-## よくある問題と解決策
+## 🐛 よくある問題と解決策
 
-### ログフォーマットエラー
-**症状**: `Test Suite: test.Copter.ArmFeatures FAILED`  
-**原因**: ログラベル長やフィールド数の制約違反  
-**解決**: フィールド名を短縮、不要なフィールドを削除
+| 問題 | 症状 | 原因 | 解決策 |
+|------|------|------|--------|
+| **ログフォーマットエラー** | `Test Suite: test.Copter.ArmFeatures FAILED` | ログラベル長やフィールド数の制約違反 | フィールド名を短縮、不要なフィールドを削除 |
+| **未使用変数警告** | `error: unused variable 'variable_name'` | 変数が定義されているが使用されていない | 変数の削除または`(void)variable_name;`で明示的に使用 |
+| **位相補正が動作しない** | P（位相補正）が0のまま | phase_bufferに時間ベース位相ではなく観測位相を格納すべき | `ab_phase_unwrapped[0]`をバッファに格納 |
 
-### 未使用変数警告
-**症状**: `error: unused variable 'variable_name'`  
-**解決**: 変数の削除または`(void)variable_name;`で明示的に使用
+---
 
-### 位相補正が動作しない
-**症状**: P（位相補正）が0のまま  
-**原因**: phase_bufferに時間ベース位相ではなく観測位相を格納すべき  
-**解決**: `ab_phase_unwrapped[0]`をバッファに格納
-
-## デバッグ手法
+## 🔍 デバッグ手法
 
 ### ログ確認
-- ログファイル: `logs/OBSV_data_*.csv`
-- 重要カラム: X（観測位相）, P（位相補正）, F（推定周波数）
+- **ログファイル**: `logs/OBSV_data_*.csv`
+- **重要カラム**: 
+  - X（観測位相）
+  - P（位相補正）
+  - F（推定周波数）
 
 ### GCSメッセージ
 - `PhaseCorr: err=X.XXXX est_freq=X.XXXX Hz corr=X.XXXX` で位相補正状態を確認
 - `RLS[0]: A=X.XXX B=X.XXX C=X.XXX` でRLS推定パラメータを確認
 
-## 修正の原則
+---
 
-1. **段階的な変更**: 一度に多くを変更せず、小さな修正を積み重ねる
-2. **即座の検証**: 各修正後、必ずビルド・テストを実行
-3. **ログの保守**: ログ/メッセージの出力量は極力変更しない
-4. **コメントの充実**: アルゴリズムの意図を明確にコメントで説明
-5. **変数の整理**: 不要になった変数は定義・初期化含め完全に削除
+## ✅ 修正の原則
 
-## 参考情報
+1. **段階的な変更** - 一度に多くを変更せず、小さな修正を積み重ねる
+2. **即座の検証** - 各修正後、必ずビルド・テストを実行
+3. **ログの保守** - ログ/メッセージの出力量は極力変更しない
+4. **コメントの充実** - アルゴリズムの意図を明確にコメントで説明
+5. **変数の整理** - 不要になった変数は定義・初期化含め完全に削除
+
+---
+
+## 📚 参考情報
 
 ### ArduPilotビルドシステム
-- wafビルドシステムを使用
-- ボード指定: `--board Pixhawk6C` または SITLの場合は指定不要
-- 並列ビルド: `-j$(nproc)` で高速化
+- **ビルドツール**: wafビルドシステムを使用
+- **ボード指定**: 
+  - Pixhawk6C: `--board Pixhawk6C`
+  - SITL: ボード指定不要
+- **並列ビルド**: `-j$(nproc)` で高速化
 
 ### 主要なディレクトリ構造
-
 ```
-UMEMOTO2/
-├── libraries/AP_Observer/    # 外力推定ライブラリ
+Ardupilot-UmemotoLab/
+├── libraries/AP_Observer/    # 外力推定ライブラリ（カスタム）
 ├── ArduCopter/               # コプター制御メインコード
 ├── Tools/autotest/           # オートテストスクリプト
 ├── logs/                     # ログファイル出力先
 └── build/                    # ビルド成果物
 ```
 
-## Pixhawk6C向け完全クリーンビルド手順（2026/01/21検証済み）
+---
 
-### Pixhawk6C向け完全クリーンビルドのポイント
+## 🔄 Pixhawk6C向け完全クリーンビルド（2026/01/21検証済み）
 
-- `./waf clean` だけではキャッシュや一部生成物が残る場合があるため、**`rm -rf build/`でbuildディレクトリごと削除することが唯一確実なクリーンビルド手法**。
-- waf公式・ArduPilot開発でも推奨される手法。
-- 一回目から確実に全ファイルが再生成され、ビルド不整合や古い生成物の混入を防げる。
-- サブモジュールの不整合が疑われる場合は `git submodule update --init --recursive` も実行推奨。
-- 他ボードの場合は`--board`オプションを適宜変更。
+### クリーンビルドのポイント
+- `./waf clean` だけではキャッシュや一部生成物が残る場合がある
+- **`rm -rf build/`でbuildディレクトリごと削除することが唯一確実なクリーンビルド手法**
+- waf公式・ArduPilot開発でも推奨される手法
+- 一回目から確実に全ファイルが再生成され、ビルド不整合や古い生成物の混入を防げる
+- サブモジュールの不整合が疑われる場合は `git submodule update --init --recursive` も実行推奨
+- 他ボードの場合は`--board`オプションを適宜変更
 
-## 追加のベストプラクティス
+---
 
-- 修正前に現在の動作を理解する
-- 仮説を立ててから修正する
-- 修正後の影響範囲を確認する
-- テストでカバーされない部分は手動確認する
-- 重要な変更はコミットメッセージに詳細を記載する
+## 💡 追加のベストプラクティス
 
-## ArduPilotコーディング規約（追加）
+- ✅ 修正前に現在の動作を理解する
+- ✅ 仮説を立ててから修正する
+- ✅ 修正後の影響範囲を確認する
+- ✅ テストでカバーされない部分は手動確認する
+- ✅ 重要な変更はコミットメッセージに詳細を記載する
+
+---
+
+## 📖 ArduPilotコーディング規約
 
 ### ファイル構成と命名規則
 - **ヘッダーファイル**: `#pragma once` を使用（includeガード代わり）
@@ -218,10 +287,28 @@ float omega = _disturbance_freq.get() * 2.0f * M_PI;  // 角周波数 [rad/s]
 float omega = freq * 6.28;  // 2*PIをマジックナンバーで書かない
 ```
 
-# 【追加】ユーザー独自のオートテスト実行について
-- ユーザーが追加した独自のオートテスト（例: `test.Copter.TestRLSBasicEstimation` など）が存在する場合、**必ず修正後にそのテストも実行し、PASSすることを確認してください**。
-- 実行例:
-  ```bash
-  cd /home/umemoto/UMEMOTO2 && timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation
-  ```
-- ArmFeatures以外のテストも必ずカバーすること。
+---
+
+## 🎯 必須オートテスト一覧（まとめ）
+
+コード修正後は、以下のテストを実行し、**すべてPASSすることを確認**してください（リポジトリの現在の利用状況に応じて増減します）。
+
+| テスト名 | 説明 | タイムアウト |
+|---------|------|-------------|
+| `test.Copter.ArmFeatures` | アーミング機能のテスト | 300秒 |
+| `test.Copter.TestRLSBasicEstimation` | RLS推定テスト（カスタム） | 600秒 |
+
+### 一括実行スクリプト例
+```bash
+#!/bin/bash
+cd /home/memoto/Ardupilot-UmemotoLab
+source venv_ardupilot/bin/activate
+
+# 必須テストを順次実行
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures || exit 1
+timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation || exit 1
+
+echo "✅ すべてのテストがPASSしました"
+```
+
+**⚠️ 重要**: すべてのテストがPASSするまで、Pixhawk6Cビルドには進まないこと。
