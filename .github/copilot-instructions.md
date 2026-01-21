@@ -21,12 +21,13 @@
 #### フェーズ2: ハードウェアターゲット（Pixhawk6C）ビルド
 SITLテストがすべてPASSした後、以下を実行：
 
-6. **クリーンビルド**:
-   ```bash
-   ./waf clean
-   ./waf configure --board Pixhawk6C
-   ./waf -j$(nproc) copter
-   ```
+6. **Pixhawk6C向け完全クリーンビルド（推奨）**:
+  ```bash
+  cd /home/umemoto/UMEMOTO2
+  rm -rf build/
+  ./waf configure --board Pixhawk6C
+  ./waf -j$(nproc) copter
+  ```
 7. **ビルドエラー対応**: エラーが出た場合、フェーズ1に戻って修正
 
 **重要**: フェーズ1がクリアするまで、フェーズ2には進まないこと
@@ -45,10 +46,8 @@ cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -30
 cd /home/umemoto/UMEMOTO2 && timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures 2>&1 | grep -E "(PASSED|FAILED)" | tail -10
 
 # === フェーズ2: Pixhawk6Cビルド（SITLテストPASS後のみ） ===
-# クリーンビルド
-cd /home/umemoto/UMEMOTO2 && ./waf clean
-cd /home/umemoto/UMEMOTO2 && ./waf configure --board Pixhawk6C
-cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter
+# 完全クリーンビルド（推奨）
+cd /home/umemoto/UMEMOTO2 && rm -rf build/ && ./waf configure --board Pixhawk6C && ./waf -j$(nproc) copter
 
 # Pixhawk6Cビルドエラー確認用
 cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
@@ -122,6 +121,7 @@ cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
 - 並列ビルド: `-j$(nproc)` で高速化
 
 ### 主要なディレクトリ構造
+
 ```
 UMEMOTO2/
 ├── libraries/AP_Observer/    # 外力推定ライブラリ
@@ -130,6 +130,16 @@ UMEMOTO2/
 ├── logs/                     # ログファイル出力先
 └── build/                    # ビルド成果物
 ```
+
+## Pixhawk6C向け完全クリーンビルド手順（2026/01/21検証済み）
+
+### Pixhawk6C向け完全クリーンビルドのポイント
+
+- `./waf clean` だけではキャッシュや一部生成物が残る場合があるため、**`rm -rf build/`でbuildディレクトリごと削除することが唯一確実なクリーンビルド手法**。
+- waf公式・ArduPilot開発でも推奨される手法。
+- 一回目から確実に全ファイルが再生成され、ビルド不整合や古い生成物の混入を防げる。
+- サブモジュールの不整合が疑われる場合は `git submodule update --init --recursive` も実行推奨。
+- 他ボードの場合は`--board`オプションを適宜変更。
 
 ## 追加のベストプラクティス
 
