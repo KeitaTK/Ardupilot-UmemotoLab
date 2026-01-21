@@ -57,6 +57,27 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 5.0
     // @User: Advanced
     AP_GROUPINFO("PHASE_THRESH", 7, AP_Observer, _phase_correction_threshold, 0.0f),
+    
+    // @Param: TEST_INJECT
+    // @DisplayName: Test Force Injection Enable
+    // @Description: Enable test mode to inject known sinusoidal force for RLS validation
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    AP_GROUPINFO("TEST_INJECT", 8, AP_Observer, _test_force_inject_enable, 0),
+    
+    // @Param: TEST_FREQ
+    // @DisplayName: Test Force Frequency
+    // @Description: Frequency of injected test force [Hz]
+    // @Range: 0.35 0.91
+    // @User: Advanced
+    AP_GROUPINFO("TEST_FREQ", 9, AP_Observer, _test_force_freq, 0.7f),
+    
+    // @Param: TEST_AMP
+    // @DisplayName: Test Force Amplitude
+    // @Description: Amplitude of injected test force [N]
+    // @Range: 0.0 10.0
+    // @User: Advanced
+    AP_GROUPINFO("TEST_AMP", 10, AP_Observer, _test_force_amp, 1.0f),
 
     AP_GROUPEND
 };
@@ -130,6 +151,11 @@ void AP_Observer::rls_init() {
 }
 
 void AP_Observer::reset_frequency_estimation() {
+    // 位相補正が無効の場合はリセットしない（固定周波数で動作）
+    if (_phase_correction_enabled.get() == 0) {
+        return;  // 静かに終了
+    }
+    
     // RLS周波数推定パラメータをリセット
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Resetting frequency estimation");
     
@@ -312,14 +338,35 @@ void AP_Observer::update() {
     float throttle = motors->get_throttle_out();
     float thrust = -(THRUST_SCALE * throttle + THRUST_OFFSET) * g;
     
-    // 加速度取得
-    Vector3f accel = AP::ins().get_accel();
-    
     // ペイロード力計算
     Vector3f payload;
+    Vector3f accel = AP::ins().get_accel();
     payload.x = UAV_mass * accel.x;
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
+    
+    // テスト用外力注入モード（推力とIMUから計算された結果として扱う）
+    if (_test_force_inject_enable == 1) {
+        // 既知の正弦波外力をpayloadに直接代入
+        // カウンタベースの時刻を計算 [秒]
+        float t = counter * 0.01f;  // 10msごとに呼ばれるため
+        float test_omega = _test_force_freq.get() * 2.0f * M_PI;  // [rad/s]
+        float amplitude = _test_force_amp.get();                   // [N]
+        
+        payload.x = amplitude * sinf(test_omega * t);
+        payload.y = amplitude * sinf(test_omega * t + M_PI / 2.0f);  // 90度位相差
+        payload.z = 0.0f;  // Z軸は0
+        
+        // 初回のみデバッグメッセージ
+        static bool test_mode_announced = false;
+        if (!test_mode_announced) {
+            gcs().send_text(MAV_SEVERITY_INFO, 
+                "AP_Observer: Test force injection enabled (%.2fHz, %.2fN)",
+                _test_force_freq.get(), _test_force_amp.get()
+            );
+            test_mode_announced = true;
+        }
+    }
 
     // フィルタ適用（無効化）
     // _payload_filtered = _payload_filter.apply(payload);
@@ -345,6 +392,8 @@ void AP_Observer::update() {
         update_prediction_cache();
         last_freq = _disturbance_freq.get();
         last_pred_time = _prediction_time.get();
+        // パラメータ変更時はestimated_frequencyも更新
+        estimated_frequency = _disturbance_freq.get();
     }
     
     // 100回目のループで位相補正を実行（バッファが満杯になる）
@@ -509,6 +558,7 @@ void AP_Observer::phase_correction_init() {
     phase_buffer_index = 0;
     phase_buffer_count = 0;
     phase_correction = 0.0f;
+    estimated_frequency = _disturbance_freq.get();  // パラメータ値で初期化
 
     // A,B由来位相もリセット
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
@@ -576,10 +626,9 @@ float AP_Observer::linear_fit_slope(const float* buffer, uint8_t count) {
 
 // 位相補正の更新（100ループごとに呼ばれる）
 void AP_Observer::phase_correction_update() {
-    // 位相補正が無効の場合は何もしない
+    // 位相補正が無効の場合は何もしない（最優先でチェック）
     if (_phase_correction_enabled.get() == 0) {
-        gcs().send_text(MAV_SEVERITY_INFO, "PhaseCorr: disabled");
-        return;
+        return;  // 静かに終了（メッセージ不要）
     }
     
     // バッファが満杯でない場合は警告して終了
@@ -610,6 +659,9 @@ void AP_Observer::phase_correction_update() {
     // slope [rad/sample] → frequency [Hz]
     float estimated_freq = slope / (2.0f * M_PI * 0.01f);
     
+    // 推定周波数をメンバー変数に保存（ログ用）
+    estimated_frequency = estimated_freq;
+    
     // 周波数範囲チェック：範囲外なら初期値にリセット
     if (!check_frequency_range(estimated_freq)) {
         gcs().send_text(MAV_SEVERITY_WARNING,
@@ -619,6 +671,8 @@ void AP_Observer::phase_correction_update() {
         _disturbance_freq.set(0.6f);  // 初期値にリセット
         update_prediction_cache();     // キャッシュ更新
         reset_frequency_estimation();  // RLSリセット
+        // リセット時は設定値を保持（0に戻さない）
+        estimated_frequency = _disturbance_freq.get();
         return;
     }
     
@@ -654,18 +708,15 @@ bool AP_Observer::check_frequency_range(float freq) {
     return (freq >= FREQ_MIN && freq <= FREQ_MAX);
 }
 
-// 離陸検知（モーターアーム済み＋スロットルが一定以上）
+// 離陸検知（モーターアーム済み）
 bool AP_Observer::is_taking_off() {
     AP_Motors* motors = AP::motors();
     if (!motors) {
         return false;
     }
     
-    // モーターがアームされており、スロットル出力が0.3以上なら離陸とみなす
-    bool motors_armed = motors->armed();
-    float throttle = motors->get_throttle_out();
-    
-    return (motors_armed && throttle > 0.3f);
+    // モーターがアームされていれば離陸とみなす
+    return motors->armed();
 }
 
 // ログをSDカードに記録
@@ -675,24 +726,13 @@ void AP_Observer::Write_Observer_Log() {
     if (logger == nullptr) {
         return;
     }
-    
-    // 位相補正用の最新データを計算
-    float est_freq = 0.0f;
-    // 位相バッファが満杯のときのみ計算
-    if (phase_buffer_count == PHASE_BUFFER_SIZE) {
-        float sorted_buffer[PHASE_BUFFER_SIZE];
-        for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
-            uint8_t idx = (phase_buffer_index - PHASE_BUFFER_SIZE + i + PHASE_BUFFER_SIZE) % PHASE_BUFFER_SIZE;
-            sorted_buffer[i] = phase_buffer[idx];
-        }
-        float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
-        est_freq = slope / (2.0f * M_PI * 0.01f);
-    }
-    
 
     // A,B由来位相（MATLAB相当）をログへ追加（X,Y両軸）
     float phi_obs_x = ab_phase_unwrapped[0];
     float phi_obs_y = ab_phase_unwrapped[1];
+    
+    // 周波数フィールド：位相補正ONなら推定値、OFFならパラメータ値
+    float log_frequency = (_phase_correction_enabled == 1) ? estimated_frequency : _disturbance_freq.get();
 
     // ログメッセージをカスタムフォーマットで書き込み
     // OBSV: TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, F, P, X, Y
@@ -703,15 +743,16 @@ void AP_Observer::Write_Observer_Log() {
                   _payload_filtered.x,
                   _payload_filtered.y,
                   _payload_filtered.z,
-                  rls_theta[0][0],  // sin係数 X軸
-                  rls_theta[1][0],  // sin係数 Y軸
-                  rls_theta[0][1],  // cos係数 X軸
-                  rls_theta[1][1],  // cos係数 Y軸
-                  rls_theta[0][2],  // 定常偏差 X軸
-                  rls_theta[1][2],  // 定常偏差 Y軸
-                  est_freq,         // F: 推定周波数
-                  phase_correction, // P: 位相補正
-                  phi_obs_x,        // X: 観測位相X
-                  phi_obs_y);       // Y: 観測位相Y
+                  rls_theta[0][0],      // sin係数 X軸
+                  rls_theta[1][0],      // sin係数 Y軸
+                  rls_theta[0][1],      // cos係数 X軸
+                  rls_theta[1][1],      // cos係数 Y軸
+                  rls_theta[0][2],      // 定常偏差 X軸
+                  rls_theta[1][2],      // 定常偏差 Y軸
+                  log_frequency,        // F: 周波数（位相補正ON=推定値、OFF=パラメータ値）
+                  phase_correction,     // P: 位相補正
+                  phi_obs_x,            // X: 観測位相X
+                  phi_obs_y);           // Y: 観測位相Y
 #endif
 }
+

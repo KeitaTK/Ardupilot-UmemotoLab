@@ -80,6 +80,11 @@ private:
     AP_Float _disturbance_freq;        // ω: 外乱周波数 [Hz]
     AP_Float _prediction_time;         // Δt: 予測時間 [秒]
     
+    // テスト用パラメータ（外力注入）
+    AP_Int8  _test_force_inject_enable;  // テスト用外力注入の有効/無効
+    AP_Float _test_force_freq;           // テスト用外力の周波数 [Hz]
+    AP_Float _test_force_amp;            // テスト用外力の振幅 [N]
+    
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
     
@@ -93,6 +98,7 @@ private:
     uint8_t phase_buffer_index;                        // バッファの現在のインデックス
     uint8_t phase_buffer_count;                        // バッファ内の有効データ数
     float phase_correction;                            // 累積位相補正量 [rad]
+    float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
     // A,B係数から推定した観測位相（MATLAB相当）
     // phi_obs_axis = atan2(-B, A) をアンラップして連続化したもの
