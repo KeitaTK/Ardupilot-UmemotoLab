@@ -173,3 +173,18 @@ env.bak/
 venv.bak/
 autotest_result_*_junit.xml
 .python-version
+
+# Python仮想環境（venv, virtualenv, conda等）
+venv_*/
+.venv/
+ENV/
+env/
+__pycache__/
+# VSCode Python拡張の自動生成
+.python-version
+# pipenv
+Pipfile.lock
+# poetry
+poetry.lock
+# その他
+*.egg-info/
