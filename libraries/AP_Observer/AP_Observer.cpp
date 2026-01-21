@@ -32,8 +32,8 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     
     // @Param: DIST_FREQ
     // @DisplayName: Disturbance Frequency
-    // @Description: Frequency of periodic disturbance for RLS estimation [Hz]
-    // @Range: 0.1 10.0
+    // @Description: Frequency of periodic disturbance for RLS estimation [Hz]. Constrained to 0.35-0.91Hz (pendulum length 0.3-2.0m)
+    // @Range: 0.35 0.91
     // @User: Advanced
     AP_GROUPINFO("DIST_FREQ", 4, AP_Observer, _disturbance_freq, 0.6f),
     
@@ -54,9 +54,9 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Param: PHASE_THRESH
     // @DisplayName: Phase Correction Threshold
     // @Description: Threshold for applying phase correction [rad]. Correction is only applied if error exceeds this value.
-    // @Range: 0.0 20.0
+    // @Range: 0.0 5.0
     // @User: Advanced
-    AP_GROUPINFO("PHASE_THRESH", 7, AP_Observer, _phase_correction_threshold, 10.0f),
+    AP_GROUPINFO("PHASE_THRESH", 7, AP_Observer, _phase_correction_threshold, 0.0f),
 
     AP_GROUPEND
 };
@@ -92,6 +92,9 @@ void AP_Observer::init() {
         ab_phase_initialized[axis] = false;
         ab_amp[axis] = 0.0f;
     }
+    
+    // 離陸検知フラグ初期化
+    _has_taken_off = false;
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -322,9 +325,14 @@ void AP_Observer::update() {
     // _payload_filtered = _payload_filter.apply(payload);
     _payload_filtered = payload; // フィルタなしで生データを使用
 
-    // RLS更新（時間ベースの周期外乱推定）
-    // 入力は使わず、フィルタ後の力を直接出力として使用
-    if (rls_initialized) {
+    // 離陸検知
+    if (!_has_taken_off && is_taking_off()) {
+        _has_taken_off = true;
+        gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Takeoff detected, starting RLS");
+    }
+    
+    // RLS更新（離陸後のみ実行）
+    if (rls_initialized && _has_taken_off) {
         Vector3f dummy_input;  // 使用しないダミー
         rls_update(dummy_input, _payload_filtered);
     }
@@ -602,6 +610,18 @@ void AP_Observer::phase_correction_update() {
     // slope [rad/sample] → frequency [Hz]
     float estimated_freq = slope / (2.0f * M_PI * 0.01f);
     
+    // 周波数範囲チェック：範囲外なら初期値にリセット
+    if (!check_frequency_range(estimated_freq)) {
+        gcs().send_text(MAV_SEVERITY_WARNING,
+            "PhaseCorr: freq %.3fHz out of range [%.2f-%.2fHz], resetting to %.2fHz",
+            estimated_freq, FREQ_MIN, FREQ_MAX, 0.6f
+        );
+        _disturbance_freq.set(0.6f);  // 初期値にリセット
+        update_prediction_cache();     // キャッシュ更新
+        reset_frequency_estimation();  // RLSリセット
+        return;
+    }
+    
     // 位相誤差（傾きの差）
     float slope_error = slope - ideal_slope;
     
@@ -627,6 +647,25 @@ void AP_Observer::phase_correction_update() {
         "PhaseCorr: err=%.4f est_freq=%.4f Hz corr=%.4f",
         phase_error, estimated_freq, phase_correction
     );
+}
+
+// 周波数範囲チェック（振り子長0.3m~2.0mに対応）
+bool AP_Observer::check_frequency_range(float freq) {
+    return (freq >= FREQ_MIN && freq <= FREQ_MAX);
+}
+
+// 離陸検知（モーターアーム済み＋スロットルが一定以上）
+bool AP_Observer::is_taking_off() {
+    AP_Motors* motors = AP::motors();
+    if (!motors) {
+        return false;
+    }
+    
+    // モーターがアームされており、スロットル出力が0.3以上なら離陸とみなす
+    bool motors_armed = motors->armed();
+    float throttle = motors->get_throttle_out();
+    
+    return (motors_armed && throttle > 0.3f);
 }
 
 // ログをSDカードに記録

@@ -136,4 +136,15 @@ private:
     static constexpr float    RLS_MAX_LAMBDA        = 0.9999f;
     static constexpr float    RLS_MIN_COVARIANCE    = 0.001f;
     static constexpr float    RLS_MAX_COVARIANCE    = 1000.0f;
+    
+    // 周波数範囲制限（振り子長0.3m~2.0mに対応）
+    static constexpr float    FREQ_MIN              = 0.35f;  // 2.0m相当 [Hz]
+    static constexpr float    FREQ_MAX              = 0.91f;  // 0.3m相当 [Hz]
+    
+    // 離陸検知用の変数
+    bool _has_taken_off = false;  // 離陸済みフラグ
+    
+    // ヘルパー関数
+    bool check_frequency_range(float freq);  // 周波数範囲チェック
+    bool is_taking_off();  // 離陸検知
 };
