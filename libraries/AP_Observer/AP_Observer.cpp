@@ -466,6 +466,7 @@ Vector3f AP_Observer::get_predicted_force() const {
     // ここで phi = atan2(B, A)。MATLABで扱っているのは phi_obs = atan2(-B, A) なので
     // phase_for_prediction = omega*(t+dt) - phi_obs とすると R*sin(phase_for_prediction) + C と等価。
     // （符号規約はこの等価性に基づき採用）
+    // 注：X軸の観測位相（ab_phase_unwrapped[0]）を全軸の周波数推定に使用
     float sin_omega_t_dt = 0.0f;
     float cos_omega_t_dt = 0.0f;
     bool have_ab_phase = ab_phase_initialized[0];
@@ -642,10 +643,7 @@ void AP_Observer::Write_Observer_Log() {
         return;
     }
     
-    Vector3f pred = get_predicted_force();
-
     // 位相補正用の最新データを計算
-    float err = 0.0f;
     float est_freq = 0.0f;
     // 位相バッファが満杯のときのみ計算
     if (phase_buffer_count == PHASE_BUFFER_SIZE) {
@@ -655,43 +653,19 @@ void AP_Observer::Write_Observer_Log() {
             sorted_buffer[i] = phase_buffer[idx];
         }
         float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
-        float ideal_slope = _omega_rad * 0.01f;
         est_freq = slope / (2.0f * M_PI * 0.01f);
-        float slope_error = slope - ideal_slope;
-        err = slope_error * (PHASE_BUFFER_SIZE - 1);
     }
     
 
-    // A,B由来位相（MATLAB相当）と位相誤差を計算してログへ追加（X,Y両軸）
-    const float t_sec = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
-    const float phi_ref = _omega_rad * t_sec;
+    // A,B由来位相（MATLAB相当）をログへ追加（X,Y両軸）
     float phi_obs_x = ab_phase_unwrapped[0];
     float phi_obs_y = ab_phase_unwrapped[1];
-    float phi_err_x = 0.0f;
-    float phi_err_y = 0.0f;
-    if (ab_phase_initialized[0]) {
-        float e = phi_ref - phi_obs_x;
-        e = fmodf(e + M_PI, 2.0f * M_PI);
-        if (e < 0) {
-            e += 2.0f * M_PI;
-        }
-        phi_err_x = e - M_PI;
-    }
-    if (ab_phase_initialized[1]) {
-        float e = phi_ref - phi_obs_y;
-        e = fmodf(e + M_PI, 2.0f * M_PI);
-        if (e < 0) {
-            e += 2.0f * M_PI;
-        }
-        phi_err_y = e - M_PI;
-    }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ,
-    //               ERR, FREQ, CORR, PHX, PHY, AMX, AMY, PEX, PEY
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,FREQ,CORR,PHX,PHY,AMX,AMY,PEX,PEY",
-                  "s------------rzr", "F---------------",
-                  "Qfffffffffffffffffffff",
+    // OBSV: TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, F, P, X, Y
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,F,P,X,Y",
+                  "s-------------", "F-------------",
+                  "Qfffffffffffff",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -702,17 +676,9 @@ void AP_Observer::Write_Observer_Log() {
                   rls_theta[1][1],  // cos係数 Y軸
                   rls_theta[0][2],  // 定常偏差 X軸
                   rls_theta[1][2],  // 定常偏差 Y軸
-                  pred.x,
-                  pred.y,
-                  pred.z,
-                  err,
-                  est_freq,
-                  phase_correction,
-                  phi_obs_x,
-                  phi_obs_y,
-                  ab_amp[0],
-                  ab_amp[1],
-                  phi_err_x,
-                  phi_err_y);
+                  est_freq,         // F: 推定周波数
+                  phase_correction, // P: 位相補正
+                  phi_obs_x,        // X: 観測位相X
+                  phi_obs_y);       // Y: 観測位相Y
 #endif
 }
