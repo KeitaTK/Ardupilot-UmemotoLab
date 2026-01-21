@@ -85,6 +85,14 @@ void AP_Observer::init() {
     // 位相補正初期化
     phase_correction_init();
 
+    // A,B由来位相（観測位相）初期化
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        ab_phase_unwrapped[axis] = 0.0f;
+        ab_phase_prev_wrapped[axis] = 0.0f;
+        ab_phase_initialized[axis] = false;
+        ab_amp[axis] = 0.0f;
+    }
+
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
@@ -254,6 +262,37 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
             );
         }
     }
+
+    // --- A,B係数から観測位相を推定（MATLAB相当: atan2(-B, A)）---
+    // 注意: 振幅が小さい場合は位相が不安定になるため、最小振幅でガードする。
+    static constexpr float AB_PHASE_MIN_AMP = 1.0e-3f;
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        const float A = rls_theta[axis][0];
+        const float B = rls_theta[axis][1];
+        const float amp = sqrtf(A * A + B * B);
+        ab_amp[axis] = amp;
+
+        if (amp < AB_PHASE_MIN_AMP) {
+            continue;
+        }
+
+        const float phi_wrapped = atan2f(-B, A);
+        if (!ab_phase_initialized[axis]) {
+            ab_phase_prev_wrapped[axis] = phi_wrapped;
+            ab_phase_unwrapped[axis] = phi_wrapped;
+            ab_phase_initialized[axis] = true;
+        } else {
+            // ラップ角の差分を[-pi,pi]に収めてから連続位相へ積分
+            float dphi = phi_wrapped - ab_phase_prev_wrapped[axis];
+            if (dphi > M_PI) {
+                dphi -= 2.0f * M_PI;
+            } else if (dphi < -M_PI) {
+                dphi += 2.0f * M_PI;
+            }
+            ab_phase_unwrapped[axis] += dphi;
+            ab_phase_prev_wrapped[axis] = phi_wrapped;
+        }
+    }
     
     rls_sample_count++;
 }
@@ -421,13 +460,25 @@ Vector3f AP_Observer::get_predicted_force() const {
     
     // 現在時刻 [秒]
     float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
-    
-    // Δt秒後の位相 ω(t+Δt) - 補正量 [rad]
-    float omega_t_dt = _omega_rad * (t + _prediction_time.get()) - phase_correction;
-    
-    // Δt秒後のsin/cos値を直接計算
-    float sin_omega_t_dt = sinf(omega_t_dt);
-    float cos_omega_t_dt = cosf(omega_t_dt);
+
+    // Δt秒後の位相をA,B由来の観測位相から生成
+    // モデル: F = A*sin(omega*t) + B*cos(omega*t) + C = R*sin(omega*t + phi) + C
+    // ここで phi = atan2(B, A)。MATLABで扱っているのは phi_obs = atan2(-B, A) なので
+    // phase_for_prediction = omega*(t+dt) - phi_obs とすると R*sin(phase_for_prediction) + C と等価。
+    // （符号規約はこの等価性に基づき採用）
+    float sin_omega_t_dt = 0.0f;
+    float cos_omega_t_dt = 0.0f;
+    bool have_ab_phase = ab_phase_initialized[0];
+    if (have_ab_phase) {
+        const float phase_pred = _omega_rad * (t + _prediction_time.get()) - ab_phase_unwrapped[0];
+        sin_omega_t_dt = sinf(phase_pred);
+        cos_omega_t_dt = cosf(phase_pred);
+    } else {
+        // 初期化前は従来の時間位相にフォールバック
+        const float omega_t_dt = _omega_rad * (t + _prediction_time.get()) - phase_correction;
+        sin_omega_t_dt = sinf(omega_t_dt);
+        cos_omega_t_dt = cosf(omega_t_dt);
+    }
     
     // 各軸の予測外力計算: F_pred = A·sin(ω(t+Δt)) + B·cos(ω(t+Δt)) + C
     Vector3f predicted;
@@ -455,6 +506,14 @@ void AP_Observer::phase_correction_init() {
     previous_phase = 0.0f;
     phase_correction = 0.0f;
     phase_initialized = false;
+
+    // A,B由来位相もリセット
+    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+        ab_phase_unwrapped[axis] = 0.0f;
+        ab_phase_prev_wrapped[axis] = 0.0f;
+        ab_phase_initialized[axis] = false;
+        ab_amp[axis] = 0.0f;
+    }
     
     // バッファをゼロクリア
     for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
@@ -603,11 +662,36 @@ void AP_Observer::Write_Observer_Log() {
     }
     
 
+    // A,B由来位相（MATLAB相当）と位相誤差を計算してログへ追加（X,Y両軸）
+    const float t_sec = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+    const float phi_ref = _omega_rad * t_sec;
+    float phi_obs_x = ab_phase_unwrapped[0];
+    float phi_obs_y = ab_phase_unwrapped[1];
+    float phi_err_x = 0.0f;
+    float phi_err_y = 0.0f;
+    if (ab_phase_initialized[0]) {
+        float e = phi_ref - phi_obs_x;
+        e = fmodf(e + M_PI, 2.0f * M_PI);
+        if (e < 0) {
+            e += 2.0f * M_PI;
+        }
+        phi_err_x = e - M_PI;
+    }
+    if (ab_phase_initialized[1]) {
+        float e = phi_ref - phi_obs_y;
+        e = fmodf(e + M_PI, 2.0f * M_PI);
+        if (e < 0) {
+            e += 2.0f * M_PI;
+        }
+        phi_err_y = e - M_PI;
+    }
+
     // ログメッセージをカスタムフォーマットで書き込み
-    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, ERR, FREQ, CORR
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,FREQ,CORR",
+    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ,
+    //               ERR, FREQ, CORR, PHX, PHY, AMX, AMY, PEX, PEY
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,FREQ,CORR,PHX,PHY,AMX,AMY,PEX,PEY",
                   "s------------rzr", "F---------------",
-                  "Qfffffffffffffff",
+                  "Qfffffffffffffffffffff",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -623,6 +707,12 @@ void AP_Observer::Write_Observer_Log() {
                   pred.z,
                   err,
                   est_freq,
-                  phase_correction);
+                  phase_correction,
+                  phi_obs_x,
+                  phi_obs_y,
+                  ab_amp[0],
+                  ab_amp[1],
+                  phi_err_x,
+                  phi_err_y);
 #endif
 }

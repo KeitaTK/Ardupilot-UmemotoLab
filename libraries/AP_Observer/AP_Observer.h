@@ -95,6 +95,13 @@ private:
     float previous_phase;                              // 前回の位相 [rad]
     float phase_correction;                            // 累積位相補正量 [rad]
     bool phase_initialized;                            // 位相初期化フラグ
+
+    // A,B係数から推定した観測位相（MATLAB相当）
+    // phi_obs_axis = atan2(-B, A) をアンラップして連続化したもの
+    float ab_phase_unwrapped[RLS_NUM_AXES];
+    float ab_phase_prev_wrapped[RLS_NUM_AXES];
+    bool  ab_phase_initialized[RLS_NUM_AXES];
+    float ab_amp[RLS_NUM_AXES];
     
     // RLS関数
     void rls_init();
