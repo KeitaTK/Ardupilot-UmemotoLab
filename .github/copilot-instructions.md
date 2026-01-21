@@ -217,3 +217,11 @@ float omega = _disturbance_freq.get() * 2.0f * M_PI;  // 角周波数 [rad/s]
 #define MIN_AMP 0.001  // マクロではなくconstexprを使用
 float omega = freq * 6.28;  // 2*PIをマジックナンバーで書かない
 ```
+
+# 【追加】ユーザー独自のオートテスト実行について
+- ユーザーが追加した独自のオートテスト（例: `test.Copter.TestRLSBasicEstimation` など）が存在する場合、**必ず修正後にそのテストも実行し、PASSすることを確認してください**。
+- 実行例:
+  ```bash
+  cd /home/umemoto/UMEMOTO2 && timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation
+  ```
+- ArmFeatures以外のテストも必ずカバーすること。
