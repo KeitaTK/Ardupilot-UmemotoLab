@@ -8759,9 +8759,9 @@ Also, ignores heartbeats not from our target system'''
 
     def send_statustext(self, text):
         if sys.version_info.major >= 3 and not isinstance(text, bytes):
-            text = bytes(text, "ascii")
+            text = bytes(text, "ascii", errors="replace")
         elif 'unicode' in str(type(text)):
-            text = text.encode('ascii')
+            text = text.encode('ascii', errors="replace")
         seq = 0
         while len(text):
             self.mav.mav.statustext_send(mavutil.mavlink.MAV_SEVERITY_WARNING, text[:50], id=self.statustext_id, chunk_seq=seq)
