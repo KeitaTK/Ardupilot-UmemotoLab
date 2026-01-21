@@ -601,6 +601,7 @@ void AP_Observer::Write_Observer_Log() {
         float slope_error = slope - ideal_slope;
         err = slope_error * (PHASE_BUFFER_SIZE - 1);
     }
+    
 
     // ログメッセージをカスタムフォーマットで書き込み
     // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, ERR, FREQ, CORR
