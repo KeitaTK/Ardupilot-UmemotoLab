@@ -58,6 +58,10 @@
 .vagrant
 Tools/vagrant/*.log
 Rover/test.Rover/
+.venv_ardupilot/
+venv_ardupilot/
+venv_ardupilot/**
+.venv_ardupilot/**
 Rover/way.txt
 ArduCopter/Debug/
 ArduCopter/arducopter.exe.stackdump
