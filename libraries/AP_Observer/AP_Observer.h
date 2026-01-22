@@ -95,6 +95,7 @@ private:
     // 位相補正用の変数
     static constexpr uint8_t PHASE_BUFFER_SIZE = 50;   // 位相データバッファのサイズ（0.5秒分に短縮）
     float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
+    uint32_t phase_time_buffer_ms[PHASE_BUFFER_SIZE];  // 位相サンプルの時刻 [ms]
     uint8_t phase_buffer_index;                        // バッファの現在のインデックス
     uint8_t phase_buffer_count;                        // バッファ内の有効データ数
     float phase_correction;                            // 累積位相補正量 [rad]
@@ -117,6 +118,7 @@ private:
     void phase_correction_update();
     float unwrap_phase(float prev, float curr);  // 位相アンラップ
     float linear_fit_slope(const float* buffer, uint8_t count);  // 最小二乗法で傾きを計算
+    float linear_fit_slope_time(const float* phase, const uint32_t* time_ms, uint8_t count);  // 位相-時刻で傾きを計算[rad/s]
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;

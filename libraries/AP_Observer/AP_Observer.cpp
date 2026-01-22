@@ -276,21 +276,25 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         }
     }
 
-    // --- A,B係数から観測位相を推定（MATLAB相当: atan2(-B, A)）---
+    // --- A,B係数から観測位相を推定 ---
+    // y = A*sin(phase) + B*cos(phase) = R*sin(phase + phi)
+    // したがって phi = atan2(B, A)
     // 注意: 振幅が小さい場合は位相が不安定になるため、最小振幅でガードする。
-    // 周波数推定を確実に行うため、閾値は十分小さくする
-    static constexpr float AB_PHASE_MIN_AMP = 1.0e-4f;  // 最小振幅を0.0001Nに緩和
+    // 位相推定（unwrap）の初期化は緩めで良いが、周波数推定に使う位相バッファへ入れる値は
+    // できるだけSNRの高い（振幅が十分大きい）サンプルに限定して外れ値を抑える。
+    static constexpr float AB_PHASE_MIN_AMP_INIT = 1.0e-4f;  // unwrap初期化用 [N]
+    static constexpr float AB_PHASE_MIN_AMP_BUF  = 1.0f;     // 位相バッファ投入用 [N]
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
         const float A = rls_theta[axis][0];
         const float B = rls_theta[axis][1];
         const float amp = sqrtf(A * A + B * B);
         ab_amp[axis] = amp;
 
-        if (amp < AB_PHASE_MIN_AMP) {
+        if (amp < AB_PHASE_MIN_AMP_INIT) {
             continue;
         }
 
-        const float phi_wrapped = atan2f(-B, A);
+        const float phi_wrapped = atan2f(B, A);
         if (!ab_phase_initialized[axis]) {
             ab_phase_prev_wrapped[axis] = phi_wrapped;
             ab_phase_unwrapped[axis] = phi_wrapped;
@@ -308,12 +312,13 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         }
     }
     
-    // 観測位相（X軸）を位相バッファに追加（位相補正計算用）
-    // 振幅が十分大きい場合のみバッファに追加
-    // 注：初期化前や振幅が小さい場合でも、デフォルト値（0.0）をバッファに追加して
-    //     バッファカウントを進める（位相補正タイミングを維持するため）
-    if (ab_phase_initialized[0]) {
-        phase_buffer[phase_buffer_index] = ab_phase_unwrapped[0];
+    // 観測位相（X軸）を位相バッファに追加（位相補正/周波数推定用）
+    // バッファには「観測位相 - phase_correction」を保存し、位相補正の動きに依存しない
+    // 純粋な周波数差（Δω）を推定できるようにする。
+    // 振幅が十分大きい場合のみバッファに追加（外れ値・ラップ誤判定を抑制）
+    if (ab_phase_initialized[0] && (ab_amp[0] >= AB_PHASE_MIN_AMP_BUF)) {
+        phase_buffer[phase_buffer_index] = ab_phase_unwrapped[0] - phase_correction;
+        phase_time_buffer_ms[phase_buffer_index] = AP_HAL::millis();
         phase_buffer_index = (phase_buffer_index + 1) % PHASE_BUFFER_SIZE;
         if (phase_buffer_count < PHASE_BUFFER_SIZE) {
             phase_buffer_count++;
@@ -349,8 +354,9 @@ void AP_Observer::update() {
     // テスト用外力注入モード（推力とIMUから計算された結果として扱う）
     if (_test_force_inject_enable == 1) {
         // 既知の正弦波外力をpayloadに直接代入
-        // カウンタベースの時刻を計算 [秒]
-        float t = counter * 0.01f;  // 10msごとに呼ばれるため
+        // 時刻[秒]は実時間(=SITLのシミュレーション時刻)に基づいて計算する
+        // counter*0.01 のような固定dt前提は、更新周期が変わると注入周波数がずれるため避ける。
+        float t = (AP_HAL::millis() - rls_start_time_ms) * 0.001f;
         float test_omega = _test_force_freq.get() * 2.0f * M_PI;  // [rad/s]
         float amplitude = _test_force_amp.get();                   // [N]
         
@@ -572,6 +578,7 @@ void AP_Observer::phase_correction_init() {
     // バッファをゼロクリア
     for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
         phase_buffer[i] = 0.0f;
+        phase_time_buffer_ms[i] = 0;
     }
 }
 
@@ -625,6 +632,41 @@ float AP_Observer::linear_fit_slope(const float* buffer, uint8_t count) {
     return slope;
 }
 
+// 位相-時刻の最小二乗で傾きを計算
+// phase: 位相配列 [rad]
+// time_ms: 時刻配列 [ms]
+// return: 傾き [rad/s]
+float AP_Observer::linear_fit_slope_time(const float* phase, const uint32_t* time_ms, uint8_t count)
+{
+    if (count < 2) {
+        return 0.0f;
+    }
+
+    const uint32_t t0_ms = time_ms[0];
+    float sum_t = 0.0f;
+    float sum_p = 0.0f;
+    float sum_tp = 0.0f;
+    float sum_t2 = 0.0f;
+
+    for (uint8_t i = 0; i < count; i++) {
+        const float t = (time_ms[i] - t0_ms) * 0.001f;  // [s]
+        const float p = phase[i];                       // [rad]
+        sum_t += t;
+        sum_p += p;
+        sum_tp += t * p;
+        sum_t2 += t * t;
+    }
+
+    const float n = (float)count;
+    const float denominator = n * sum_t2 - sum_t * sum_t;
+    if (fabsf(denominator) < 1.0e-9f) {
+        return 0.0f;
+    }
+
+    // slope [rad/s]
+    return (n * sum_tp - sum_t * sum_p) / denominator;
+}
+
 // 位相補正の更新（100ループごとに呼ばれる）
 void AP_Observer::phase_correction_update() {
     // 位相補正が無効の場合は何もしない（最優先でチェック）
@@ -634,62 +676,79 @@ void AP_Observer::phase_correction_update() {
     
     // バッファが満杯でない場合は警告して終了
     if (phase_buffer_count < PHASE_BUFFER_SIZE) {
-        // デバッグ：バッファ状態を詳細に出力
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "PhaseCorr: buffer filling %d/%d (amp[0]=%.4f, init=%d)",
-            phase_buffer_count, PHASE_BUFFER_SIZE, ab_amp[0], (int)ab_phase_initialized[0]
-        );
+        // デバッグ：バッファ状態を間引いて出力（出力過多を避ける）
+        static uint16_t buffer_msg_decim = 0;
+        if ((++buffer_msg_decim % 10U) == 0U) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "PhaseCorr: buffer %u/%u amp=%.3f init=%u",
+                (unsigned)phase_buffer_count, (unsigned)PHASE_BUFFER_SIZE,
+                (double)ab_amp[0], (unsigned)ab_phase_initialized[0]
+            );
+        }
         return;
     }
     
     // バッファを時系列順に再配置（リングバッファなので）
     float sorted_buffer[PHASE_BUFFER_SIZE];
+    uint32_t sorted_time_ms[PHASE_BUFFER_SIZE];
     for (uint8_t i = 0; i < phase_buffer_count; i++) {
         uint8_t idx = (phase_buffer_index - phase_buffer_count + i + PHASE_BUFFER_SIZE) % PHASE_BUFFER_SIZE;
         sorted_buffer[i] = phase_buffer[idx];
+        sorted_time_ms[i] = phase_time_buffer_ms[idx];
     }
     
     // 線形近似で傾きを計算（全サンプルを使用）
-    float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
+    // 時刻でフィットして [rad/s] を得ることで、更新周期の揺らぎやdt仮定に依存しない推定にする
+    const float slope_rad_s = linear_fit_slope_time(sorted_buffer, sorted_time_ms, PHASE_BUFFER_SIZE);
     
-    // 理想的な傾き（設定された周波数から計算）
-    // 1ループあたりの理想的な位相変化 = ω * dt
-    // dt = 0.01秒（100Hzサンプリングを想定）
-    float ideal_slope = _omega_rad * 0.01f;
+    // 位相バッファは「A,B係数から推定した観測位相（=モデル位相に対する相対位相）」を格納している。
+    // したがって slope_rad_s [rad/s] は「角周波数差 Δω」に相当し、Δf = Δω/(2π) となる。
+    const float current_freq = _disturbance_freq.get();
+    const float delta_freq_unclamped = slope_rad_s / (2.0f * M_PI);  // [Hz]
+    // 位相の外れ値等でΔfが跳ねることがあるため、現実的な範囲に制限して安定化
+    const float delta_freq = constrain_value(delta_freq_unclamped, -0.5f, 0.5f);
+    const float estimated_freq = current_freq + delta_freq;   // [Hz]
     
-    // 実測周波数を計算 [Hz]
-    // slope [rad/sample] → frequency [Hz]
-    float estimated_freq = slope / (2.0f * M_PI * 0.01f);
-    
-    // 推定周波数をメンバー変数に保存（ログ用）
-    estimated_frequency = estimated_freq;
-    
-    // 周波数範囲チェック：範囲外なら初期値にリセット
+    // 周波数範囲チェック：範囲外は一時的に無視（即リセットすると推定が進まない）
+    static uint8_t out_of_range_count = 0;
     if (!check_frequency_range(estimated_freq)) {
+        out_of_range_count++;
         gcs().send_text(MAV_SEVERITY_WARNING,
-            "PhaseCorr: freq %.4fHz out of range [%.2f-%.2fHz], slope=%.6f, resetting",
-            estimated_freq, FREQ_MIN, FREQ_MAX, slope
+            "PhaseCorr: f=%.3fHz (df=%.3f) OOR[%u] (%.2f-%.2f) slope=%.4f",
+            (double)estimated_freq, (double)delta_freq, (unsigned)out_of_range_count,
+            (double)FREQ_MIN, (double)FREQ_MAX, (double)slope_rad_s
         );
-        _disturbance_freq.set(0.6f);  // 初期値にリセット
-        update_prediction_cache();     // キャッシュ更新
-        reset_frequency_estimation();  // RLSリセット
-        // リセット時は設定値を保持（0に戻さない）
-        estimated_frequency = _disturbance_freq.get();
+        if (out_of_range_count >= 5U) {
+            // 連続で外れ続ける場合のみリセット
+            reset_frequency_estimation();
+            estimated_frequency = _disturbance_freq.get();
+        }
         return;
     }
+    out_of_range_count = 0;
+
+    // ログ用周波数（レンジ内の推定値のみ採用）
+    // 推定がパラメータ(OBS_DIST_FREQ)を勝手に書き換えないよう、ここでは内部推定値のみ更新する。
+    static constexpr float FREQ_EST_ALPHA = 0.20f;  // 0..1, 大きいほど追従が速い
+    estimated_frequency = estimated_frequency + FREQ_EST_ALPHA * (estimated_freq - estimated_frequency);
+
+    // デバッグ：周波数推定が進んでいることを間引いて出力
+    static uint16_t freq_msg_decim = 0;
+    if ((++freq_msg_decim % 5U) == 0U) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "PhaseCorr: f=%.3f est=%.3f (df=%.3f)",
+            (double)current_freq, (double)estimated_frequency, (double)delta_freq
+        );
+    }
     
-    // デバッグ：周波数推定が成功したことをログ出力
-    gcs().send_text(MAV_SEVERITY_INFO,
-        "PhaseCorr: freq_est=%.4fHz (slope=%.6f) within range",
-        estimated_freq, slope
-    );
-    
-    // 位相誤差（傾きの差）
-    float slope_error = slope - ideal_slope;
-    
+    // 位相誤差（相対位相の傾き=周波数差を位相ずれとして積算）
+    // 周波数が一致していれば slope_rad_s ≈ 0 になるのが理想。
+    const float slope_error = slope_rad_s;
+
     // バッファ期間全体での位相ずれを計算
-    // phase_error = slope_error * (データ点数 - 1)
-    float phase_error = slope_error * (PHASE_BUFFER_SIZE - 1);
+    // phase_error [rad] = slope_error [rad/s] * buffer_duration [s]
+    const float buffer_duration_s = (sorted_time_ms[PHASE_BUFFER_SIZE - 1] - sorted_time_ms[0]) * 0.001f;
+    const float phase_error = slope_error * buffer_duration_s;
     
     // 閾値チェック：誤差が閾値以下なら補正しない
     if (fabsf(phase_error) <= _phase_correction_threshold.get()) {
@@ -701,8 +760,10 @@ void AP_Observer::phase_correction_update() {
         return;
     }
     
-    // 補正量を一気に修正（累積ではなく、誤差分を直接加算）
-    phase_correction += phase_error;
+    // phase は omega*t - phase_correction を使用しているため、
+    // 観測位相が進む(phase_error>0)場合は model を進める方向に補正する必要がある。
+    // よって phase_correction は誤差と逆符号で更新する。
+    phase_correction -= phase_error;
     
     // デバッグメッセージ：位相誤差と推定周波数を送信
     gcs().send_text(MAV_SEVERITY_INFO,
