@@ -444,33 +444,25 @@ void AP_Observer::update() {
         );
         
         // RLS推定パラメータ（XY軸のみ）
-        #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO,
             "A: %.3f %.3f",
             rls_theta[0][0], rls_theta[1][0]
         );
-        #endif
-        #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO,
             "B: %.3f %.3f",
             rls_theta[0][1], rls_theta[1][1]
         );
-        #endif
-        #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO,
             "C: %.3f %.3f",
             rls_theta[0][2], rls_theta[1][2]
         );
-        #endif
         
         // 予測外力
         Vector3f pred = get_predicted_force();
-        #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO,
             "PRED: %.3f %.3f %.3f",
             pred.x, pred.y, pred.z
         );
-        #endif
         
         // 共分散行列（コメントアウト）
         // gcs().send_text(MAV_SEVERITY_INFO,
@@ -484,7 +476,6 @@ void AP_Observer::update() {
         //     rls_initialized, (unsigned long)rls_sample_count, _omega_rad
         // );
     }
-#endif
 }
     
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {

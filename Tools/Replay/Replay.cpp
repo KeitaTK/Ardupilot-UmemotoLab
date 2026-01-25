@@ -94,6 +94,14 @@ void ReplayVehicle::load_parameters(void)
 
 GCS_Dummy _gcs;
 
+// Dummy copter global for GCS_Common.cpp linkage
+// Replay doesn't use vehicle-specific code, but GCS_Common needs this symbol
+class DummyCopter {
+public:
+    void set_mode(uint8_t mode, uint8_t reason) {}
+    uint8_t get_mode() { return 0; }
+} copter;
+
 #if AP_ADVANCEDFAILSAFE_ENABLED
 AP_AdvancedFailsafe *AP::advancedfailsafe() { return nullptr; }
 bool AP_AdvancedFailsafe::gcs_terminate(bool should_terminate, const char *reason) { return false; }
