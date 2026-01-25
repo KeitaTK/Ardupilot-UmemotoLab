@@ -8,6 +8,7 @@
 #include <GCS_MAVLink/GCS.h>
 #include <Filter/LowPassFilter2p.h>
 #include <AP_Logger/AP_Logger.h>
+#include <RC_Channel/RC_Channel.h>
 
 class AP_Observer {
 public:
@@ -92,6 +93,9 @@ private:
     AP_Int8  _phase_correction_enabled;  // 位相補正の有効/無効
     AP_Float _phase_correction_threshold; // 位相補正を適用する閾値 [rad]
     
+    // RC8スイッチによる周波数推定制御
+    AP_Int8  _freq_estimation_rc_channel; // RC周波数推定スイッチのチャンネル番号（デフォルト8）
+    
     // 位相補正用の変数
     static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 位相データバッファのサイズ（1.0秒分に拡張）
     float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
@@ -152,7 +156,14 @@ private:
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ
     
+    // 周波数推定制御用の変数
+    bool _freq_estimation_active = false;    // 現在推定中かどうか
+    bool _freq_estimation_prev_switch = false; // 前回のスイッチ状態
+    float _freq_estimation_result = 0.0f;    // 推定終了時の周波数結果 [Hz]
+    uint8_t _freq_estimation_switch_state = 0; // スイッチ状態（0=オフ、1=オン）
+    
     // ヘルパー関数
     bool check_frequency_range(float freq);  // 周波数範囲チェック
     bool is_taking_off();  // 離陸検知
+    bool read_freq_estimation_switch();      // RC8スイッチの状態を読み取る
 };

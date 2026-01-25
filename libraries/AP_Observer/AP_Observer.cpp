@@ -78,6 +78,13 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 10.0
     // @User: Advanced
     AP_GROUPINFO("TEST_AMP", 10, AP_Observer, _test_force_amp, 1.0f),
+    
+    // @Param: FREQ_EST_CH
+    // @DisplayName: Frequency Estimation RC Channel
+    // @Description: RC channel number for frequency estimation control (0=disabled, 8=RC8)
+    // @Range: 0 16
+    // @User: Advanced
+    AP_GROUPINFO("FREQ_EST_CH", 11, AP_Observer, _freq_estimation_rc_channel, 8),
 
     AP_GROUPEND
 };
@@ -116,6 +123,12 @@ void AP_Observer::init() {
     
     // 離陸検知フラグ初期化
     _has_taken_off = false;
+    
+    // 周波数推定制御初期化
+    _freq_estimation_active = false;
+    _freq_estimation_prev_switch = false;
+    _freq_estimation_result = _disturbance_freq.get();
+    _freq_estimation_switch_state = 0;
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -151,12 +164,7 @@ void AP_Observer::rls_init() {
 }
 
 void AP_Observer::reset_frequency_estimation() {
-    // 位相補正が無効の場合はリセットしない（固定周波数で動作）
-    if (_phase_correction_enabled.get() == 0) {
-        return;  // 静かに終了
-    }
-    
-    // RLS周波数推定パラメータをリセット
+    // RLS周波数推定パラメータをリセット（閾値チェック無効化）
 #if HAL_GCS_ENABLED
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Resetting frequency estimation");
 #endif
@@ -399,8 +407,42 @@ void AP_Observer::update() {
 #endif
     }
     
-    // RLS更新（離陸後のみ実行）
-    if (rls_initialized && _has_taken_off) {
+    // RC8スイッチによる周波数推定制御
+    bool current_switch = read_freq_estimation_switch();
+    _freq_estimation_switch_state = current_switch ? 1 : 0;  // ログ用に0/1で記録
+    
+    // スイッチの立ち上がりエッジ検出（オフ→オン）
+    if (current_switch && !_freq_estimation_prev_switch) {
+        // 推定開始：RLSと位相補正を初期値にリセット
+        _freq_estimation_active = true;
+        reset_frequency_estimation();
+        _freq_estimation_result = _disturbance_freq.get();  // 初期設定周波数
+#if HAL_GCS_ENABLED
+        gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Started (init=%.3fHz)", _freq_estimation_result);
+#endif
+    }
+    
+    // スイッチの立ち下がりエッジ検出（オン→オフ）
+    if (!current_switch && _freq_estimation_prev_switch) {
+        // 推定終了：推定値を保持
+        _freq_estimation_active = false;
+        _freq_estimation_result = estimated_frequency;  // 推定終了時の周波数を保存
+#if HAL_GCS_ENABLED
+        gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Stopped (result=%.3fHz)", _freq_estimation_result);
+#endif
+    }
+    
+    _freq_estimation_prev_switch = current_switch;
+    
+    // RLS更新条件：
+    // 1. 離陸後である
+    // 2. かつ以下のいずれか：
+    //    a. 推定がアクティブ（RC8スイッチオン）
+    //    b. テストモード（OBS_TEST_INJECT=1）
+    bool should_update_rls = rls_initialized && _has_taken_off && 
+                             (_freq_estimation_active || _test_force_inject_enable.get() == 1);
+    
+    if (should_update_rls) {
         Vector3f dummy_input;  // 使用しないダミー
         rls_update(dummy_input, _payload_filtered);
     }
@@ -417,8 +459,13 @@ void AP_Observer::update() {
         estimated_frequency = _disturbance_freq.get();
     }
     
-    // 50回目のループで位相補正を実行（バッファサイズに合わせて調整）
-    if ((counter % 50) == 49) {  // 0-indexed なので49回目=50回目
+    // 位相補正実行条件：
+    // 1. 推定がアクティブ（RC8スイッチオン）
+    // 2. または テストモード（OBS_TEST_INJECT=1）
+    bool should_update_phase = _freq_estimation_active || _test_force_inject_enable.get() == 1;
+    
+    // 50回目のループで位相補正を実行
+    if (should_update_phase && (counter % 50) == 49) {  // 0-indexed なので49回目=50回目
         phase_correction_update();
     }
 
@@ -735,25 +782,20 @@ void AP_Observer::phase_correction_update() {
     const float delta_freq = constrain_value(delta_freq_unclamped, -0.5f, 0.5f);
     const float estimated_freq = current_freq + delta_freq;   // [Hz]
     
-    // 周波数範囲チェック：範囲外は一時的に無視（即リセットすると推定が進まない）
-    static uint8_t out_of_range_count = 0;
+    // 周波数範囲チェック：範囲外は警告のみ（リセット無効化）
     if (!check_frequency_range(estimated_freq)) {
-        out_of_range_count++;
 #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_WARNING,
-            "PhaseCorr: f=%.3fHz (df=%.3f) OOR[%u] (%.2f-%.2f) slope=%.4f",
-            (double)estimated_freq, (double)delta_freq, (unsigned)out_of_range_count,
-            (double)FREQ_MIN, (double)FREQ_MAX, (double)slope_rad_s
-        );
-#endif
-        if (out_of_range_count >= 5U) {
-            // 連続で外れ続ける場合のみリセット
-            reset_frequency_estimation();
-            estimated_frequency = _disturbance_freq.get();
+        static uint16_t oor_msg_decim = 0;
+        if ((++oor_msg_decim % 10U) == 0U) {
+            gcs().send_text(MAV_SEVERITY_WARNING,
+                "PhaseCorr: f=%.3fHz (df=%.3f) OutOfRange (%.2f-%.2f) slope=%.4f",
+                (double)estimated_freq, (double)delta_freq,
+                (double)FREQ_MIN, (double)FREQ_MAX, (double)slope_rad_s
+            );
         }
-        return;
+#endif
+        // 範囲外の場合も続行（リセットしない）
     }
-    out_of_range_count = 0;
 
     // ログ用周波数（レンジ内の推定値のみ採用）
     // 推定がパラメータ(OBS_DIST_FREQ)を勝手に書き換えないよう、ここでは内部推定値のみ更新する。
@@ -822,6 +864,24 @@ bool AP_Observer::is_taking_off() {
     return motors->armed();
 }
 
+// RC8スイッチの状態を読み取る（true=オン、false=オフ）
+bool AP_Observer::read_freq_estimation_switch() {
+    // RCチャンネルが0なら無効（常にオフ）
+    if (_freq_estimation_rc_channel.get() == 0) {
+        return false;
+    }
+    
+    // RCチャンネルを取得（チャンネル番号は1ベース）
+    RC_Channel* rc_chan = rc().channel(_freq_estimation_rc_channel.get() - 1);
+    if (rc_chan == nullptr) {
+        return false;
+    }
+    
+    // PWM値を取得して1700以上でオン、1300以下でオフ
+    uint16_t pwm = rc_chan->get_radio_in();
+    return (pwm >= 1700);
+}
+
 // ログをSDカードに記録
 void AP_Observer::Write_Observer_Log() {
 #if HAL_LOGGING_ENABLED
@@ -838,10 +898,10 @@ void AP_Observer::Write_Observer_Log() {
     float log_frequency = (_phase_correction_enabled == 1) ? estimated_frequency : _disturbance_freq.get();
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, F, P, X, Y
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,F,P,X,Y",
-                  "s-------------", "F-------------",
-                  "Qfffffffffffff",
+    // OBSV: TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, F, P, X, Y, SW
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,F,P,X,Y,SW",
+                  "s--------------", "F--------------",
+                  "QfffffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -855,7 +915,8 @@ void AP_Observer::Write_Observer_Log() {
                   log_frequency,        // F: 周波数（位相補正ON=推定値、OFF=パラメータ値）
                   phase_correction,     // P: 位相補正
                   phi_obs_x,            // X: 観測位相X
-                  phi_obs_y);           // Y: 観測位相Y
+                  phi_obs_y,            // Y: 観測位相Y
+                  _freq_estimation_switch_state);  // SW: RC8スイッチ状態（0=オフ、1=オン）
 #endif
 }
 
