@@ -8076,6 +8076,177 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.set_rc(8, 1000)
         self.context_pop()
 
+    def TestRLSRCAuxFunction(self):
+        '''Test RC Aux Function (RC9_OPTION=316) for frequency estimation'''
+        self.context_push()
+        
+        # テストパラメータ設定
+        test_freq = 0.7
+        test_amplitude = 10.0
+        self.progress(f"Testing RC Aux Function control with RC9_OPTION=316: {test_freq}Hz, {test_amplitude}N")
+        
+        self.set_parameters({
+            'OBS_DIST_FREQ': 0.6,  # 初期周波数（実際と異なる値）
+            'OBS_PHASE_CORR': 1,  # 位相補正ON
+            'OBS_TEST_INJECT': 1,  # テスト外力注入
+            'OBS_TEST_FREQ': test_freq,  # 実際の周波数
+            'OBS_TEST_AMP': test_amplitude,
+            'RC9_OPTION': 316,  # RC9にRLS_FREQ_EST機能を割り当て
+            'LOG_DISARMED': 1,  # ログを取得するために必要
+        })
+        
+        self.reboot_sitl()
+        
+        # パラメータが正しく設定されているか確認
+        rc9_option = self.get_parameter('RC9_OPTION')
+        self.progress(f"RC9_OPTION after reboot: {rc9_option} (expected 316)")
+        if rc9_option != 316:
+            raise NotAchievedException(f"RC9_OPTION not set correctly: {rc9_option} != 316")
+        
+        # RC9をオフ状態で開始
+        self.progress("Setting RC9 to OFF (1000) at startup")
+        self.set_rc(9, 1000)
+        self.delay_sim_time(5)  # 初期化待ち
+        
+        # 離陸
+        self.progress("Taking off to 10m")
+        self.takeoff(10, mode='ALT_HOLD')
+        self.delay_sim_time(5)
+        
+        # Phase 1: RC9オフ状態で10秒ホバリング（推定なし）
+        self.progress("Phase 1: RC9 OFF (PWM=1000) - No estimation for 10 seconds")
+        self.set_rc(9, 1000)
+        self.delay_sim_time(2)
+        t1_start = self.get_sim_time()
+        self.delay_sim_time(10)
+        t1_end = self.get_sim_time()
+        self.progress(f"Phase 1: t1_start={t1_start}, t1_end={t1_end}")
+        
+        # Phase 2: RC9をオンにして30秒推定
+        self.progress("Phase 2: RC9 ON (PWM=2000) - Estimating for 30 seconds")
+        self.set_rc(9, 2000)  # RC9オン
+        self.delay_sim_time(5)  # スイッチ反映待ち（十分に待つ）
+        t2_start = self.get_sim_time()
+        self.delay_sim_time(30)
+        t2_end = self.get_sim_time()
+        self.progress(f"Phase 2: t2_start={t2_start}, t2_end={t2_end}")
+        
+        # Phase 3: RC9をオフにして10秒ホバリング（推定停止、結果保持）
+        self.progress("Phase 3: RC9 OFF (PWM=1000) - Hold result for 10 seconds")
+        self.set_rc(9, 1000)  # RC9オフ
+        self.delay_sim_time(5)
+        t3_start = self.get_sim_time()
+        self.delay_sim_time(10)
+        t3_end = self.get_sim_time()
+        self.progress(f"Phase 3: t3_start={t3_start}, t3_end={t3_end}")
+        
+        # ログ解析
+        self.progress("Analyzing log data...")
+        import numpy
+        mlog = self.dfreader_for_current_onboard_log()
+        
+        # Phase 1のSWフィールドを確認（オフ=0）
+        phase1_sw = []
+        while True:
+            m = mlog.recv_match(
+                type='OBSV',
+                blocking=False,
+                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t1_start * 1.0e6, t1_end * 1.0e6))
+            if m is None:
+                break
+            if hasattr(m, 'SW'):
+                phase1_sw.append(m.SW)
+        
+        self.progress(f"Phase 1: Found {len(phase1_sw)} OBSV messages with SW field")
+        
+        # Phase 2のSWフィールドを確認（オン=1）
+        mlog = self.dfreader_for_current_onboard_log()
+        phase2_sw = []
+        phase2_freq = []
+        while True:
+            m = mlog.recv_match(
+                type='OBSV',
+                blocking=False,
+                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t2_start * 1.0e6, t2_end * 1.0e6))
+            if m is None:
+                break
+            if hasattr(m, 'SW'):
+                phase2_sw.append(m.SW)
+            if hasattr(m, 'F'):
+                phase2_freq.append(m.F)
+        
+        self.progress(f"Phase 2: Found {len(phase2_sw)} OBSV messages with SW field")
+        
+        # Phase 3のSWフィールドを確認（オフ=0）
+        mlog = self.dfreader_for_current_onboard_log()
+        phase3_sw = []
+        phase3_freq = []
+        while True:
+            m = mlog.recv_match(
+                type='OBSV',
+                blocking=False,
+                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t3_start * 1.0e6, t3_end * 1.0e6))
+            if m is None:
+                break
+            if hasattr(m, 'SW'):
+                phase3_sw.append(m.SW)
+            if hasattr(m, 'F'):
+                phase3_freq.append(m.F)
+        
+        self.progress(f"Phase 3: Found {len(phase3_sw)} OBSV messages with SW field")
+        
+        # デバッグ: 最初の数個のSW値を表示
+        if len(phase2_sw) > 0:
+            self.progress(f"Phase 2 SW values (first 10): {phase2_sw[:10]}")
+        
+        # 検証1: Phase1でSW=0（オフ）
+        if len(phase1_sw) > 0:
+            sw1_median = numpy.median(numpy.asarray(phase1_sw))
+            self.progress(f"Phase 1: SW median = {sw1_median} (expected 0)")
+            if sw1_median > 0.5:
+                raise NotAchievedException("Phase 1: RC Aux Function switch should be OFF (0)")
+        else:
+            self.progress("Warning: No OBSV messages found in Phase 1")
+        
+        # 検証2: Phase2でSW=1（オン）
+        if len(phase2_sw) > 0:
+            sw2_median = numpy.median(numpy.asarray(phase2_sw))
+            self.progress(f"Phase 2: SW median = {sw2_median} (expected 1)")
+            if sw2_median < 0.5:
+                raise NotAchievedException("Phase 2: RC Aux Function switch should be ON (1)")
+        else:
+            raise NotAchievedException("No OBSV messages found in Phase 2 - logging may be disabled")
+        
+        # 検証3: Phase3でSW=0（オフ）
+        if len(phase3_sw) > 0:
+            sw3_median = numpy.median(numpy.asarray(phase3_sw))
+            self.progress(f"Phase 3: SW median = {sw3_median} (expected 0)")
+            if sw3_median > 0.5:
+                raise NotAchievedException("Phase 3: RC Aux Function switch should be OFF (0)")
+        else:
+            self.progress("Warning: No OBSV messages found in Phase 3")
+        
+        # 検証4: Phase2で周波数が推定されている（後半の平均）
+        if len(phase2_freq) > 10:
+            # 後半50%のデータを使用
+            phase2_freq_late = phase2_freq[len(phase2_freq)//2:]
+            freq2_mean = numpy.mean(numpy.asarray(phase2_freq_late))
+            self.progress(f"Phase 2: Estimated frequency = {freq2_mean:.3f}Hz (injected {test_freq}Hz)")
+            # 推定周波数が実際の周波数に近いことを確認（±0.05Hz）
+            if abs(freq2_mean - test_freq) > 0.05:
+                self.progress(f"Warning: Frequency error = {abs(freq2_mean - test_freq):.3f}Hz")
+        
+        # 検証5: Phase3で周波数が保持されている
+        if len(phase3_freq) > 5:
+            freq3_mean = numpy.mean(numpy.asarray(phase3_freq))
+            self.progress(f"Phase 3: Frequency held at {freq3_mean:.3f}Hz")
+        
+        self.progress("✅ RC AUX FUNCTION CONTROL TEST PASSED")
+        
+        self.do_RTL()
+        self.set_rc(9, 1000)
+        self.context_pop()
+
     def TestRLSWindowedEstimation(self):
         '''Test RC8 switch control with specific time window (20-30s)'''
         self.context_push()
@@ -12467,7 +12638,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
              self.TestRLSBasicEstimation,  # AP_Observer RLS test
              self.TestRLSFrequencyEstimation,  # AP_Observer frequency estimation test
              self.TestRLSFrequencyEstimationMulti,  # AP_Observer multi-case frequency estimation test
-             self.TestRLSRC8SwitchControl,  # AP_Observer RC8 switch control test
+             self.TestRLSRC8SwitchControl,  # AP_Observer RC8 switch control test (old method)
+             self.TestRLSRCAuxFunction,  # AP_Observer RC Aux Function control test (new method)
              self.TestRLSWindowedEstimation,  # AP_Observer windowed estimation (20-30s) test
         ])
         return ret

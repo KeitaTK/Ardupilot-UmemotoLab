@@ -78,13 +78,13 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 10.0
     // @User: Advanced
     AP_GROUPINFO("TEST_AMP", 10, AP_Observer, _test_force_amp, 1.0f),
-    
+
     // @Param: FREQ_EST_CH
-    // @DisplayName: Frequency Estimation RC Channel
-    // @Description: RC channel number for frequency estimation control (0=disabled, 8=RC8)
-    // @Range: 0 16
+    // @DisplayName: Frequency estimation RC channel
+    // @Description: RC channel for frequency estimation control (0=disabled, use RC7_OPTION=316 instead). Legacy method for compatibility.
+    // @Values: 0:Disabled,5:RC5,6:RC6,7:RC7,8:RC8,9:RC9,10:RC10,11:RC11,12:RC12,13:RC13,14:RC14,15:RC15,16:RC16
     // @User: Advanced
-    AP_GROUPINFO("FREQ_EST_CH", 11, AP_Observer, _freq_estimation_rc_channel, 8),
+    AP_GROUPINFO("FREQ_EST_CH", 11, AP_Observer, _freq_estimation_rc_channel, 7),
 
     AP_GROUPEND
 };
@@ -124,11 +124,13 @@ void AP_Observer::init() {
     // 離陸検知フラグ初期化
     _has_taken_off = false;
     
-    // 周波数推定制御初期化
+    // 周波数推定制御初期化（両方式サポート）
+    _freq_estimation_rc_channel.set(0);  // デフォルト無効
+    _freq_estimation_switch_state = false;  // RC Aux Function経由で制御
     _freq_estimation_active = false;
     _freq_estimation_prev_switch = false;
     _freq_estimation_result = _disturbance_freq.get();
-    _freq_estimation_switch_state = 0;
+    _freq_estimation_switch_state = false;  // RC Aux Function経由で制御
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -407,9 +409,15 @@ void AP_Observer::update() {
 #endif
     }
     
-    // RC8スイッチによる周波数推定制御
-    bool current_switch = read_freq_estimation_switch();
-    _freq_estimation_switch_state = current_switch ? 1 : 0;  // ログ用に0/1で記録
+    // 周波数推定制御（両方式サポート）
+    // 1. 新方式：RC Aux Function経由（RC9_OPTION=316など）
+    // 2. 旧方式：OBS_FREQ_EST_CHパラメータで直接チャンネル指定
+    bool current_switch = _freq_estimation_switch_state;  // 新方式
+    
+    // 旧方式もチェック（互換性のため）
+    if (_freq_estimation_rc_channel.get() > 0) {
+        current_switch = current_switch || read_freq_estimation_switch();
+    }
     
     // スイッチの立ち上がりエッジ検出（オフ→オン）
     if (current_switch && !_freq_estimation_prev_switch) {
@@ -636,7 +644,8 @@ void AP_Observer::phase_correction_init() {
     phase_buffer_index = 0;
     phase_buffer_count = 0;
     phase_correction = 0.0f;
-    estimated_frequency = _disturbance_freq.get();  // パラメータ値で初期化
+    estimated_frequency = _disturbance_freq.get();
+    _freq_estimation_switch_state = false;  // 初期状態はOFF  // パラメータ値で初期化
 
     // A,B由来位相もリセット
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
@@ -864,24 +873,6 @@ bool AP_Observer::is_taking_off() {
     return motors->armed();
 }
 
-// RC8スイッチの状態を読み取る（true=オン、false=オフ）
-bool AP_Observer::read_freq_estimation_switch() {
-    // RCチャンネルが0なら無効（常にオフ）
-    if (_freq_estimation_rc_channel.get() == 0) {
-        return false;
-    }
-    
-    // RCチャンネルを取得（チャンネル番号は1ベース）
-    RC_Channel* rc_chan = rc().channel(_freq_estimation_rc_channel.get() - 1);
-    if (rc_chan == nullptr) {
-        return false;
-    }
-    
-    // PWM値を取得して1700以上でオン、1300以下でオフ
-    uint16_t pwm = rc_chan->get_radio_in();
-    return (pwm >= 1700);
-}
-
 // ログをSDカードに記録
 void AP_Observer::Write_Observer_Log() {
 #if HAL_LOGGING_ENABLED
@@ -916,7 +907,33 @@ void AP_Observer::Write_Observer_Log() {
                   phase_correction,     // P: 位相補正
                   phi_obs_x,            // X: 観測位相X
                   phi_obs_y,            // Y: 観測位相Y
-                  _freq_estimation_switch_state);  // SW: RC8スイッチ状態（0=オフ、1=オン）
+                  (uint8_t)(_freq_estimation_switch_state ? 1 : 0));  // SW: RC Aux Functionスイッチ状態（0=オフ、1=オン）
 #endif
+}
+
+// RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
+void AP_Observer::set_freq_estimation_switch(bool enabled) {
+    _freq_estimation_switch_state = enabled;
+    // デバッグ用GCSメッセージ（頻度制限なし、重要な動作確認のため）
+    GCS_SEND_TEXT(MAV_SEVERITY_INFO, "AP_Observer: Freq Est Switch set to %s", enabled ? "ON" : "OFF");
+}
+
+// RCチャンネル読み取り（旧方式・互換性のため）
+bool AP_Observer::read_freq_estimation_switch() {
+    // FREQ_EST_CHパラメータが0なら無効
+    int8_t rc_ch = _freq_estimation_rc_channel.get();
+    if (rc_ch <= 0 || rc_ch > 16) {
+        return false;
+    }
+    
+    // RCチャンネルを取得
+    RC_Channel *ch = rc().channel(rc_ch - 1);  // チャンネルは0-indexed
+    if (ch == nullptr) {
+        return false;
+    }
+    
+    // PWM値を読み取り、閾値と比較（1700以上でON）
+    uint16_t pwm = ch->get_radio_in();
+    return (pwm >= 1700);
 }
 
