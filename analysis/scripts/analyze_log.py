@@ -102,8 +102,9 @@ def analyze_csv(filepath):
     ax[3].grid(True)
     ax[3].legend()
     
-    plt.savefig('log_analysis.png')
-    print("Analysis plot saved to log_analysis.png")
+    output_path = 'analysis/results/log_analysis.png'
+    plt.savefig(output_path)
+    print(f"Analysis plot saved to {output_path}")
     
     # Print some stats
     print(f"Mean Delta Freq: {np.mean(delta_freq):.4f} Hz")

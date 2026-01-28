@@ -9,10 +9,39 @@ All code changes affecting AP_Observer must pass these tests:
 | `test.Copter.ArmFeatures` | Core ArduPilot arming | 300s | Every change |
 | `test.Copter.TestRLSBasicEstimation` | RLS estimation with known frequency | 600s | Every AP_Observer change |
 | `test.Copter.TestRLSRC8SwitchControl` | RC Aux Function (RC8_OPTION=316) control | 600s | After RC/integration changes |
+| `RLS_CSV_Replay (Simulation)` | Offline replay of flight data | ~30s | After frequency estimation code changes |
 
 ---
 
-## Optional Tests
+## Log Simulation & Offline Analysis
+
+When modifying frequency estimation logic, you **MUST** run the offline simulation to verify convergence and stability using real flight data.
+
+### 1. Build & Run Replay
+```bash
+# Build the replay example
+./waf examples --targets=RLS_CSV_Replay
+# Run simulation (Input: analysis/replay/data/replay_data.csv)
+./build/sitl/libraries/AP_Observer/examples/RLS_CSV_Replay
+```
+
+### 2. Generate Comparison Graph
+```bash
+# Generate PNG (Output: analysis/replay/results/rls_freq_compare.png)
+python3 analysis/scripts/plot_rls_freq_compare.py
+```
+
+### 3. Analyze SITL/Flight BIN Logs
+If you have a `.BIN` log from SITL or flight:
+```bash
+# Convert BIN to CSV using MAVExplorer or Mavlink tools, then:
+python3 analysis/scripts/analyze_log.py path/to/log.csv
+# Output: analysis/results/log_analysis.png
+```
+
+---
+
+## Mandatory Tests
 
 These tests are experimental or require long execution time:
 

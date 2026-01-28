@@ -1,4 +1,16 @@
+#define AP_OBSERVER_REPLAY_TEST 1
 #include "AP_Observer.h"
+
+#ifdef AP_OBSERVER_REPLAY_TEST
+// Mock GCS to prevent segfaults in standalone test
+class MockGCS {
+public:
+    void send_text(int severity, const char *fmt, ...) const {}
+};
+static MockGCS _mock_gcs;
+// Force substitution of gcs() calls to use our mock
+#define gcs() _mock_gcs
+#endif
 
 // パラメータテーブル定義
 const AP_Param::GroupInfo AP_Observer::var_info[] = {
@@ -152,7 +164,7 @@ void AP_Observer::rls_init() {
     }
     
     rls_sample_count = 0;
-    rls_start_time_ms = AP_HAL::millis();  // 開始時刻を記録
+    rls_start_time_ms = get_current_time_ms();  // 開始時刻を記録
     
     // 位相補正・周波数推定用の変数を初期化
     phase_buffer_count = 0;
@@ -197,7 +209,7 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     float lambda = constrain_value(_rls_forgetting_factor.get(), RLS_MIN_LAMBDA, RLS_MAX_LAMBDA);
     
     // 経過時間計算 [秒]
-    float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+    float t = (get_current_time_ms() - rls_start_time_ms) / 1000.0f;
     
     // 角周波数 ω = 2πf [rad/s]
     // 位相補正が有効な場合は推定された周波数を使用
@@ -309,7 +321,9 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     // 位相推定（unwrap）の初期化は緩めで良いが、周波数推定に使う位相バッファへ入れる値は
     // できるだけSNRの高い（振幅が十分大きい）サンプルに限定して外れ値を抑える。
     static constexpr float AB_PHASE_MIN_AMP_INIT = 1.0e-4f;  // unwrap初期化用 [N]
-    static constexpr float AB_PHASE_MIN_AMP_BUF  = 1.0f;     // 位相バッファ投入用 [N]
+    // static constexpr float AB_PHASE_MIN_AMP_BUF  = 1.0f;     // 位相バッファ投入用 [N]
+    static constexpr float AB_PHASE_MIN_AMP_BUF  = 0.0f;     // Replay用に閾値を無効化 (常時更新)
+
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
         const float A = rls_theta[axis][0];
         const float B = rls_theta[axis][1];
@@ -347,7 +361,7 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         // 3秒分のデータを60サンプルで表現（メモリ・計算量削減）
         if (++phase_decimation_counter % 5 == 0) {
             phase_buffer[phase_buffer_index] = ab_phase_unwrapped[0] - phase_correction;
-            phase_time_buffer_ms[phase_buffer_index] = AP_HAL::millis();
+            phase_time_buffer_ms[phase_buffer_index] = get_current_time_ms();
             
             phase_buffer_index = (phase_buffer_index + 1) % PHASE_BUFFER_SIZE;
             if (phase_buffer_count < PHASE_BUFFER_SIZE) {
@@ -395,10 +409,10 @@ void AP_Observer::update() {
         static bool test_announced = false;
         
         if (test_start_time_ms == 0) {
-            test_start_time_ms = AP_HAL::millis();
+            test_start_time_ms = get_current_time_ms();
         }
         
-        float t = (AP_HAL::millis() - test_start_time_ms) * 0.001f;
+        float t = (get_current_time_ms() - test_start_time_ms) * 0.001f;
         float test_omega = _test_force_freq.get() * 2.0f * M_PI;  // [rad/s]
         float amplitude = _test_force_amp.get();                   // 毎回取得
         
@@ -498,7 +512,7 @@ void AP_Observer::update() {
     current_filtered_force = get_predicted_force();  // Δt秒後の予測外力
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
     current_correction_euler = calculate_correction_euler_from_force(current_filtered_force);
-    last_update_ms = AP_HAL::millis();
+    last_update_ms = get_current_time_ms();
 
     // ログをSDカードに記録（毎回記録）
     Write_Observer_Log();
@@ -507,7 +521,7 @@ void AP_Observer::update() {
 // #if HAL_GCS_ENABLED
 //     if ((++counter % 10) == 0) {
 //         // 経過時間 [秒]
-//         float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+//         float t = (get_current_time_ms() - rls_start_time_ms) / 1000.0f;
 //         
 //         // タイムスタンプ付き元の外力
 //         gcs().send_text(MAV_SEVERITY_INFO,
@@ -615,7 +629,7 @@ Vector3f AP_Observer::get_predicted_force() const {
     }
     
     // 現在時刻 [秒]
-    float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+    float t = (get_current_time_ms() - rls_start_time_ms) / 1000.0f;
 
     // Δt秒後の位相をA,B由来の観測位相から生成
     // モデル: F = A*sin(omega*t) + B*cos(omega*t) + C = R*sin(omega*t + phi) + C
@@ -774,6 +788,7 @@ float AP_Observer::linear_fit_slope_time(const float* phase, const uint32_t* tim
 
 // 位相補正の更新（100ループごとに呼ばれる）
 void AP_Observer::phase_correction_update() {
+    // return; // DEBUG: Force return to isolate crash
     // 位相補正が無効の場合は何もしない（最優先でチェック）
     if (_phase_correction_enabled.get() == 0) {
         return;  // 静かに終了（メッセージ不要）
@@ -862,14 +877,14 @@ void AP_Observer::phase_correction_update() {
         float old_est_freq = estimated_frequency;
         
         // オンライン周波数推定実行（estimated_frequencyを更新）
-        static constexpr float FREQ_EST_ALPHA = 0.05f;  // Changed from 0.01 to 0.10 for faster convergence
-        estimated_frequency = estimated_frequency + FREQ_EST_ALPHA * (estimated_freq - estimated_frequency);
+        // static constexpr float FREQ_EST_ALPHA = 0.01f;  // Alpha=0.01 for slow adaptation
+        estimated_frequency = estimated_frequency + _freq_est_alpha * (estimated_freq - estimated_frequency);
         
         // 周波数変更に伴う位相不連続を防ぐためにphase_correctionを調整
         // omega_new * t - corr_new = omega_old * t - corr_old
         // -> corr_new = omega_new * t - omega_old * t + corr_old
         // -> corr_new = corr_old + (omega_new - omega_old) * t
-        float t_sec = (AP_HAL::millis() - rls_start_time_ms) * 0.001f;
+        float t_sec = (get_current_time_ms() - rls_start_time_ms) * 0.001f;
         float freq_diff = estimated_frequency - old_est_freq;
         float phase_adj_freq = freq_diff * 2.0f * M_PI * t_sec;
         phase_correction += phase_adj_freq;
@@ -1127,3 +1142,38 @@ void AP_Observer::set_freq_estimation_switch(bool enabled) {
     _freq_estimation_switch_state = enabled;
 }
 
+
+#ifdef AP_OBSERVER_REPLAY_TEST
+void AP_Observer::force_rls_update(const Vector3f& payload) {
+    _payload_filtered = payload;
+    
+    if (rls_initialized) {
+        Vector3f dummy_input;
+        rls_update(dummy_input, _payload_filtered);
+    }
+
+    // Process phase correction trigger from RLS decimation
+    if (rls_initialized && (slope_estimation_trigger_counter >= 20)) {
+        phase_correction_update();
+        slope_estimation_trigger_counter = 0;
+    }
+}
+
+void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
+    _disturbance_freq.set(freq);
+    _filter_cutoff_freq.set(bw);
+    _correction_gain.set(gain);
+
+    // Force RLS params (workaround for AP_Param failure in replay)
+    _rls_forgetting_factor.set(0.99f);
+    _rls_initial_covariance.set(100.0f);
+    _phase_correction_enabled.set(1);
+
+    // ここで推定周波数も初期化
+    estimated_frequency = freq;
+
+    // Ensure RLS re-init usage of new params
+    update_prediction_cache();
+    rls_init();
+}
+#endif

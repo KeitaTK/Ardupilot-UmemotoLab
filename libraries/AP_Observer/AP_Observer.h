@@ -51,10 +51,33 @@ public:
     // RLS周波数推定のリセット（アーム時に呼び出し）
     void reset_frequency_estimation();
 
+// #ifdef AP_OBSERVER_REPLAY_TEST
+    // リプレイテスト用
+    void set_replay_time_ms(uint32_t ms) { _test_current_ms = ms; _replay_active = true; }
+    void set_freq_estimation_active(bool active) { _freq_estimation_active = active; }
+    void force_rls_update(const Vector3f& payload);
+    void set_params_for_replay(float freq, float bw, float gain);
+    void set_freq_est_alpha(float alpha) { _freq_est_alpha = alpha; }
+    float get_estimated_frequency() const { return estimated_frequency; }
+    float get_phase_correction() const { return phase_correction; }
+    // Add logic to get internal RLS state if needed
+// #endif
+
     // パラメータ定義テーブル
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
+// #ifdef AP_OBSERVER_REPLAY_TEST
+    uint32_t _test_current_ms = 0;
+    bool _replay_active = false;
+    float _freq_est_alpha = 0.05f;
+    uint32_t get_current_time_ms() const { return _replay_active ? _test_current_ms : AP_HAL::millis(); }
+    uint64_t get_current_time_us() const { return _test_current_ms != 0 ? (uint64_t)_test_current_ms * 1000 : AP_HAL::micros64(); }
+// #else
+//    uint32_t get_current_time_ms() const { return AP_HAL::millis(); }
+//    uint64_t get_current_time_us() const { return AP_HAL::micros64(); }
+// #endif
+
     uint32_t    counter = 0;
     Vector3f    current_filtered_force = Vector3f();
     Quaternion  current_correction_quat = Quaternion(1,0,0,0); // 単位クォータニオンで初期化
