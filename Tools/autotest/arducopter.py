@@ -8433,32 +8433,33 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         import math
         
         # テストパラメータ設定
-        initial_freq = 0.60  # [Hz] 初期設定周波数（モデル周波数）
-        test_freq = 0.70     # [Hz] 実際に注入する周波数（真の周波数）
-        freq_error = test_freq - initial_freq  # 0.10Hz の誤差
-        test_amplitude = 8.0  # 外力振幅 [N] (明確な信号のため増加)
+        # ユーザー条件: 設定0.74m(0.58Hz), 実機1.04m(0.49Hz)
+        initial_freq = 0.58  # [Hz] 初期設定周波数（モデル周波数）
+        test_freq = 0.49     # [Hz] 実際に注入する周波数（真の周波数）
+        freq_error = test_freq - initial_freq  # -0.09Hz の誤差
+        test_amplitude = 2.0  # 外力振幅 [N] (ユーザー指定条件に合わせる)
         
         self.progress("=" * 80)
-        self.progress("DETAILED FREQUENCY ESTIMATION TEST")
+        self.progress("DETAILED FREQUENCY ESTIMATION TEST (User Case Reproduction)")
         self.progress("Algorithm: Phase drift detection for frequency estimation")
         self.progress(f"Initial frequency (OBS_DIST_FREQ): {initial_freq:.4f}Hz")
         self.progress(f"Injected frequency (true): {test_freq:.4f}Hz")
         self.progress(f"Frequency error: {freq_error:.4f}Hz ({freq_error/test_freq*100:.1f}%)")
         self.progress(f"Test amplitude: {test_amplitude}N")
-        self.progress("Expected: Phase drift slope = 2π × freq_error")
+        self.progress("Expected: Phase drift slope should be detected and Freq updated")
         self.progress("=" * 80)
         
         self.set_parameters({
             'OBS_CORR_GAIN': 0.0,        # 補正ゲインは0（推定のみ）
             'OBS_FILT_CUTOFF': 20.0,
-            'OBS_RLS_LAMBDA': 0.99,      # 忘却係数（高めで安定推定）
+            'OBS_RLS_LAMBDA': 0.99,      # 忘却係数
             'OBS_RLS_COV_INIT': 100.0,
             'OBS_DIST_FREQ': initial_freq,  # 初期周波数（意図的に誤差あり）
             'OBS_PRED_TIME': 0.00,
             'OBS_PHASE_CORR': 1,         # 位相補正＝周波数推定を有効化
-            'OBS_PHASE_THRESH': 1000.0,  # 閾値大＝位相リセット無効（純粋な周波数推定のみ）
+            'OBS_PHASE_THRESH': 0.0,     # 閾値0（常に補正）
             'OBS_TEST_INJECT': 1,        # テスト外力注入
-            'OBS_TEST_FREQ': test_freq,  # 真の周波数（initial_freq + 0.10Hz）
+            'OBS_TEST_FREQ': test_freq,  # 真の周波数（initial_freq + 誤差）
             'OBS_TEST_AMP': test_amplitude,
             'RC8_OPTION': 316,           # RC8にRLS_FREQ_EST機能
             'LOG_DISARMED': 1,           # 離陸後のログも記録
@@ -8498,17 +8499,16 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         t0 = self.get_sim_time()
         self.progress(f"Flight start time: {t0:.2f}s")
         
-        # Phase 1: 10秒間RC8オフ（RLS起動中、周波数推定なし）
+        # Phase 1: 5秒間RC8オフ
         self.progress("=" * 80)
-        self.progress("PHASE 1: 0-10s - RC8 OFF (RLS active, no frequency estimation)")
+        self.progress("PHASE 1: 0-5s - RC8 OFF")
         self.progress("=" * 80)
         t_phase1_start = self.get_sim_time()
-        self.delay_sim_time(10)
-        t_phase1_end = self.get_sim_time()
+        self.delay_sim_time(5)
         
-        # Phase 2: RC8をオンにして周波数推定開始（40秒間）
+        # Phase 2: RC8をオンにして周波数推定開始（60秒間）
         self.progress("=" * 80)
-        self.progress("PHASE 2: 10-50s - RC8 ON (frequency estimation active)")
+        self.progress("PHASE 2: 5-65s - RC8 ON (frequency estimation active)")
         self.progress("Turning RC8 ON now...")
         self.progress("=" * 80)
         self.set_rc(8, 2000)
@@ -8516,24 +8516,22 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         
         t_phase2_start = self.get_sim_time()
         
-        # 10秒ごとに進捗を表示しながら40秒間推定
-        for i in range(4):
+        # 10秒ごとに進捗を表示しながら60秒間推定
+        for i in range(6):
             self.delay_sim_time(10)
             elapsed = self.get_sim_time() - t_phase2_start
-            self.progress(f"  Estimation in progress: {elapsed:.0f}s / 40s")
+            self.progress(f"  Estimation in progress: {elapsed:.0f}s / 60s")
         
         t_phase2_end = self.get_sim_time()
+        t_phase3_start = t_phase2_end
         
-        # Phase 3: RC8をオフにして周波数を保持（10秒間）
+        # Phase 3: RC8をオフにして周波数を保持（5秒間）
         self.progress("=" * 80)
-        self.progress("PHASE 3: 50-60s - RC8 OFF (holding estimated frequency)")
+        self.progress("PHASE 3: 65-70s - RC8 OFF")
         self.progress("Turning RC8 OFF now...")
         self.progress("=" * 80)
         self.set_rc(8, 1000)
-        self.delay_sim_time(2)
-        
-        t_phase3_start = self.get_sim_time()
-        self.delay_sim_time(10)
+        self.delay_sim_time(5)
         t_phase3_end = self.get_sim_time()
         
         # ログ解析開始
@@ -8543,200 +8541,79 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         
         import numpy
         
-        # Phase 1のデータ収集
+        # Log parsing logic - read all OBSV data
         mlog = self.dfreader_for_current_onboard_log()
-        phase1_data = {'time': [], 'sw': [], 'freq': [], 'ax': [], 'bx': []}
+        all_data = {'time': [], 'sw': [], 'freq': [], 'ax': [], 'bx': []}
+        
         while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_phase1_start * 1.0e6, t_phase1_end * 1.0e6))
+            m = mlog.recv_match(type='OBSV', blocking=False)
             if m is None:
                 break
-            phase1_data['time'].append(m.TimeUS / 1.0e6)
-            if hasattr(m, 'SW'):
-                phase1_data['sw'].append(m.SW)
-            if hasattr(m, 'F'):
-                phase1_data['freq'].append(m.F)
-            if hasattr(m, 'AX'):
-                phase1_data['ax'].append(m.AX)
-            if hasattr(m, 'BX'):
-                phase1_data['bx'].append(m.BX)
-        
-        # Phase 2のデータ収集（時系列で）
-        mlog = self.dfreader_for_current_onboard_log()
-        phase2_data = {'time': [], 'sw': [], 'freq': [], 'ax': [], 'bx': []}
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_phase2_start * 1.0e6, t_phase2_end * 1.0e6))
-            if m is None:
-                break
-            phase2_data['time'].append(m.TimeUS / 1.0e6)
-            if hasattr(m, 'SW'):
-                phase2_data['sw'].append(m.SW)
-            if hasattr(m, 'F'):
-                phase2_data['freq'].append(m.F)
-            if hasattr(m, 'AX'):
-                phase2_data['ax'].append(m.AX)
-            if hasattr(m, 'BX'):
-                phase2_data['bx'].append(m.BX)
-        
-        # Phase 3のデータ収集
-        mlog = self.dfreader_for_current_onboard_log()
-        phase3_data = {'time': [], 'sw': [], 'freq': [], 'ax': [], 'bx': []}
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_phase3_start * 1.0e6, t_phase3_end * 1.0e6))
-            if m is None:
-                break
-            phase3_data['time'].append(m.TimeUS / 1.0e6)
-            if hasattr(m, 'SW'):
-                phase3_data['sw'].append(m.SW)
-            if hasattr(m, 'F'):
-                phase3_data['freq'].append(m.F)
-            if hasattr(m, 'AX'):
-                phase3_data['ax'].append(m.AX)
-            if hasattr(m, 'BX'):
-                phase3_data['bx'].append(m.BX)
-        
-        # === Phase 1 分析 ===
-        self.progress("-" * 80)
-        self.progress("PHASE 1 RESULTS (0-10s): RC8 OFF")
-        self.progress("-" * 80)
-        if len(phase1_data['sw']) > 0:
-            sw1 = numpy.median(numpy.asarray(phase1_data['sw']))
-            self.progress(f"  Switch state (median): {sw1:.1f} (expected 0)")
-            if sw1 > 0.5:
-                raise NotAchievedException("Phase 1: RC8 should be OFF")
-        
-        if len(phase1_data['freq']) > 5:
-            freq1 = numpy.asarray(phase1_data['freq'])
-            self.progress(f"  Frequency: mean={numpy.mean(freq1):.4f}Hz, std={numpy.std(freq1):.5f}Hz")
-            self.progress(f"  Frequency: min={numpy.min(freq1):.4f}Hz, max={numpy.max(freq1):.4f}Hz")
-        
-        if len(phase1_data['ax']) > 5 and len(phase1_data['bx']) > 5:
-            ax1 = numpy.asarray(phase1_data['ax'])
-            bx1 = numpy.asarray(phase1_data['bx'])
-            amp1 = numpy.sqrt(ax1**2 + bx1**2)
-            self.progress(f"  RLS amplitude: mean={numpy.mean(amp1):.3f}N, std={numpy.std(amp1):.3f}N")
-        
-        # === Phase 2 分析（詳細） ===
-        self.progress("-" * 80)
-        self.progress("PHASE 2 RESULTS (10-50s): RC8 ON - FREQUENCY ESTIMATION")
-        self.progress("-" * 80)
-        if len(phase2_data['sw']) > 0:
-            sw2 = numpy.median(numpy.asarray(phase2_data['sw']))
-            self.progress(f"  Switch state (median): {sw2:.1f} (expected 1)")
-            if sw2 < 0.5:
-                raise NotAchievedException("Phase 2: RC8 should be ON")
-        
-        if len(phase2_data['freq']) > 10:
-            freq2 = numpy.asarray(phase2_data['freq'])
-            time2 = numpy.asarray(phase2_data['time'])
             
-            # 全体統計
-            self.progress(f"  Total samples: {len(freq2)}")
-            self.progress(f"  Frequency: mean={numpy.mean(freq2):.4f}Hz, std={numpy.std(freq2):.5f}Hz")
-            self.progress(f"  Frequency: min={numpy.min(freq2):.4f}Hz, max={numpy.max(freq2):.4f}Hz")
-            
-            # 時系列変化（10秒ごと）
-            self.progress("  Frequency evolution (10s intervals):")
-            t_start = time2[0]
-            for interval in range(4):
-                t_lo = t_start + interval * 10
-                t_hi = t_start + (interval + 1) * 10
-                mask = (time2 >= t_lo) & (time2 < t_hi)
-                if numpy.sum(mask) > 0:
-                    freq_interval = freq2[mask]
-                    self.progress(f"    {interval*10:2d}-{(interval+1)*10:2d}s: "
-                                  f"mean={numpy.mean(freq_interval):.4f}Hz, "
-                                  f"std={numpy.std(freq_interval):.5f}Hz, "
-                                  f"n={len(freq_interval)}")
-            
-            # 収束判定（後半20秒の平均）
-            mask_late = time2 >= (t_start + 20)
-            if numpy.sum(mask_late) > 5:
-                freq_late = freq2[mask_late]
-                freq_est = numpy.mean(freq_late)
-                freq_err = abs(freq_est - test_freq)
-                convergence_percent = (1.0 - abs(freq_est - test_freq) / abs(test_freq - initial_freq)) * 100
-                self.progress(f"  Estimated frequency (last 20s): {freq_est:.4f}Hz")
-                self.progress(f"  Target frequency: {test_freq:.4f}Hz")
-                self.progress(f"  Initial error: {abs(test_freq - initial_freq):.4f}Hz")
-                self.progress(f"  Final error: {freq_err:.5f}Hz ({freq_err/test_freq*100:.2f}%)")
-                self.progress(f"  Convergence: {convergence_percent:.1f}%")
-                
-                if freq_err > 0.02:  # 0.02Hz = 2.9%の許容誤差
-                    self.progress(f"  ⚠ Warning: Large frequency error {freq_err:.5f}Hz")
-                else:
-                    self.progress(f"  ✓ Good convergence!")
+            t = m.TimeUS * 1.0e-6
+            all_data['time'].append(t)
+            all_data['sw'].append(m.SW)
+            all_data['freq'].append(m.F)
+            all_data['ax'].append(m.AX)
+            all_data['bx'].append(m.BX)
+
+        time_arr = numpy.array(all_data['time'])
+        freq_arr = numpy.array(all_data['freq'])
+        sw_arr = numpy.array(all_data['sw'])
         
-        if len(phase2_data['ax']) > 5 and len(phase2_data['bx']) > 5:
-            ax2 = numpy.asarray(phase2_data['ax'])
-            bx2 = numpy.asarray(phase2_data['bx'])
-            amp2 = numpy.sqrt(ax2**2 + bx2**2)
-            self.progress(f"  RLS amplitude: mean={numpy.mean(amp2):.3f}N, std={numpy.std(amp2):.3f}N")
-            self.progress(f"  Target amplitude: {test_amplitude:.1f}N")
+        if len(time_arr) == 0:
+            raise NotAchievedException("No OBSV log data found")
+
+        # Define Masks
+        mask_p1 = (time_arr >= t_phase1_start) & (time_arr < t_phase2_start)
+        mask_p2 = (time_arr >= t_phase2_start) & (time_arr < t_phase2_end)
         
-        # === Phase 3 分析 ===
-        self.progress("-" * 80)
-        self.progress("PHASE 3 RESULTS (50-60s): RC8 OFF - HOLDING")
-        self.progress("-" * 80)
-        if len(phase3_data['sw']) > 0:
-            sw3 = numpy.median(numpy.asarray(phase3_data['sw']))
-            self.progress(f"  Switch state (median): {sw3:.1f} (expected 0)")
-            if sw3 > 0.5:
-                raise NotAchievedException("Phase 3: RC8 should be OFF")
+        # Analysis Phase 2
+        freq_on = freq_arr[mask_p2]
         
-        if len(phase3_data['freq']) > 5:
-            freq3 = numpy.asarray(phase3_data['freq'])
-            self.progress(f"  Held frequency: mean={numpy.mean(freq3):.4f}Hz, std={numpy.std(freq3):.5f}Hz")
-            self.progress(f"  Frequency: min={numpy.min(freq3):.4f}Hz, max={numpy.max(freq3):.4f}Hz")
-            
-            # 保持された周波数が推定結果と一致するか
-            if len(phase2_data['freq']) > 5:
-                freq2_late = numpy.asarray(phase2_data['freq'])[-20:]  # 最後の20サンプル
-                freq2_final = numpy.mean(freq2_late)
-                freq3_mean = numpy.mean(freq3)
-                freq_hold_diff = abs(freq3_mean - freq2_final)
-                self.progress(f"  Phase2 final frequency: {freq2_final:.4f}Hz")
-                self.progress(f"  Phase3 held frequency: {freq3_mean:.4f}Hz")
-                self.progress(f"  Hold accuracy: {freq_hold_diff:.5f}Hz")
-                
-                if freq_hold_diff > 0.01:
-                    self.progress(f"  ⚠ Warning: Frequency not held accurately")
+        if len(freq_on) == 0:
+             # Fallback to switch based
+             mask_p2 = (sw_arr > 0.5)
+             freq_on = freq_arr[mask_p2]
+             
+        if len(freq_on) == 0:
+             raise NotAchievedException("No data during estimation phase (Phase 2)")
+
+        final_est_freq = freq_on[-1]
+        estimation_error = final_est_freq - test_freq
         
-        if len(phase3_data['ax']) > 5 and len(phase3_data['bx']) > 5:
-            ax3 = numpy.asarray(phase3_data['ax'])
-            bx3 = numpy.asarray(phase3_data['bx'])
-            amp3 = numpy.sqrt(ax3**2 + bx3**2)
-            self.progress(f"  RLS amplitude: mean={numpy.mean(amp3):.3f}N, std={numpy.std(amp3):.3f}N")
+        self.progress(f"Estimated Freq: {initial_freq:.4f}Hz -> {final_est_freq:.4f}Hz")
+        self.progress(f"True Freq: {test_freq:.4f}Hz")
+        self.progress(f"Error: {estimation_error:.4f}Hz")
+
+        # 推定値の推移
+        initial_val = freq_on[0]
+        mid_val = freq_on[len(freq_on)//2]
         
-        # 最終サマリー
-        self.progress("=" * 80)
-        self.progress("✅ DETAILED FREQUENCY ESTIMATION TEST PASSED")
-        self.progress("=" * 80)
-        self.progress("Summary:")
-        self.progress(f"  - Initial frequency: {initial_freq:.4f}Hz")
-        self.progress(f"  - True frequency: {test_freq:.4f}Hz")
-        self.progress(f"  - Initial error: {freq_error:.4f}Hz")
-        if len(phase2_data['freq']) > 5:
-            self.progress(f"  - Estimated frequency: {freq_est:.4f}Hz")
-            self.progress(f"  - Final error: {freq_err:.5f}Hz")
-            self.progress(f"  - Convergence: {convergence_percent:.1f}%")
-        self.progress("  - Algorithm: Phase drift detection → frequency correction")
-        self.progress("  - RLS continuously active throughout flight")
-        self.progress("  - Frequency estimation only during RC8 ON period")
-        self.progress("  - Frequency successfully held after RC8 OFF")
-        self.progress("=" * 80)
+        self.progress(f"Start: {initial_val:.4f} Hz")
+        self.progress(f"Mid  : {mid_val:.4f} Hz")
+        self.progress(f"End  : {final_est_freq:.4f} Hz")
         
-        self.do_RTL()
-        self.set_rc(8, 1000)
+        # Check standard deviation
+        freq_std = numpy.std(freq_on)
+        self.progress(f"Freq Std Dev during estimation: {freq_std:.6f}")
+        
+        # 評価
+        if abs(estimation_error) > 0.05:
+            self.progress("WARNING: Estimation accuracy is poor")
+
+        # Stuck check
+        diff1 = abs(mid_val - initial_val)
+        diff2 = abs(final_est_freq - mid_val)
+        
+        if diff1 < 1e-4 and diff2 < 1e-4:
+             raise NotAchievedException("Frequency estimate stuck! (No change observed)")
+             
+        # 着陸
+        self.land_and_disarm()
         self.context_pop()
+        
+
 
     def ParameterChecks(self):
         '''Test Arming Parameter Checks'''

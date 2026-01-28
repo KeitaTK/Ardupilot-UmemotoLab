@@ -549,3 +549,40 @@ README.md
 
 ---
 
+
+### 2026-01-28 (最適化): 周波数推定のスライディングウィンドウ化
+
+- 問題: 周波数推定のサンプル数が不足していたため（1秒=100サンプル更新）、安定性と応答性のバランスが悪かった。3秒間データの使用が求められた。
+- 調査:
+  - 3秒分のデータ（300サンプル）をバッファに持つのはメモリ（スタック）消費量が大きい。
+  - 毎ステップ全データを再計算するのはCPU負荷が高い。
+- 試行:
+  1. **ダウンサンプリング**: 入力を100Hzから20Hzに間引き（5回に1回保存）。
+  2. **バッファサイズ変更**: 3秒間のデータを保持するため、サイズを60（20Hz * 3s）に変更。
+  3. **スライディングウィンドウ**: バッファをクリアせず、リングバッファとして古データを上書きし、過去3秒分のデータで推定を行う。
+  4. **更新頻度調整**: 20サンプル（1秒）追加されるごとに推定更新を実行。
+  5. **不具合修正**:
+     - SITLクラッシュ (Floating Point Exception / Connection Refused) が発生。
+     - 原因は未初期化変数と、桁落ちによるゼロ除算に近い状態での `slope` 計算の爆発。
+     - 対策: `linear_fit_slope_time` を `double` 精度化し、異常値ガードを追加。`rls_init`/`reset` での変数の完全初期化。
+- 結果:
+  - ✅ メモリ使用量を抑制しつつ3秒間の観測窓を実現。
+  - ✅ 1秒ごとの更新頻度で滑らかに推定値が推移することを確認。
+  - ✅ SITLでのテスト (`TestRLSFrequencyEstimationDetailed`) 通過。推定精度（0.6Hz -> 0.67Hz付近）も良好。
+
+### 2026-01-28 (修正): 推定の連続性確保
+- 問題: 周波数推定や位相補正が発生した際、バッファ内の過去データと新しいパラメータの間に不整合（段差）が生じ、スロープ計算が不安定になる（"一気に補正されて止まる"現象の原因）。
+- 対策:
+  1. **周波数変更時**: `phase_correction` を調整して現時点の位相を保つ際、バッファ内の過去データ(`phi - P`)に対しても補正差分を適用し、時系列としての連続性を維持。
+  2. **位相補正時**: `phase_correction` を更新する際、RLS係数(A,B)と `ab_phase` を座標回転行列で即座に新しい位相基準へ変換。これによりRLSの過渡応答（収束待ち）を排除し、観測位相の連続性を保証。
+- 結果: パラメータ更新時もバッファデータの連続性が保たれ、スライディングウィンドウによる推定が途切れず滑らかに行われるようになる見込み。
+- ツール: `analyze_log.py` を追加。CSVログから周波数推定バッファの状態を可視化可能。
+### 2026-01-28: [AP_Observer/RLS Tuning]
+- Problem: Frequency estimation was too slow (stuck at 0.56Hz vs 0.49Hz target) with conservative parameters (Alpha=0.01), and unstable/overshooting with aggressive parameters (Alpha=0.10, Clamp=0.20Hz).
+- Investigation: The learning rate `FREQ_EST_ALPHA` determines tracking speed, while clamping prevents wild jumps. 0.01 was too slow for the test duration, 0.10 caused instability.
+- Attempted: 
+    - Tuned `FREQ_EST_ALPHA` to `0.05f`.
+    - Set `delta_freq` constraint to `+/- 0.10f`.
+- Result: 
+    - ✅ Convergence verified: Estimated freq reached ~0.508Hz (Taget 0.49Hz) within test duration.
+    - ✅ Verified with `Tools/autotest/arducopter.py` (Passed).

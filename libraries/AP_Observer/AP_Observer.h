@@ -105,11 +105,13 @@ private:
     bool _combined_freq_est_switch;         // 統合されたスイッチ状態（新方式 OR 旧方式）
     
     // 位相補正用の変数
-    static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 位相データバッファのサイズ（1.0秒分に拡張）
+    static constexpr uint8_t PHASE_BUFFER_SIZE = 60;   // 3.0s * 20Hz = 60 samples (データ3秒分)
     float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
     uint32_t phase_time_buffer_ms[PHASE_BUFFER_SIZE];  // 位相サンプルの時刻 [ms]
-    uint8_t phase_buffer_index;                        // バッファの現在のインデックス
-    uint8_t phase_buffer_count;                        // バッファ内の有効データ数
+    uint8_t phase_buffer_index = 0;                    // リングバッファの次回書き込みインデックス
+    uint8_t phase_buffer_count = 0;                    // バッファ内の有効データ数
+    uint8_t phase_decimation_counter = 0;              // ダウンサンプリング用カウンタ
+    uint8_t slope_estimation_trigger_counter = 0;      // 推定実行トリガー用カウンタ
     float phase_correction;                            // 累積位相補正量 [rad]
     float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
