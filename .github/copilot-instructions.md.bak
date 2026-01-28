@@ -1,32 +1,32 @@
 # ArduPilot Project - Copilot Custom Instructions
 
-## プロジェクト概要
+## 📋 プロジェクト概要
 このプロジェクトはArduPilotベースのドローン制御システムです。
 - 実装はArduPilotの公式実装方法に準拠してください
 - 必要に応じてWeb検索やリソースを活用し、ArduPilot公式情報を参照してください
 
 ---
 
-## 開発履歴の記録（重要）
+## � 開発履歴の記録（重要）
 
 ### 履歴記録ルール
-コード変更、バグ修正、実験的試行を行った際は、**必ず** `CHANGELOG_DEVELOPMENT.md` に記録してください。
+コード変更、バグ修正、実験的試行を行った際は、**必ず** `/home/memoto/CHANGELOG_DEVELOPMENT.md` に記録してください。
 
 **記録タイミング**:
-- 重要なコード変更を実施した後
-- バグを発見・修正した後
-- オートテストの実行結果を確認した後
-- トライアンドエラーで解決策を見つけた後
-- 実験的な変更を試した後（失敗した場合も含む）
+- ✅ 重要なコード変更を実施した後
+- ✅ バグを発見・修正した後
+- ✅ オートテストの実行結果を確認した後
+- ✅ トライアンドエラーで解決策を見つけた後
+- ✅ 実験的な変更を試した後（失敗した場合も含む）
 
 **記録形式** (`CHANGELOG_DEVELOPMENT.md`参照):
 ```markdown
 ### YYYY-MM-DD: [機能名/コンポーネント]
-- 問題: [発生した問題]
-- 調査: [調査内容・原因]
-- 試行: [実施した変更]
-- 結果: [最終的な結果]
-- 備考: [その他重要な情報]
+- 🐛 **問題**: [発生した問題]
+- 🔍 **調査**: [調査内容・原因]
+- ✏️ **試行**: [実施した変更]
+- ✅ **結果**: [最終的な結果]
+- 📝 **備考**: [その他重要な情報]
 ```
 
 **記録のポイント**:
@@ -37,12 +37,12 @@
 
 ---
 
-## 開発ワークフロー
+## �🚀 開発ワークフロー
 
 ### 標準的な修正・検証フロー
 コード修正を行う際は、以下の手順を**必ず順番通りに**実行してください。
 
-#### フェーズ1: SITL開発・検証
+#### ⚡ フェーズ1: SITL開発・検証
 
 1. **コード修正**
    - 必要な変更を実装
@@ -88,7 +88,7 @@
 
 ---
 
-#### フェーズ2: ハードウェアターゲット（Pixhawk6C）ビルド
+#### 🎯 フェーズ2: ハードウェアターゲット（Pixhawk6C）ビルド
 
 **前提条件**: フェーズ1のすべてのオートテストがPASSしていること
 
@@ -103,11 +103,11 @@
 2. **ビルドエラー対応**
    - エラーが出た場合、フェーズ1に戻って修正
 
-**重要**: フェーズ1がクリアするまで、フェーズ2には進まないこと
+**⚠️ 重要**: フェーズ1がクリアするまで、フェーズ2には進まないこと
 
 ---
 
-### よく使うコマンド集
+### 📝 よく使うコマンド集
 
 #### フェーズ1: SITL開発
 ```bash
@@ -144,7 +144,7 @@ cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
 
 ---
 
-## プロジェクト固有のルール
+## 🔧 プロジェクト固有のルール
 
 ### AP_Observer ライブラリの開発
 - **ファイル場所**: `libraries/AP_Observer/`
@@ -171,7 +171,7 @@ cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
 - テストがすべてPASSするまでデバッグと修正を繰り返す
 - ログ出力量は既存と同等レベルに維持
 
-## よくある問題と解決策
+## 🐛 よくある問題と解決策
 
 | 問題 | 症状 | 原因 | 解決策 |
 |------|------|------|--------|
@@ -181,7 +181,7 @@ cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
 
 ---
 
-## デバッグ手法
+## 🔍 デバッグ手法
 
 ### ログ確認
 - **ログファイル**: `logs/OBSV_data_*.csv`
@@ -198,7 +198,7 @@ cd /home/umemoto/UMEMOTO2 && ./waf -j$(nproc) copter 2>&1 | tail -50
 
 ---
 
-## RLS周波数推定スイッチ設定
+## 🎛️ RLS周波数推定スイッチ設定
 
 ### 新方式（推奨）: RC Aux Function方式
 ArduPilot標準の`RC_OPTION`パラメータを使用する方法です。
@@ -263,7 +263,7 @@ RC7_OPTION = 0  # デフォルト（無効）
 
 ---
 
-## 修正の原則
+## ✅ 修正の原則
 
 1. **段階的な変更** - 一度に多くを変更せず、小さな修正を積み重ねる
 2. **即座の検証** - 各修正後、必ずビルド・テストを実行
@@ -294,7 +294,7 @@ Ardupilot-UmemotoLab/
 
 ---
 
-## Pixhawk6C向け完全クリーンビルド（2026/01/21検証済み）
+## 🔄 Pixhawk6C向け完全クリーンビルド（2026/01/21検証済み）
 
 ### クリーンビルドのポイント
 - `./waf clean` だけではキャッシュや一部生成物が残る場合がある
@@ -306,17 +306,17 @@ Ardupilot-UmemotoLab/
 
 ---
 
-## 追加のベストプラクティス
+## 💡 追加のベストプラクティス
 
-- 修正前に現在の動作を理解する
-- 仮説を立ててから修正する
-- 修正後の影響範囲を確認する
-- テストでカバーされない部分は手動確認する
-- 重要な変更はコミットメッセージに詳細を記載する
+- ✅ 修正前に現在の動作を理解する
+- ✅ 仮説を立ててから修正する
+- ✅ 修正後の影響範囲を確認する
+- ✅ テストでカバーされない部分は手動確認する
+- ✅ 重要な変更はコミットメッセージに詳細を記載する
 
 ---
 
-## ArduPilotコーディング規約
+## 📖 ArduPilotコーディング規約
 
 ### ファイル構成と命名規則
 - **ヘッダーファイル**: `#pragma once` を使用（includeガード代わり）
@@ -387,7 +387,7 @@ float omega = freq * 6.28;  // 2*PIをマジックナンバーで書かない
 
 ---
 
-## 必須オートテスト一覧（まとめ）
+## 🎯 必須オートテスト一覧（まとめ）
 
 コード修正後は、以下のテストを実行し、**すべてPASSすることを確認**してください（リポジトリの現在の利用状況に応じて増減します）。
 
@@ -406,11 +406,11 @@ source venv_ardupilot/bin/activate
 # 必須テストを順次実行
 timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures || exit 1
 timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation || exit 1
-timeout 800 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSFrequencyEstimation || { echo " TestRLSFrequencyEstimation failed (experimental)"; }
+timeout 800 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSFrequencyEstimation || { echo "⚠️  TestRLSFrequencyEstimation failed (experimental)"; }
 
-echo "すべての必須テストが完了しました"
+echo "✅ すべての必須テストが完了しました"
 ```
 
-**注意**: `TestRLSFrequencyEstimation` は実験的な機能で、タイミングによって不安定な場合があります。
+**⚠️ 注意**: `TestRLSFrequencyEstimation` は実験的な機能で、タイミングによって不安定な場合があります。
 
-**重要**: すべてのテストがPASSするまで、Pixhawk6Cビルドには進まないこと。
+**⚠️ 重要**: すべてのテストがPASSするまで、Pixhawk6Cビルドには進まないこと。

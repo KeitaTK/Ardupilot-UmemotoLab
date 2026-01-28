@@ -402,8 +402,153 @@ void AP_Observer::update() {
     
     // 周波数推定制御（RC Aux Function方式）
     // RC8_OPTION=316 などでスイッチを割り当て
-    // RC Aux Functionが既にデバウンス処理を行っているため、ここでは単純なエッジ検出のみ
     bool current_switch = _freq_estimation_switch_state;
+    
+    // デバッグ情報：RC8の状況を詳細に確認
+    static uint32_t debug_counter = 0;
+    debug_counter++;
+    bool do_detailed_debug = (debug_counter % 25) == 0;  // 25回に1回詳細デバッグ
+    
+    // RC8チャンネルの実際のPWM値を取得
+    RC_Channel* rc8 = RC_Channels::rc_channel(7);  // RC8 = index 7
+    uint16_t rc8_pwm = 0;
+    if (rc8 != nullptr) {
+        rc8_pwm = rc8->get_radio_in();
+    }
+    
+    // RC8_OPTIONの設定値を取得
+    RC_Channel* rc8_option_channel = nullptr;
+    uint16_t rc8_option_value = 0;
+    for (uint8_t i = 4; i < 16; i++) {  // RC5～RC16をチェック
+        RC_Channel* ch = RC_Channels::rc_channel(i);
+        if (ch && (RC_Channel::AUX_FUNC)ch->option.get() == RC_Channel::AUX_FUNC::RLS_FREQ_EST) {
+            rc8_option_channel = ch;
+            rc8_option_value = ch->get_radio_in();
+            break;
+        }
+    }
+    
+#if HAL_GCS_ENABLED
+    if (do_detailed_debug) {
+        gcs().send_text(MAV_SEVERITY_INFO, "RC8_Debug: PWM=%d switch=%d", 
+                       rc8_pwm, (int)current_switch);
+        if (rc8_option_channel) {
+            uint8_t ch_num = (int)(rc8_option_channel - RC_Channels::rc_channel(0) + 1);
+            uint16_t option_val = rc8_option_channel->option.get();
+            gcs().send_text(MAV_SEVERITY_INFO, "RC8_Option: ch=%d PWM=%d option=%d", 
+                           ch_num, rc8_option_value, option_val);
+        } else {
+            gcs().send_text(MAV_SEVERITY_INFO, "RC8_Option: No channel set to 316");
+        }
+    }
+#endif
+    
+    // 堅牢なデバウンス処理：200ms以内の変化は無視
+    // 3段階スイッチの中間位置でのチャタリングを防止
+    static uint32_t last_switch_change_ms = 0;
+    static bool pending_switch_state = false;
+    static bool switch_state_confirmed = false;
+    uint32_t now_ms = AP_HAL::millis();
+    
+    // スイッチ状態の変化を検出
+    if (current_switch != _freq_estimation_prev_switch) {
+#if HAL_GCS_ENABLED
+        if (do_detailed_debug) {
+            gcs().send_text(MAV_SEVERITY_INFO, "SW_Change: %d->%d pending=%d confirmed=%d", 
+                           (int)_freq_estimation_prev_switch, (int)current_switch,
+                           (int)pending_switch_state, (int)switch_state_confirmed);
+        }
+#endif
+        // 初回の変化検出
+        if (!switch_state_confirmed) {
+            pending_switch_state = current_switch;
+            last_switch_change_ms = now_ms;
+            switch_state_confirmed = true;
+#if HAL_GCS_ENABLED
+            if (do_detailed_debug) {
+                gcs().send_text(MAV_SEVERITY_INFO, "SW_Pending: state=%d at %lu ms", 
+                               (int)pending_switch_state, now_ms);
+            }
+#endif
+        }
+        // 状態が安定しているか確認（200ms経過）
+        else if (pending_switch_state == current_switch && 
+                 now_ms - last_switch_change_ms >= 200) {
+            // 状態確定：エッジ処理を実行
+#if HAL_GCS_ENABLED
+            GCS_SEND_TEXT(MAV_SEVERITY_INFO, "RLS Freq Est: %s", 
+                         current_switch ? "ON" : "OFF");
+            if (do_detailed_debug) {
+                gcs().send_text(MAV_SEVERITY_INFO, "SW_Confirmed: state=%d after %lu ms", 
+                               (int)current_switch, now_ms - last_switch_change_ms);
+            }
+#endif
+            // 状態を更新してエッジ検出処理へ進む
+            switch_state_confirmed = false;
+        }
+        // 状態が変わった場合はリセット
+        else if (pending_switch_state != current_switch) {
+            pending_switch_state = current_switch;
+            last_switch_change_ms = now_ms;
+#if HAL_GCS_ENABLED
+            if (do_detailed_debug) {
+                gcs().send_text(MAV_SEVERITY_INFO, "SW_Reset: new_pending=%d at %lu ms", 
+                               (int)pending_switch_state, now_ms);
+            }
+#endif
+        }
+        // デバウンス期間中は前回の状態を維持
+        else {
+            current_switch = _freq_estimation_prev_switch;
+#if HAL_GCS_ENABLED
+            if (do_detailed_debug) {
+                uint32_t elapsed = now_ms - last_switch_change_ms;
+                gcs().send_text(MAV_SEVERITY_INFO, "SW_Debounce: keeping=%d elapsed=%lu ms", 
+                               (int)current_switch, elapsed);
+            }
+#endif
+        }
+    } else {
+        // 状態変化なし：デバウンスをリセット
+        if (switch_state_confirmed) {
+#if HAL_GCS_ENABLED
+            if (do_detailed_debug) {
+                gcs().send_text(MAV_SEVERITY_INFO, "SW_NoChange: resetting debounce");
+            }
+#endif
+        }
+        switch_state_confirmed = false;
+    }
+    
+    // スイッチの立ち上がりエッジ検出（オフ→オン）
+    if (current_switch && !_freq_estimation_prev_switch) {
+        // 推定開始：RLSと位相補正を初期値にリセット
+        _freq_estimation_active = true;
+        reset_frequency_estimation();
+        _freq_estimation_result = _disturbance_freq.get();  // 初期設定周波数
+#if HAL_GCS_ENABLED
+        gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Started (init=%.3fHz)", _freq_estimation_result);
+#endif
+    }
+    
+    // スイッチの立ち下がりエッジ検出（オン→オフ）
+    if (!current_switch && _freq_estimation_prev_switch) {
+        // 推定終了：推定値を保持
+        _freq_estimation_active = false;
+        _freq_estimation_result = estimated_frequency;  // 推定終了時の周波数を保存
+#if HAL_GCS_ENABLED
+        gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Stopped (result=%.3fHz)", _freq_estimation_result);
+#endif
+    }
+    
+    // 前回状態の更新をログ
+#if HAL_GCS_ENABLED
+    if (_freq_estimation_prev_switch != current_switch && do_detailed_debug) {
+        gcs().send_text(MAV_SEVERITY_INFO, "SW_Updated: prev=%d->%d", 
+                       (int)_freq_estimation_prev_switch, (int)current_switch);
+    }
+#endif
+    _freq_estimation_prev_switch = current_switch;
     
     // スイッチの立ち上がりエッジ検出（オフ→オン）
     if (current_switch && !_freq_estimation_prev_switch) {
@@ -416,8 +561,9 @@ void AP_Observer::update() {
         gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Started (init=%.3fHz)", _freq_estimation_result);
 #endif
     }
+    
     // スイッチの立ち下がりエッジ検出（オン→オフ）
-    else if (!current_switch && _freq_estimation_prev_switch) {
+    if (!current_switch && _freq_estimation_prev_switch) {
         // 推定終了：推定値を保持
         _freq_estimation_active = false;
         _freq_estimation_result = estimated_frequency;  // 推定終了時の周波数を保存
@@ -632,7 +778,7 @@ void AP_Observer::phase_correction_init() {
     phase_buffer_count = 0;
     phase_correction = 0.0f;
     estimated_frequency = _disturbance_freq.get();
-    // 注：_freq_estimation_switch_stateはRC Aux Functionが管理するため、ここでは変更しない
+    _freq_estimation_switch_state = false;  // 初期状態はOFF  // パラメータ値で初期化
 
     // A,B由来位相もリセット
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
@@ -900,7 +1046,12 @@ void AP_Observer::Write_Observer_Log() {
 
 // RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
 // RC8_OPTION=316 を推奨（デフォルト設定）
+// 注：この関数は単に状態を保存するだけ。エッジ検出とメッセージはupdate()で行う。
 void AP_Observer::set_freq_estimation_switch(bool enabled) {
     _freq_estimation_switch_state = enabled;
+#if HAL_GCS_ENABLED
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: set_switch called with %s", 
+                   enabled ? "true" : "false");
+#endif
 }
 

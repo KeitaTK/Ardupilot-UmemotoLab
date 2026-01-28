@@ -7922,13 +7922,13 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.context_pop()
 
     def TestRLSRC8SwitchControl(self):
-        '''Test RC8 switch control for frequency estimation'''
+        '''Test RC8 switch control for frequency estimation (RC Aux Function)'''
         self.context_push()
         
         # テストパラメータ設定
         test_freq = 0.7
         test_amplitude = 10.0
-        self.progress(f"Testing RC8 switch control with test force: {test_freq}Hz, {test_amplitude}N")
+        self.progress(f"Testing RC8 switch control with RC8_OPTION=316: {test_freq}Hz, {test_amplitude}N")
         
         self.set_parameters({
             'OBS_DIST_FREQ': 0.6,  # 初期周波数（実際と異なる値）
@@ -7936,32 +7936,41 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_INJECT': 1,  # テスト外力注入
             'OBS_TEST_FREQ': test_freq,  # 実際の周波数
             'OBS_TEST_AMP': test_amplitude,
-            'OBS_FREQ_EST_CH': 8,  # RC8を周波数推定制御に使用
+            'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
             'LOG_DISARMED': 0,
         })
         
+        self.set_rc(8, 1000)  # reboot前にLOWを設定
         self.reboot_sitl()
         
-        # パラメータ再設定
-        self.set_parameters({
-            'OBS_DIST_FREQ': 0.6,
-            'OBS_PHASE_CORR': 1,
-            'OBS_TEST_INJECT': 1,
-            'OBS_TEST_FREQ': test_freq,
-            'OBS_TEST_AMP': test_amplitude,
-            'OBS_FREQ_EST_CH': 8,
-        })
+        # パラメータが正しく設定されているか確認
+        rc8_option = self.get_parameter('RC8_OPTION')
+        self.progress(f"RC8_OPTION after reboot: {rc8_option} (expected 316)")
+        if rc8_option != 316:
+            raise NotAchievedException(f"RC8_OPTION not set correctly: {rc8_option} != 316")
+        
+        # RCライブラリの初期化を待つ
+        self.delay_sim_time(2)
+        self.progress("RC library initialized, RC8 should be at LOW (OFF)")
+        # RCライブラリの初期化を待つ
+        self.delay_sim_time(2)
+        self.progress("RC library initialized, RC8 should be at LOW (OFF)")
         
         self.delay_sim_time(1)
         
-        # RC8をオフ状態にしてから離陸
-        self.progress("Setting RC8 to OFF (1000) before takeoff")
+        # 明示的にRC8をOFFに設定
         self.set_rc(8, 1000)
+        self.delay_sim_time(1)
+        self.progress("RC8 explicitly set to OFF (PWM=1000)")
         
         # 離陸
         self.progress("Taking off to 10m")
         self.takeoff(10, mode='ALT_HOLD')
         self.delay_sim_time(5)
+        
+        # 離陸後もRC8をOFFに再設定（念のため）
+        self.set_rc(8, 1000)
+        self.delay_sim_time(3)
         
         # Phase 1: RC8オフ状態で10秒ホバリング（推定なし）
         self.progress("Phase 1: RC8 OFF - No estimation for 10 seconds")
@@ -8092,9 +8101,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_FREQ': test_freq,  # 実際の周波数
             'OBS_TEST_AMP': test_amplitude,
             'RC9_OPTION': 316,  # RC9にRLS_FREQ_EST機能を割り当て
+            'OBS_FREQ_EST_CH': 0,  # 旧方式を無効化（重要！）
             'LOG_DISARMED': 1,  # ログを取得するために必要
         })
         
+        self.set_rc(9, 1000)  # reboot前にLOWを設定
         self.reboot_sitl()
         
         # パラメータが正しく設定されているか確認
@@ -8103,20 +8114,28 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         if rc9_option != 316:
             raise NotAchievedException(f"RC9_OPTION not set correctly: {rc9_option} != 316")
         
-        # RC9をオフ状態で開始
-        self.progress("Setting RC9 to OFF (1000) at startup")
+        # RCライブラリの初期化を待つ（重要！）
+        self.delay_sim_time(2)
+        self.progress("RC library initialized, RC9 should be at LOW (OFF)")
+        
+        # 明示的にRC9をOFFに設定（最重要！）
         self.set_rc(9, 1000)
-        self.delay_sim_time(5)  # 初期化待ち
+        self.delay_sim_time(1)
+        self.progress("RC9 explicitly set to OFF (PWM=1000)")
         
         # 離陸
         self.progress("Taking off to 10m")
         self.takeoff(10, mode='ALT_HOLD')
-        self.delay_sim_time(5)
+        self.delay_sim_time(2)
+        
+        # 離陸後もRC9をOFFに再設定（念のため）
+        self.set_rc(9, 1000)
+        self.delay_sim_time(3)
         
         # Phase 1: RC9オフ状態で10秒ホバリング（推定なし）
         self.progress("Phase 1: RC9 OFF (PWM=1000) - No estimation for 10 seconds")
         self.set_rc(9, 1000)
-        self.delay_sim_time(2)
+        self.delay_sim_time(3)  # スイッチ状態安定化待ち
         t1_start = self.get_sim_time()
         self.delay_sim_time(10)
         t1_end = self.get_sim_time()
@@ -8248,13 +8267,13 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.context_pop()
 
     def TestRLSWindowedEstimation(self):
-        '''Test RC8 switch control with specific time window (20-30s)'''
+        '''Test RC8 switch control with specific time window (20-30s) using RC Aux Function'''
         self.context_push()
         
         # テストパラメータ設定（logs/Pixhawk6CLogs/00000422.BINを参考）
         test_freq = 0.65  # 推定すべき周波数
         test_amplitude = 8.0
-        self.progress(f"Testing windowed estimation (20-30s) with RC8 switch")
+        self.progress(f"Testing windowed estimation (20-30s) with RC8_OPTION=316")
         
         self.set_parameters({
             'OBS_DIST_FREQ': 0.6,  # 初期周波数
@@ -8262,23 +8281,21 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_INJECT': 1,  # テスト外力注入
             'OBS_TEST_FREQ': test_freq,
             'OBS_TEST_AMP': test_amplitude,
-            'OBS_FREQ_EST_CH': 8,  # RC8を周波数推定制御に使用
+            'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
             'LOG_DISARMED': 0,
         })
         
+        self.set_rc(8, 1000)  # reboot前にLOWを設定
         self.reboot_sitl()
         
-        # パラメータ再設定
-        self.set_parameters({
-            'OBS_DIST_FREQ': 0.6,
-            'OBS_PHASE_CORR': 1,
-            'OBS_TEST_INJECT': 1,
-            'OBS_TEST_FREQ': test_freq,
-            'OBS_TEST_AMP': test_amplitude,
-            'OBS_FREQ_EST_CH': 8,
-        })
+        # パラメータ確認
+        rc8_option = self.get_parameter('RC8_OPTION')
+        self.progress(f"RC8_OPTION: {rc8_option} (expected 316)")
+        if rc8_option != 316:
+            raise NotAchievedException(f"RC8_OPTION not set: {rc8_option}")
         
-        self.delay_sim_time(1)
+        # RCライブラリ初期化待ち
+        self.delay_sim_time(2)
         
         # RC8をオフで離陸
         self.progress("Setting RC8 to OFF before takeoff")
@@ -12638,8 +12655,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
              self.TestRLSBasicEstimation,  # AP_Observer RLS test
              self.TestRLSFrequencyEstimation,  # AP_Observer frequency estimation test
              self.TestRLSFrequencyEstimationMulti,  # AP_Observer multi-case frequency estimation test
-             self.TestRLSRC8SwitchControl,  # AP_Observer RC8 switch control test (old method)
-             self.TestRLSRCAuxFunction,  # AP_Observer RC Aux Function control test (new method)
+             self.TestRLSRC8SwitchControl,  # AP_Observer RC8 switch control test (RC Aux Function)
+             self.TestRLSRCAuxFunction,  # AP_Observer RC Aux Function control test (RC9 variant)
              self.TestRLSWindowedEstimation,  # AP_Observer windowed estimation (20-30s) test
         ])
         return ret

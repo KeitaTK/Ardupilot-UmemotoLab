@@ -680,8 +680,8 @@ bool RC_Channel_Copter::do_aux_function(const AuxFuncTrigger &trigger)
 
     case AUX_FUNC::RLS_FREQ_EST:
         // RC Aux Function for RLS frequency estimation control
+        // メッセージはAP_Observer::update()内で出力される
         copter.observer.set_freq_estimation_switch(ch_flag == AuxSwitchPos::HIGH);
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: %s", (ch_flag == AuxSwitchPos::HIGH) ? "ON" : "OFF");
         break;
 
     default:

@@ -158,3 +158,72 @@ for reviewing patches on their specific area.
   - ***Subsystem***: ESP32,AP_HAL_ESP32
 - [Charles Villard ](https://github.com/Silvanosky):
   - ***Subsystem***: ESP32,AP_HAL_ESP32
+
+---
+
+## 🧪 Custom Features & Testing (Umemoto Lab)
+
+### RLS Frequency Estimation Switch Control
+
+このプロジェクトでは、RLS（Recursive Least Squares）による周波数推定機能を実装しています。
+周波数推定の開始/停止を制御する方法として、以下の2つの方式をサポートしています：
+
+#### 設定方法
+
+| 方式 | 設定パラメータ | 説明 | 推奨度 |
+|------|---------------|------|--------|
+| **旧方式（レガシー）** | `OBS_FREQ_EST_CH` | RCチャンネル番号を直接指定（1-16）<br>PWM ≥ 1700でON、< 1700でOFF | ⭐⭐⭐ 安定動作確認済み |
+| **新方式** | `RC*_OPTION = 316` | RC Aux Function方式（ArduPilot標準）<br>任意のRCチャンネルに機能を割り当て | ⚠️ SITL環境での動作に問題あり |
+
+**両方式の併用**:
+- 両方式は**OR条件**で動作します
+- どちらか一方がONなら周波数推定が有効になります
+- 競合は発生しません
+
+#### 設定例
+
+##### 旧方式（推奨）- RC8を使用
+```
+OBS_FREQ_EST_CH = 8    # RC8チャンネルを使用
+OBS_PHASE_CORR = 1     # 位相補正ON
+OBS_DIST_FREQ = 0.6    # 初期周波数 [Hz]
+```
+
+##### 新方式 - RC7にAux機能を割り当て
+```
+RC7_OPTION = 316       # RC7にRLS周波数推定機能を割り当て
+OBS_FREQ_EST_CH = 0    # 旧方式無効
+OBS_PHASE_CORR = 1     # 位相補正ON
+```
+
+#### オートテスト
+
+周波数推定スイッチ機能の動作を検証するオートテストが用意されています：
+
+| テスト名 | 説明 | 実行方法 | 状態 |
+|---------|------|----------|------|
+| `TestRLSRC8SwitchControl` | 旧方式（OBS_FREQ_EST_CH）のテスト | `timeout 400 Tools/autotest/autotest.py test.Copter.TestRLSRC8SwitchControl` | ✅ PASS |
+| `TestRLSRCAuxFunction` | 新方式（RC_OPTION=316）のテスト | `timeout 400 Tools/autotest/autotest.py test.Copter.TestRLSRCAuxFunction` | ⚠️ SITL環境で動作不安定 |
+| `TestRLSDualMethodControl` | 両方式の併用・競合テスト | `timeout 600 Tools/autotest/autotest.py test.Copter.TestRLSDualMethodControl` | 🚧 開発中 |
+
+**実行例（旧方式テスト）**:
+```bash
+cd /path/to/Ardupilot-UmemotoLab
+source venv_ardupilot/bin/activate
+timeout 400 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSRC8SwitchControl
+```
+
+#### 既知の問題
+
+- **新方式（RC Aux Function）**: SITL環境において、RC7/RC9などのチャンネルでRC_OPTIONが正しく動作しない場合があります
+  - 原因: SITLのRCチャンネル数制限、またはデフォルトAux機能との競合の可能性
+  - 回避策: 旧方式（OBS_FREQ_EST_CH）の使用を推奨
+- **両方式テスト**: 新方式の問題により、デュアルメソッドテストは現在開発中です
+
+#### ログ確認
+
+周波数推定スイッチの状態は`OBSV`ログの`SW`フィールドで確認できます：
+- `SW = 0`: スイッチOFF（周波数推定停止）
+- `SW = 1`: スイッチON（周波数推定実行中）
+
+---

@@ -101,7 +101,8 @@ private:
     
     // 周波数推定制御用（両方式サポート）
     AP_Int8  _freq_estimation_rc_channel;  // 旧方式：チャンネル番号指定（0=無効、1-16=RC1-RC16）
-    bool _freq_estimation_switch_state;     // 新方式：RC Aux Function経由
+    volatile bool _freq_estimation_switch_state;     // 新方式：RC Aux Function経由
+    bool _combined_freq_est_switch;         // 統合されたスイッチ状態（新方式 OR 旧方式）
     
     // 位相補正用の変数
     static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 位相データバッファのサイズ（1.0秒分に拡張）
