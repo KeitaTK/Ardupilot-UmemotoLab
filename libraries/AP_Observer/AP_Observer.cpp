@@ -157,19 +157,17 @@ void AP_Observer::rls_init() {
 }
 
 void AP_Observer::reset_frequency_estimation() {
-    // RLS周波数推定パラメータをリセット（閾値チェック無効化）
+    // 周波数推定のみをリセット（RLSと位相補正は継続）
 #if HAL_GCS_ENABLED
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Resetting frequency estimation");
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Resetting frequency estimation only");
 #endif
     
-    // RLSパラメータと共分散行列の再初期化
-    rls_init();
-    
-    // 位相補正の再初期化
-    phase_correction_init();
+    // 推定周波数を初期値にリセット（スイッチON時に初期化）
+    // RLSパラメータや位相補正バッファは保持される
+    estimated_frequency = _disturbance_freq.get();
     
 #if HAL_GCS_ENABLED
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Frequency estimation reset complete");
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Frequency reset to %.3fHz (RLS/Phase continue)", (double)estimated_frequency);
 #endif
 }
 
@@ -187,7 +185,9 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
     
     // 角周波数 ω = 2πf [rad/s]
-    float omega = _disturbance_freq.get() * 2.0f * M_PI;
+    // 位相補正が有効な場合は推定された周波数を使用
+    float freq_to_use = (_phase_correction_enabled.get() == 1) ? estimated_frequency : _disturbance_freq.get();
+    float omega = freq_to_use * 2.0f * M_PI;
     
     // 時間ベース位相計算（RLS入力用、補正を適用）
     float phase = omega * t - phase_correction;
@@ -341,7 +341,9 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
 
 void AP_Observer::update_prediction_cache() {
     // ω = 2πf [rad/s]
-    _omega_rad = _disturbance_freq.get() * 2.0f * M_PI;
+    // 位相補正が有効な場合は推定された周波数を使用
+    float freq_to_use = (_phase_correction_enabled.get() == 1) ? estimated_frequency : _disturbance_freq.get();
+    _omega_rad = freq_to_use * 2.0f * M_PI;
 }
 
 void AP_Observer::update() {
@@ -363,28 +365,35 @@ void AP_Observer::update() {
     payload.z = UAV_mass * accel.z - thrust;
     
     // テスト用外力注入モード（推力とIMUから計算された結果として扱う）
-    if (_test_force_inject_enable == 1) {
+    if (_test_force_inject_enable.get() == 1) {
         // 既知の正弦波外力をpayloadに直接代入
-        // 時刻[秒]は実時間(=SITLのシミュレーション時刻)に基づいて計算する
-        // counter*0.01 のような固定dt前提は、更新周期が変わると注入周波数がずれるため避ける。
-        float t = (AP_HAL::millis() - rls_start_time_ms) * 0.001f;
+        // テスト注入はシステム起動時刻から計算（RLS開始前でも動作する）
+        static uint32_t test_start_time_ms = 0;
+        static bool test_announced = false;
+        
+        if (test_start_time_ms == 0) {
+            test_start_time_ms = AP_HAL::millis();
+        }
+        
+        float t = (AP_HAL::millis() - test_start_time_ms) * 0.001f;
         float test_omega = _test_force_freq.get() * 2.0f * M_PI;  // [rad/s]
-        float amplitude = _test_force_amp.get();                   // [N]
+        float amplitude = _test_force_amp.get();                   // 毎回取得
         
         payload.x = amplitude * sinf(test_omega * t);
         payload.y = amplitude * sinf(test_omega * t + M_PI / 2.0f);  // 90度位相差
         payload.z = 0.0f;  // Z軸は0
         
-        // 初回のみデバッグメッセージ
-        static bool test_mode_announced = false;
-        if (!test_mode_announced) {
+        // デバッグ: 初回と10回後に振幅を確認
+        static uint16_t call_count = 0;
+        call_count++;
+        if (!test_announced || call_count == 1000) {
 #if HAL_GCS_ENABLED
             gcs().send_text(MAV_SEVERITY_INFO, 
-                "AP_Observer: Test force injection enabled (%.2fHz, %.2fN)",
-                _test_force_freq.get(), _test_force_amp.get()
+                "AP_Observer: Test inject count=%u, amp=%.2fN, PLX=%.3fN",
+                call_count, amplitude, payload.x
             );
 #endif
-            test_mode_announced = true;
+            test_announced = true;
         }
     }
 
@@ -407,35 +416,33 @@ void AP_Observer::update() {
     
     // スイッチの立ち上がりエッジ検出（オフ→オン）
     if (current_switch && !_freq_estimation_prev_switch) {
-        // 推定開始：RLSと位相補正を初期値にリセット
+        // 推定開始：RLS、位相補正、推定周波数を初期値にリセット
         _freq_estimation_active = true;
-        reset_frequency_estimation();
+        reset_frequency_estimation();  // この中でestimated_frequencyも初期値にリセットされる
         _freq_estimation_result = _disturbance_freq.get();  // 初期設定周波数
 #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: ON");
-        gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Started (init=%.3fHz)", _freq_estimation_result);
+        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
 #endif
     }
     // スイッチの立ち下がりエッジ検出（オン→オフ）
     else if (!current_switch && _freq_estimation_prev_switch) {
-        // 推定終了：推定値を保持
+        // 推定終了：最後の推定値を保持して引き続き使用
         _freq_estimation_active = false;
         _freq_estimation_result = estimated_frequency;  // 推定終了時の周波数を保存
+        // 注意：estimated_frequencyはそのまま保持され、位相補正で使用され続ける
 #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: OFF");
-        gcs().send_text(MAV_SEVERITY_INFO, "FreqEst: Stopped (result=%.3fHz)", _freq_estimation_result);
+        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
 #endif
     }
     
     _freq_estimation_prev_switch = current_switch;
     
     // RLS更新条件：
-    // 1. 離陸後である
-    // 2. かつ以下のいずれか：
-    //    a. 推定がアクティブ（RC8スイッチオン）
-    //    b. テストモード（OBS_TEST_INJECT=1）
-    bool should_update_rls = rls_initialized && _has_taken_off && 
-                             (_freq_estimation_active || _test_force_inject_enable.get() == 1);
+    // 1. RLSが初期化済み
+    // 2. 離陸後である
+    // 注意：テスト注入モード（OBS_TEST_INJECT）や周波数推定スイッチに関わらず、
+    // 離陸後は常にRLS推定を実行する。これにより、実際の外乱を常時観測できる。
+    bool should_update_rls = rls_initialized && _has_taken_off;
     
     if (should_update_rls) {
         Vector3f dummy_input;  // 使用しないダミー
@@ -445,6 +452,8 @@ void AP_Observer::update() {
     // パラメータ変更を検出してキャッシュ更新
     static float last_freq = 0.0f;
     static float last_pred_time = 0.0f;
+    static uint32_t update_counter = 0;  // 位相補正更新カウンタ
+    
     if (fabsf(_disturbance_freq.get() - last_freq) > 0.001f || 
         fabsf(_prediction_time.get() - last_pred_time) > 0.0001f) {
         update_prediction_cache();
@@ -454,13 +463,9 @@ void AP_Observer::update() {
         estimated_frequency = _disturbance_freq.get();
     }
     
-    // 位相補正実行条件：
-    // 1. 推定がアクティブ（RC8スイッチオン）
-    // 2. または テストモード（OBS_TEST_INJECT=1）
-    bool should_update_phase = _freq_estimation_active || _test_force_inject_enable.get() == 1;
-    
-    // 50回目のループで位相補正を実行
-    if (should_update_phase && (counter % 50) == 49) {  // 0-indexed なので49回目=50回目
+    // 位相補正は常時実行（スイッチに関係なく）
+    // RLS起動後、50回目のループごとに位相補正を実行
+    if (rls_initialized && ((++update_counter % 50) == 0)) {
         phase_correction_update();
     }
 
@@ -772,10 +777,13 @@ void AP_Observer::phase_correction_update() {
     
     // 位相バッファは「A,B係数から推定した観測位相（=モデル位相に対する相対位相）」を格納している。
     // したがって slope_rad_s [rad/s] は「角周波数差 Δω」に相当し、Δf = Δω/(2π) となる。
-    const float current_freq = _disturbance_freq.get();
+    // 注意: RLSで使用している周波数(estimated_frequency)に対する偏差が得られるため、
+    // ベースとなる周波数は _disturbance_freq ではなく estimated_frequency を使用する。
+    const float current_freq = estimated_frequency;
     const float delta_freq_unclamped = slope_rad_s / (2.0f * M_PI);  // [Hz]
     // 位相の外れ値等でΔfが跳ねることがあるため、現実的な範囲に制限して安定化
-    const float delta_freq = constrain_value(delta_freq_unclamped, -0.5f, 0.5f);
+    const float delta_freq = constrain_value(delta_freq_unclamped, -0.05f, 0.05f);
+    // 実験的な修正: 符号を元に戻す (+ delta_freq)
     const float estimated_freq = current_freq + delta_freq;   // [Hz]
     
     // 周波数範囲チェック：範囲外は警告のみ（リセット無効化）
@@ -793,21 +801,53 @@ void AP_Observer::phase_correction_update() {
         // 範囲外の場合も続行（リセットしない）
     }
 
-    // ログ用周波数（レンジ内の推定値のみ採用）
+    // 周波数推定：スイッチON時のみ更新、OFF時は最後の推定値を保持
     // 推定がパラメータ(OBS_DIST_FREQ)を勝手に書き換えないよう、ここでは内部推定値のみ更新する。
-    static constexpr float FREQ_EST_ALPHA = 0.20f;  // 0..1, 大きいほど追従が速い
-    estimated_frequency = estimated_frequency + FREQ_EST_ALPHA * (estimated_freq - estimated_frequency);
-
-    // デバッグ：周波数推定が進んでいることを間引いて出力
+    if (_freq_estimation_active || _test_force_inject_enable.get() == 1) {
+        // 現在の推定周波数をバックアップ
+        float old_est_freq = estimated_frequency;
+        
+        // オンライン周波数推定実行（estimated_frequencyを更新）
+        static constexpr float FREQ_EST_ALPHA = 0.01f;  // Changed from 0.05 to 0.01 for better stability
+        estimated_frequency = estimated_frequency + FREQ_EST_ALPHA * (estimated_freq - estimated_frequency);
+        
+        // 周波数変更に伴う位相不連続を防ぐためにphase_correctionを調整
+        // omega_new * t - corr_new = omega_old * t - corr_old
+        // -> corr_new = corr_old + (omega_new - omega_old) * t
+        float t_sec = (AP_HAL::millis() - rls_start_time_ms) * 0.001f;
+        float freq_diff = estimated_frequency - old_est_freq;
+        phase_correction += freq_diff * 2.0f * M_PI * t_sec;
+        
+        // 予測用キャッシュも更新
+        update_prediction_cache();
+        
+        // デバッグ：周波数推定が進んでいることを間引いて出力
 #if HAL_GCS_ENABLED
-    static uint16_t freq_msg_decim = 0;
-    if ((++freq_msg_decim % 5U) == 0U) {
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "PhaseCorr: f=%.3f est=%.3f (df=%.3f)",
-            (double)current_freq, (double)estimated_frequency, (double)delta_freq
-        );
-    }
+        static uint16_t freq_msg_decim = 0;
+        // Print every time (buffer clear slows rate anyway)
+        // Or every few updates
+        if ((++freq_msg_decim % 1U) == 0U) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "PhaseCorr: est=%.3f df=%.3f slope=%.3f",
+                (double)estimated_frequency, (double)delta_freq, (double)slope_rad_s
+            );
+        }
 #endif
+    } else {
+        // スイッチOFF時：estimated_frequencyを保持（更新しない）
+        // 最後に推定された周波数をそのまま使い続ける
+        
+        // デバッグ：保持中の周波数を間引いて出力
+#if HAL_GCS_ENABLED
+        static uint16_t hold_msg_decim = 0;
+        if ((++hold_msg_decim % 20U) == 0U) {
+            gcs().send_text(MAV_SEVERITY_INFO,
+                "PhaseCorr: f=%.3f (HOLDING - no update)",
+                (double)estimated_frequency
+            );
+        }
+#endif
+    }
     
     // 位相誤差（相対位相の傾き=周波数差を位相ずれとして積算）
     // 周波数が一致していれば slope_rad_s ≈ 0 になるのが理想。
@@ -842,6 +882,12 @@ void AP_Observer::phase_correction_update() {
         phase_error, estimated_freq, phase_correction
     );
 #endif
+
+    // バッファをクリアして、新しい周波数設定でのデータ蓄積を開始する
+    // これを行わないと、古い（異なる周波数設定で測定された）傾きデータに基づいて
+    // 連続して過剰な補正が行われてしまい、値が発散する。
+    phase_buffer_count = 0;
+    phase_buffer_index = 0;
 }
 
 // 周波数範囲チェック（振り子長0.3m~2.0mに対応）
@@ -901,6 +947,16 @@ void AP_Observer::Write_Observer_Log() {
 // RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
 // RC8_OPTION=316 を推奨（デフォルト設定）
 void AP_Observer::set_freq_estimation_switch(bool enabled) {
+    // 状態変化（立ち上がり）検出
+    if (enabled && !_freq_estimation_switch_state) {
+        // 周波数推定ONへの切り替え時に推定値をリセット (立ち上がりエッジ)
+        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: ON (Reset)");
+        reset_frequency_estimation();
+    } else if (!enabled && _freq_estimation_switch_state) {
+        // ON -> OFF
+        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: OFF");
+    }
+
     _freq_estimation_switch_state = enabled;
 }
 
