@@ -1,6 +1,6 @@
 # AP_Observer - RLS外乱推定と周波数追従システム 技術資料
 
-**最終更新日**: 2026年1月29日 (Phase Buffer Correction Fix反映)
+**最終更新日**: 2026年1月29日 (パラメータ値更新: FREQ_ALPHA=0.15, PHASE_THRESH=0.0)
 
 ---
 
@@ -377,9 +377,9 @@ $$
    $$f_{\text{target}} = f_{\text{current}} + \Delta f$$
    
 2. **ローパスフィルタ**: 急激な変化を防ぐため、指数移動平均（EMA）で更新します。
-   $$ f_{\text{new}} = f_{\text{old}} + \alpha (f_{\text{target}} - f_{\text{old}}), \quad \alpha=0.01 $$
+   $$ f_{\text{new}} = f_{\text{old}} + \alpha (f_{\text{target}} - f_{\text{old}}), \quad \alpha=0.15 $$
    
-   フィルタ係数 $\alpha = 0.01$ は、約100サンプル（1秒）の時定数に相当します。これにより、ノイズによる急激な周波数変動を抑制しつつ、真の周波数変化には追従できます。
+   フィルタ係数 $\alpha = 0.15$ は、約6.7サンプル（0.33秒、20Hz動作時）の時定数に相当します。これにより、ノイズによる急激な周波数変動を抑制しつつ、真の周波数変化には十分追従できます。
 
 ### 6.5 位相バッファの補正 (Phase Buffer Correction Fix)
 
@@ -415,7 +415,9 @@ $$B_{new}(t_i) = B_{old}(t_i) + \Delta\omega_{\text{diff}} \cdot (t_{curr} - t_i
 
 ### 6.6 位相ジャンプ補正
 
-周波数推定とは別に、累積した位相誤差 `phase_error` が閾値（`OBS_PHASE_THRESH` = 10 rad）を超えた場合、即時補正（ジャンプ）を行います。
+周波数推定とは別に、累積した位相誤差 `phase_error` が閾値（`OBS_PHASE_THRESH`、デフォルト = 0.0 rad）を超えた場合、即時補正（ジャンプ）を行います。
+
+**注意**: デフォルト値が0.0のため、実質的には**閾値判定なしで常に補正**が適用されます。これは、Phase Buffer Correction Fixにより周波数推定が正確に行われるため、位相誤差が十分小さく抑えられることが前提となっています。
 
 **位相補正の更新**:
 $$ \phi_{\text{corr}} \leftarrow \phi_{\text{corr}} - \text{phase\_error} $$
@@ -488,8 +490,8 @@ $$B' = B\cos(d) - A\sin(d)$$
 | `OBS_RLS_LAMBDA` | `_rls_forgetting_factor` | 0.98 | 0.9-0.9999 | 忘却係数（1に近いほどノイズに強く、追従が遅い） |
 | `OBS_RLS_COV_INIT` | `_rls_initial_covariance` | 100.0 | 0.001-1000 | 初期共分散値（大きいほど初期学習が速い） |
 | `OBS_PHASE_CORR` | `_phase_correction_enabled` | 1 | 0/1 | 位相補正の有効/無効 |
-| `OBS_PHASE_THRESH` | `_phase_correction_threshold` | 10.0 | 0.0-20.0 | 位相ジャンプ補正の閾値 [rad] |
-| `OBS_FREQ_ALPHA` | `_freq_est_alpha` | 0.05 | 0.001-0.5 | 周波数推定フィルタ係数（指数移動平均） |
+| `OBS_PHASE_THRESH` | `_phase_correction_threshold` | 0.0 | 0.0-5.0 | 位相ジャンプ補正の閾値 [rad] |
+| `OBS_FREQ_ALPHA` | `_freq_est_alpha` | 0.15 | 0.001-0.5 | 周波数推定フィルタ係数（指数移動平均） |
 | `OBS_MAX_CORR_ANG` | `_max_correction_angle` | 0.5 | 0.0-1.0 | 補正角度の最大値 [rad] |
 
 ### 7.3 内部定数
@@ -502,7 +504,7 @@ $$B' = B\cos(d) - A\sin(d)$$
 | `RLS_MAX_LAMBDA` | 0.9999 | 忘却係数の最大値 |
 | `RLS_MIN_COVARIANCE` | 0.001 | 共分散の最小値 |
 | `RLS_MAX_COVARIANCE` | 1000.0 | 共分散の最大値 |
-| `PHASE_BUFFER_SIZE` | 60 | 位相バッファのサイズ（約3秒分、20Hz動作時） |
+| `PHASE_BUFFER_SIZE` | 60 | 位相バッファのサイズ（3秒分、20Hz動作時） |
 | `FREQ_MIN` | 0.35 Hz | 周波数推定の下限（振り子長2.0m相当） |
 | `FREQ_MAX` | 0.91 Hz | 周波数推定の上限（振り子長0.3m相当） |
 | `FORCE_THRESHOLD` | 0.0 N | 外力の大きさに関わらず常に補正がかかる（閾値なし） |
@@ -563,23 +565,23 @@ $$
 - 典型的な制御ループ遅延: 5~20 ms
 - 10 msは最小限の先読みで、制御安定性を確保
 
-#### 位相補正閾値 $\phi_{\text{thresh}} = 10.0$ rad
+#### 位相補正閾値 $\phi_{\text{thresh}} = 0.0$ rad
 
-**意味**: この値以下の位相誤差は無視。
+**意味**: この値以下の位相誤差は無視。デフォルトは0.0（閾値なし、常に補正を適用）。
 
 **決定理由**:
-- 過度な補正を避けるためのデッドバンド
-- 10 radは約1.6回転分（約573°）
-- 位相バッファ100サンプル（1秒分）での累積誤差を考慮
+- **デフォルト0.0**: 周波数推定が正確であれば位相誤差は十分小さく抑えられるため、閾値を設けずに常時補正を適用
+- バッファ補正（Phase Buffer Correction Fix）により、周波数収束後の位相誤差は実質ゼロに近づくため、閾値判定は不要
+- パラメータとして残しているのは、必要に応じてデッドバンドを設定できるようにするため（互換性・デバッグ用途）
 
-計算例：
+計算例（参考）：
 - 実周波数 $f_{\text{actual}} = 0.7$ Hz
 - 設定周波数 $f_{\text{set}} = 0.6$ Hz
-- バッファ100サンプル、サンプリング周期0.01秒
-- 傾き誤差：$(2\pi \times 0.7 - 2\pi \times 0.6) \times 0.01 = 0.00628$ rad/sample
-- 100サンプルでの累積誤差：$0.00628 \times 99 \approx 0.62$ rad
+- バッファ60サンプル（3秒分）、20Hz動作時
+- 傾き誤差：$(2\pi \times 0.7 - 2\pi \times 0.6) = 0.628$ rad/s
+- 3秒での累積誤差：$0.628 \times 3.0 \approx 1.88$ rad
 
-つまり、10 radの閾値は非常に保守的で、頻繁な補正を避ける設計になっています。
+周波数推定が収束すれば、このような累積誤差は自動的に解消されます。
 
 #### 補正ゲイン $k_{\text{corr}} = 0.004$
 
@@ -674,7 +676,7 @@ if (!_external_correction_euler.is_zero()) {
 
 - **RLS更新**: 毎ループ（100 Hz想定）
 - **位相補正更新**: 20ループごと（約0.2秒ごと）
-  - バッファが100サンプル（1秒分）溜まってから動作開始
+  - バッファが60サンプル（3秒分）溜まってから動作開始
   - スライディングウィンドウ方式で常時更新
 - **デバッグ出力**: 10ループごと（GCS）※現在はコメントアウト
 - **ログ記録**: **毎ループ**（SDカード、`Write_Observer_Log()`により全データを記録）
@@ -691,7 +693,7 @@ if (!_external_correction_euler.is_zero()) {
 
 ### 8.5 安全機構
 
-1. **周波数リミッタ**: 推定値が `FREQ_MIN` (0.3 Hz) ~ `FREQ_MAX` (2.0 Hz) を逸脱しないよう制限。
+1. **周波数リミッタ**: 推定値が `FREQ_MIN` (0.35 Hz) ~ `FREQ_MAX` (0.91 Hz) を逸脱しないよう制限。
 2. **スロープ制限**: 異常な位相変化（`> 1000 rad/s`）が検出された場合は更新をスキップ。
 3. **ゼロ除算保護**: 線形回帰の分母がゼロに近い場合は計算を中止。
 4. **共分散行列のクランプ**: $[0.001, 1000.0]$ の範囲内に制限。
@@ -858,7 +860,7 @@ timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestR
 **症状**: GCSに "PhaseCorr: f=...Hz OutOfRange" というメッセージが表示される。
 
 **原因**:
-*   推定周波数が `FREQ_MIN` (0.3 Hz) ~ `FREQ_MAX` (2.0 Hz) の範囲を超えています。
+*   推定周波数が `FREQ_MIN` (0.35 Hz) ~ `FREQ_MAX` (0.91 Hz) の範囲を超えています。
 *   これは通常、位相データにノイズや異常値が含まれている場合に発生します。
 
 **対策**:
