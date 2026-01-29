@@ -169,7 +169,7 @@ private:
 
     // 定数
     static constexpr uint32_t TIMEOUT_MS            = 500;
-    static constexpr float    FORCE_THRESHOLD       = 0.2f;
+    static constexpr float    FORCE_THRESHOLD       = 0.0f;
     static constexpr float    MAX_CORRECTION_ANGLE  = 0.5f;
     static constexpr float    g                     = 9.7985f;
     static constexpr float    THRUST_SCALE          = 6.3157f;

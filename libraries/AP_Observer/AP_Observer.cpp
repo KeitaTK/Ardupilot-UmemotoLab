@@ -882,21 +882,23 @@ void AP_Observer::phase_correction_update() {
         
         // 周波数変更に伴う位相不連続を防ぐためにphase_correctionを調整
         // omega_new * t - corr_new = omega_old * t - corr_old
-        // -> corr_new = omega_new * t - omega_old * t + corr_old
         // -> corr_new = corr_old + (omega_new - omega_old) * t
-        float t_sec = (get_current_time_ms() - rls_start_time_ms) * 0.001f;
+        float t_curr_sec = (get_current_time_ms() - rls_start_time_ms) * 0.001f;
         float freq_diff = estimated_frequency - old_est_freq;
-        float phase_adj_freq = freq_diff * 2.0f * M_PI * t_sec;
-        phase_correction += phase_adj_freq;
+        float dw_rad = freq_diff * 2.0f * M_PI;
+        
+        // model phase continuity at current time
+        float phase_adj_curr = dw_rad * t_curr_sec;
+        phase_correction += phase_adj_curr;
 
-        // 【重要】周波数維持のためのphase_correction変更は、
-        // RLS入力位相(omega*t - P)を一定に保つためのもの＝RLS係数A/Bは不変。
-        // しかし、バッファに保存している値(ab_phase - P)は P の変化分だけ
-        // ずれてしまうため、過去のバッファデータを補正して連続性を保つ必要がある。
-        // phase_buffer_countの範囲で補正を行う。
+        // 【重要】バッファ補正
+        // 周波数が変わると、過去の時刻tauにおけるモデル位相 Model(tau) も変化する。
+        // Buffer(tau) = Obs(tau) - Model(tau)
+        // Model_new(tau) = Model_old(tau) - dw * (t_curr - tau)
+        // Buffer_new(tau) = Buffer_old(tau) + dw * (t_curr - tau)
         for (uint8_t i = 0; i < phase_buffer_count; i++) {
-             // Pが増えた分、(phi - P)は減る -> 補正量を引く
-             phase_buffer[i] -= phase_adj_freq;
+             float t_sample_sec = (phase_time_buffer_ms[i] - rls_start_time_ms) * 0.001f;
+             phase_buffer[i] += dw_rad * (t_curr_sec - t_sample_sec);
         }
         
         // 予測用キャッシュも更新
