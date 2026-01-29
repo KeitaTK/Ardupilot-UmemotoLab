@@ -57,7 +57,7 @@ public:
     void set_freq_estimation_active(bool active) { _freq_estimation_active = active; }
     void force_rls_update(const Vector3f& payload);
     void set_params_for_replay(float freq, float bw, float gain);
-    void set_freq_est_alpha(float alpha) { _freq_est_alpha = alpha; }
+    void set_freq_est_alpha(float alpha) { _freq_est_alpha.set(alpha); }
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal RLS state if needed
@@ -70,7 +70,6 @@ private:
 // #ifdef AP_OBSERVER_REPLAY_TEST
     uint32_t _test_current_ms = 0;
     bool _replay_active = false;
-    float _freq_est_alpha = 0.05f;
     uint32_t get_current_time_ms() const { return _replay_active ? _test_current_ms : AP_HAL::millis(); }
     uint64_t get_current_time_us() const { return _test_current_ms != 0 ? (uint64_t)_test_current_ms * 1000 : AP_HAL::micros64(); }
 // #else
@@ -166,11 +165,16 @@ private:
     AP_Float    _correction_gain;
     // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）
     AP_Float    _filter_cutoff_freq;
+    
+    // 周波数推定フィルタ係数
+    AP_Float    _freq_est_alpha;
+    
+    // 補正角度の最大値
+    AP_Float    _max_correction_angle;
 
     // 定数
     static constexpr uint32_t TIMEOUT_MS            = 500;
     static constexpr float    FORCE_THRESHOLD       = 0.0f;
-    static constexpr float    MAX_CORRECTION_ANGLE  = 0.5f;
     static constexpr float    g                     = 9.7985f;
     static constexpr float    THRUST_SCALE          = 6.3157f;
     static constexpr float    THRUST_OFFSET         = -0.9995f;

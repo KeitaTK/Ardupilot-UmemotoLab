@@ -489,6 +489,8 @@ $$B' = B\cos(d) - A\sin(d)$$
 | `OBS_RLS_COV_INIT` | `_rls_initial_covariance` | 100.0 | 0.001-1000 | 初期共分散値（大きいほど初期学習が速い） |
 | `OBS_PHASE_CORR` | `_phase_correction_enabled` | 1 | 0/1 | 位相補正の有効/無効 |
 | `OBS_PHASE_THRESH` | `_phase_correction_threshold` | 10.0 | 0.0-20.0 | 位相ジャンプ補正の閾値 [rad] |
+| `OBS_FREQ_ALPHA` | `_freq_est_alpha` | 0.05 | 0.001-0.5 | 周波数推定フィルタ係数（指数移動平均） |
+| `OBS_MAX_CORR_ANG` | `_max_correction_angle` | 0.5 | 0.0-1.0 | 補正角度の最大値 [rad] |
 
 ### 7.3 内部定数
 
@@ -501,11 +503,9 @@ $$B' = B\cos(d) - A\sin(d)$$
 | `RLS_MIN_COVARIANCE` | 0.001 | 共分散の最小値 |
 | `RLS_MAX_COVARIANCE` | 1000.0 | 共分散の最大値 |
 | `PHASE_BUFFER_SIZE` | 60 | 位相バッファのサイズ（約3秒分、20Hz動作時） |
-| `FREQ_EST_ALPHA` | 0.05 | 周波数更新のフィルタ係数（指数移動平均、デフォルト） |
 | `FREQ_MIN` | 0.35 Hz | 周波数推定の下限（振り子長2.0m相当） |
 | `FREQ_MAX` | 0.91 Hz | 周波数推定の上限（振り子長0.3m相当） |
 | `FORCE_THRESHOLD` | 0.0 N | 外力の大きさに関わらず常に補正がかかる（閾値なし） |
-| `MAX_CORRECTION_ANGLE` | 0.5 rad | 補正角度の最大値（約28.6°） |
 | `UAV_mass` | 1.4 kg | ドローンの質量 |
 | `g` | 9.7985 m/s² | 重力加速度 |
 

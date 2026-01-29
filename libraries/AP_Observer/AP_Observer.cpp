@@ -90,6 +90,20 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 10.0
     // @User: Advanced
     AP_GROUPINFO("TEST_AMP", 10, AP_Observer, _test_force_amp, 1.0f),
+    
+    // @Param: FREQ_ALPHA
+    // @DisplayName: Frequency Estimation Filter Coefficient
+    // @Description: Exponential moving average coefficient for frequency estimation update (alpha)
+    // @Range: 0.001 0.5
+    // @User: Advanced
+    AP_GROUPINFO("FREQ_ALPHA", 11, AP_Observer, _freq_est_alpha, 0.05f),
+    
+    // @Param: MAX_CORR_ANG
+    // @DisplayName: Maximum Correction Angle
+    // @Description: Maximum attitude correction angle for roll and pitch [rad]
+    // @Range: 0.0 1.0
+    // @User: Advanced
+    AP_GROUPINFO("MAX_CORR_ANG", 12, AP_Observer, _max_correction_angle, 0.5f),
 
     AP_GROUPEND
 };
@@ -583,8 +597,9 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     float roll  =  force.y * correction_gain / UAV_mass;
     float pitch = -force.x * correction_gain / UAV_mass;
 
-    roll = constrain_value(roll, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
-    pitch = constrain_value(pitch, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
+    float max_angle = _max_correction_angle.get();
+    roll = constrain_value(roll, -max_angle, max_angle);
+    pitch = constrain_value(pitch, -max_angle, max_angle);
 
     Quaternion q;
     q.from_euler(roll, pitch, 0.0f);
@@ -603,8 +618,9 @@ Vector3f AP_Observer::calculate_correction_euler_from_force(const Vector3f& forc
     float roll  =  force.y * correction_gain / UAV_mass;
     float pitch = -force.x * correction_gain / UAV_mass;
 
-    roll = constrain_value(roll, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
-    pitch = constrain_value(pitch, -MAX_CORRECTION_ANGLE, MAX_CORRECTION_ANGLE);
+    float max_angle = _max_correction_angle.get();
+    roll = constrain_value(roll, -max_angle, max_angle);
+    pitch = constrain_value(pitch, -max_angle, max_angle);
 
     // ヨー角は常に0.0fに固定
     return Vector3f(roll, pitch, 0.0f);
@@ -878,7 +894,7 @@ void AP_Observer::phase_correction_update() {
         
         // オンライン周波数推定実行（estimated_frequencyを更新）
         // static constexpr float FREQ_EST_ALPHA = 0.01f;  // Alpha=0.01 for slow adaptation
-        estimated_frequency = estimated_frequency + _freq_est_alpha * (estimated_freq - estimated_frequency);
+        estimated_frequency = estimated_frequency + _freq_est_alpha.get() * (estimated_freq - estimated_frequency);
         
         // 周波数変更に伴う位相不連続を防ぐためにphase_correctionを調整
         // omega_new * t - corr_new = omega_old * t - corr_old
