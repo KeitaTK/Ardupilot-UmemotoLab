@@ -7805,6 +7805,9 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_AMP': test_amplitude,  # テスト振幅（10N）
         })
         
+        # 周波数推定スイッチをOFFにする（設定値を維持するため）
+        self.set_rc(8, 1000)
+        
         # パラメータが反映されるまで待機
         self.delay_sim_time(1)
         
@@ -8284,8 +8287,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.progress(f"Default OBS_MAX_CORR_ANG: {default_max_corr}")
         
         # 期待されるデフォルト値
-        if abs(default_freq_alpha - 0.05) > 0.001:
-            raise NotAchievedException(f"OBS_FREQ_ALPHA default should be 0.05, got {default_freq_alpha}")
+        if abs(default_freq_alpha - 0.15) > 0.001:
+            raise NotAchievedException(f"OBS_FREQ_ALPHA default should be 0.15, got {default_freq_alpha}")
         if abs(default_max_corr - 0.5) > 0.001:
             raise NotAchievedException(f"OBS_MAX_CORR_ANG default should be 0.5, got {default_max_corr}")
         
@@ -8370,9 +8373,12 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         
         # デフォルト値に戻す
         self.progress("Restoring default parameter values")
-        self.set_parameter('OBS_FREQ_ALPHA', 0.05)
+        self.set_parameter('OBS_FREQ_ALPHA', 0.15)
         self.set_parameter('OBS_MAX_CORR_ANG', 0.5)
         
+        self.do_RTL()
+        self.wait_disarmed()
+
         self.progress("✅ ALL PARAMETER CHANGE TESTS PASSED")
 
     def TestRLSWindowedEstimation(self):

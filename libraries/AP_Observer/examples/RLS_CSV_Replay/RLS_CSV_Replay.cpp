@@ -24,6 +24,8 @@ struct ReplayData {
     float ply;
     float plz;
     int sw;
+    float real_freq;
+    float real_phase;
 };
 
 static std::vector<ReplayData> read_csv(const char* filename) {
@@ -45,6 +47,8 @@ static std::vector<ReplayData> read_csv(const char* filename) {
         if (std::getline(ss, item, ',')) d.ply = strtof(item.c_str(), nullptr);
         if (std::getline(ss, item, ',')) d.plz = strtof(item.c_str(), nullptr);
         if (std::getline(ss, item, ',')) d.sw = strtol(item.c_str(), nullptr, 10);
+        if (std::getline(ss, item, ',')) d.real_freq = strtof(item.c_str(), nullptr);
+        if (std::getline(ss, item, ',')) d.real_phase = strtof(item.c_str(), nullptr);
         data.push_back(d);
     }
     return data;
@@ -56,6 +60,8 @@ static void run_case(float alpha, const char* out_filename, const std::vector<Re
     observer.set_replay_time_ms(0); // Ensure time starts at 0 for init
     observer.init();
     // 初期化後にパラメータを上書き
+    // Ensure start frequency matches 0.74m equivalent (0.5794Hz)
+    // Code should converge to 1.04m equivalent (0.488Hz) if data supports it
     observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
     observer.set_freq_est_alpha(alpha);
     
@@ -66,7 +72,7 @@ static void run_case(float alpha, const char* out_filename, const std::vector<Re
     
     std::ofstream outfile(out_filename);
     // Write header
-    outfile << "Time_s,PLX,PLY,EstFreq_Hz,PhaseCorr,SW,RealSW,RLS_A_X,RLS_B_X\n";
+    outfile << "Time_s,PLX,PLY,EstFreq_Hz,PhaseCorr,SW,RealSW,RLS_A_X,RLS_B_X,RealFreq_Hz,RealPhase\n";
 
     uint32_t start_time_us = data[0].time_us;
     
@@ -95,12 +101,13 @@ static void run_case(float alpha, const char* out_filename, const std::vector<Re
         Vector3f B = observer.get_rls_cos_coeff();
         
         char buf[256];
-        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f", 
+        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f", 
                rel_time_s, d.plx, d.ply, 
                observer.get_estimated_frequency(), 
                observer.get_phase_correction(),
                d.sw, d.sw,
-               A.x, B.x);
+               A.x, B.x,
+               d.real_freq, d.real_phase);
         outfile << buf << "\n";
     }
     printf("Finished: %s (Alpha=%.2f)\n", out_filename, alpha);
@@ -111,19 +118,49 @@ void setup() {
 }
 
 void loop() {
-    std::string csv_path = "analysis/replay/data/replay_data.csv";
-    std::vector<ReplayData> data = read_csv(csv_path.c_str());
-    if (data.empty()) {
-        printf("Failed to read CSV\n");
-        exit(1);
+    // Check command line arguments
+    // Usage: ./RLS_CSV_Replay <csv_path> <alpha> <output_path>
+    // If no args, run default behavior (loop over files and fixed alphas)
+    
+    // In ArduPilot examples, accessing raw argc/argv isn't standard in loop(), 
+    // but for Linux port (SITL), we can access global args or just assume this IS main on some platforms.
+    // However, AP_HAL_MAIN uses a specific entry.
+    // Let's rely on hardcoded loop for now if we can't get args easily without changing HAL.
+    // Wait, SITL allows passing args?
+    // Usually not through to the sketch easily.
+    
+    // Instead of args, I will just iterate my sweep list here directly.
+    
+    const char* files[] = {
+        "analysis/replay/data/00000443.csv",
+        "analysis/replay/data/00000444.csv"
+    };
+    
+    // Sweep parameters
+    float alphas[] = { 0.01f, 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.50f };
+    
+    for (const char* f : files) {
+        std::vector<ReplayData> data = read_csv(f);
+        if (data.empty()) {
+            printf("Failed to read CSV: %s\n", f);
+            continue;
+        }
+        printf("Read %lu records from %s.\n", data.size(), f);
+
+        std::string base = f; 
+        size_t lastslash = base.find_last_of("/");
+        if (lastslash != std::string::npos) base = base.substr(lastslash+1);
+        base = base.substr(0, base.size()-4); // remove .csv
+
+        for (float alpha : alphas) {
+             char alpha_str[16];
+             snprintf(alpha_str, sizeof(alpha_str), "%.2f", alpha);
+             std::string out = "analysis/replay/results/" + base + "_alpha" + alpha_str + ".csv";
+             
+             printf("Running %s with Alpha=%s...\n", base.c_str(), alpha_str);
+             run_case(alpha, out.c_str(), data);
+        }
     }
-    printf("Read %lu records.\n", data.size());
-    
-    // Run Alpha=0.05
-    run_case(0.05f, "analysis/replay/results/result.csv", data);
-    
-    // Run Alpha=0.01
-    run_case(0.01f, "analysis/replay/results/result_alpha001.csv", data);
     
     exit(0);
 }

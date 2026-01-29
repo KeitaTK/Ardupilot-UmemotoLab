@@ -23,6 +23,41 @@
 
 ---
 
+### 2026-01-29 19:45: [AP_Observer/Autotest] 最適パラメータ設定とCIテストの修正
+- 問題: 周波数推定の追従性を向上させる最適な `OBS_FREQ_ALPHA` を設定する必要がある。また、コード変更後に `TestRLSBasicEstimation` が周波数ドリフトにより失敗し、`TestRLSParameterChange` が終了時にArmed状態のままで失敗する問題が発生。
+- 調査:
+  - Alphaパラメータの探索により 0.15 が最適（旧 0.05 は遅すぎる）と判明。
+  - `TestRLSBasicEstimation` の失敗原因は、テスト信号注入中(`_test_force_inject_enable`)に周波数推定が意図せず走り、ドリフトしていたため。
+  - `TestRLSParameterChange` の失敗原因は、テストスクリプトが着陸・Disarm処理を行わずに終了していたため。
+- 試行:
+  1. `libraries/AP_Observer/AP_Observer.cpp` のデフォルト `OBS_FREQ_ALPHA` を 0.15 に変更。
+  2. `AP_Observer.cpp` の `rls_update` 条件を修正し、`_freq_estimation_active` が true の場合のみ推定を更新するように変更（テスト注入フラグを除外）。
+  3. `Tools/autotest/arducopter.py` の `TestRLSParameterChange` に `self.do_RTL()` と `self.wait_disarmed()` を追加。
+- 結果:
+  - `TestRLSBasicEstimation` ✅ PASSED (ドリフト解消)
+  - `TestRLSParameterChange` ✅ PASSED (正常終了)
+  - `TestRLSRC8SwitchControl` ✅ PASSED
+  - `TestRLSFrequencyEstimationDetailed` ✅ PASSED
+  - `ArmFeatures` ✅ PASSED
+  - 全必須テストが通過し、パラメータも最適化された状態となった。
+
+### 2026-01-29 17:00: [AP_Observer/Analysis] ログ443, 444のリプレイ検証と開始周波数設定
+- 問題: 実機ログ 00000443.BIN, 00000444.BIN のリプレイ検証依頼。リプレイの開始周波数がデフォルト(0.6Hz)のままであり、実際の紐長0.74m相当(0.579Hz)と不一致。また1.04m相当(0.488Hz)への収束確認が必要。
+- 調査: RLS_CSV_Replay ツールが固定入力・パラメータを使用していた。`extract_csv.py` が比較用の実機推定周波数(F)を抽出していなかった。
+- 試行:
+  - `analysis/scripts/extract_csv.py` を修正し、OBSVメッセージから `F` (周波数) と `P` (位相) を抽出するように変更。
+  - `libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp` を修正:
+    - 複数のCSVファイル(443, 444)を処理するように変更。
+    - 開始周波数を明示的に 0.5794Hz (0.74m相当) に設定。
+    - 比較用として実機周波数(RealFreq)を読み込む機能追加。
+  - `analysis/scripts/plot_rls_freq_compare.py` を更新し、実機周波数と推定周波数の比較プロットを作成。
+  - リプレイシミュレーションを実行し比較。
+- 結果:
+  - リプレイ開始周波数を0.5794Hzに設定確認。
+  - ログ443: リプレイ結果は実機の挙動とほぼ一致 (実機終了: 0.535Hz, リプレイ終了: 0.534Hz)。目標(0.488Hz)までは収束しきれず。
+  - ログ444: 同様に実機と一致。
+  - リプレイツールが実機の推定動作を正しく再現していることを確認。
+
 ### 2026-01-29 16:30: [AP_Observer] FREQ_EST_ALPHA と MAX_CORRECTION_ANGLE を外部設定可能なパラメータに変更
 - 問題: RLS 周波数推定フィルタ係数 (FREQ_EST_ALPHA) と最大補正角 (MAX_CORRECTION_ANGLE) がソースコード内で定数として定義されており、実機での調整が不可能だった。チューニングのために再コンパイルとファームウェア更新が必要で非効率だった。
 - 調査: ArduPilot のパラメータシステム (AP_Param) を調査し、AP_Float 型を使用すれば外部からパラメータを変更可能であることを確認。既存の OBS_DIST_FREQ, OBS_PHASE_CORR 等と同様の仕組みを適用可能。

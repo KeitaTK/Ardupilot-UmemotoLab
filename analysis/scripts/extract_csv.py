@@ -10,7 +10,7 @@ def extract_obs_data(bin_path, csv_path):
     print(f"Writing to CSV: {csv_path}")
     with open(csv_path, 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["TimeUS", "PLX", "PLY", "PLZ", "SW"])
+        writer.writerow(["TimeUS", "PLX", "PLY", "PLZ", "SW", "RealFreq", "RealPhase"])
 
         count = 0
         while True:
@@ -21,7 +21,7 @@ def extract_obs_data(bin_path, csv_path):
                 # Actually recv_match on file returns None on EOF.
                 break
             
-            writer.writerow([m.TimeUS, m.PLX, m.PLY, m.PLZ, m.SW])
+            writer.writerow([m.TimeUS, m.PLX, m.PLY, m.PLZ, m.SW, m.F, m.P])
             count += 1
             if count % 10000 == 0:
                 print(f"Processed {count} records...")

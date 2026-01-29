@@ -96,7 +96,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Exponential moving average coefficient for frequency estimation update (alpha)
     // @Range: 0.001 0.5
     // @User: Advanced
-    AP_GROUPINFO("FREQ_ALPHA", 11, AP_Observer, _freq_est_alpha, 0.05f),
+    AP_GROUPINFO("FREQ_ALPHA", 11, AP_Observer, _freq_est_alpha, 0.15f),
     
     // @Param: MAX_CORR_ANG
     // @DisplayName: Maximum Correction Angle
@@ -888,7 +888,7 @@ void AP_Observer::phase_correction_update() {
 
     // 周波数推定：スイッチON時のみ更新、OFF時は最後の推定値を保持
     // 推定がパラメータ(OBS_DIST_FREQ)を勝手に書き換えないよう、ここでは内部推定値のみ更新する。
-    if (_freq_estimation_active || _test_force_inject_enable.get() == 1) {
+    if (_freq_estimation_active) {
         // 現在の推定周波数をバックアップ
         float old_est_freq = estimated_frequency;
         
