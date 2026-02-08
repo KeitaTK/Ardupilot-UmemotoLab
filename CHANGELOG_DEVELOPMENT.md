@@ -23,6 +23,57 @@
 
 ---
 
+### 2026-02-04 20:30: [AP_Observer / Autotest] RLSテストのタイムアウト修正
+- 問題: `test.Copter.TestRLSBasicEstimation` がタイムアウト (Exit 143/124) で失敗する。シミュレーションが正常に起動またはアームしていない可能性があった。
+- 調査:
+  - `autotest.py` に詳細なデバッグログを追加し、ブートプロセスを追跡。
+  - プロセスログ (`autotest_debug.log`) に `Log structure invalid` エラーが大量に出力され、PreArm チェックで失敗していたことが判明。
+  - 原因は `AP_Observer::Write_Observer_Log` で `logger->Write` のフォーマット文字列 (`Qffffffffff` - 11要素) と、実際の引数/ラベル数 (10要素) が不一致だったこと。
+- 試行:
+  - `AP_Observer.cpp` のフォーマット文字列を `Qfffffffff` (Q + 9 floats = 10要素) に修正。
+  - `arducopter.py` の `TestRLSBasicEstimation` にログ解析ロジック（推定振幅の検証）を復元・強化。
+- 結果:
+  - ビルドおよびオートテスト (`TestRLSBasicEstimation`) が正常に通過。RLSがテスト外力 (10N) を正しく推定できていることを確認。
+
+
+
+### 2026-02-04 19:30: [AP_Observer] 周波数推定機能の削除
+- 問題: ユーザーからの要求により、AP_Observerから周波数推定機能を削除し、基本的なRLS推定のみを残す必要がある。周波数推定に関連するパラメータ、ログフィールド、スイッチ機能、オートテストを削除する。
+- 調査:
+  - 周波数推定関連のコード、パラメータ、関数が多数の箇所に散在していた。
+  - 主な削除対象: `OBS_PHASE_CORR`, `OBS_PHASE_THRESH`, `OBS_FREQ_ALPHA`, `phase_correction_init()`, `phase_correction_update()`, `unwrap_phase()`, `linear_fit_slope()`, `linear_fit_slope_time()`, `set_freq_estimation_switch()`, `reset_frequency_estimation()`など。
+  - ログメッセージ `OBSV` から周波数推定関連フィールド（F, P, X, Y, SW）を削除。
+  - オートテストから `TestRLSRC8SwitchControl`, `TestRLSParameterChange`, `TestRLSFrequencyEstimationDetailed` を削除。
+- 試行:
+  1. **AP_Observer.h** から周波数推定関連の宣言、メンバー変数を削除。
+  2. **AP_Observer.cpp** から:
+     - `var_info[]` から `OBS_PHASE_CORR`, `OBS_PHASE_THRESH`, `OBS_FREQ_ALPHA` パラメータを削除。
+     - `init()`, `rls_init()`, `rls_update()` から周波数推定コードを削除。
+     - `update()` から周波数推定スイッチ制御と位相補正呼び出しを削除。
+     - `phase_correction_init()`, `phase_correction_update()`, `unwrap_phase()`, `linear_fit_slope()`, `linear_fit_slope_time()` 関数を完全削除。
+     - `get_rls_sin_coeff()`, `get_rls_cos_coeff()`, `get_rls_bias()` ゲッター関数を削除。
+     - `get_predicted_force()` を簡略化（周波数推定変数を使用しないように）。
+     - `check_frequency_range()` を削除。
+     - リプレイテスト用の `force_rls_update()`, `set_params_for_replay()` を削除。
+     - `Write_Observer_Log()` を簡略化（`TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY` のみ）。
+  3. **RC_Channel_Copter.cpp** から `set_freq_estimation_switch()` 呼び出しを削除（RC8_OPTION=316のハンドラ）。
+  4. **AP_Arming_Copter.cpp** から `reset_frequency_estimation()` 呼び出しを削除。
+  5. **arducopter.py** から:
+     - `TestRLSRC8SwitchControl`, `TestRLSParameterChange`, `TestRLSFrequencyEstimationDetailed` テストを削除。
+     - `TestRLSBasicEstimation` を簡略化（周波数推定検証を削除、基本RLS係数収束のみチェック）。
+  6. **README.md**, **AUTOTEST_SPECIFICATION.md** から周波数推定関連の記述を削除。
+  7. **Copter.cpp** の `update_altitude()` に `observer.Write_Observer_Log()` 呼び出しを追加（RLS初期化後のみ）。
+- 結果:
+  - ✅ ビルド成功: `./waf -j$(nproc) copter` がエラーなく完了。
+  - ✅ ArmFeaturesテスト PASSED。
+  - ⚠️ TestRLSBasicEstimationテスト: タイムアウト問題が発生。テストを最小限に簡略化したが、60秒のタイムアウトでもハング。原因調査中。
+  - OBSVログフィールドを10個（Q + 10f）に簡略化したが、ログ読み取りが正常に機能しない可能性あり。
+  - 周波数推定コードの削除は完了したが、オートテストの安定化が未完了。
+- 備考:
+  - 次の作業: TestRLSBasicEstimationのタイムアウト原因を特定し、ログ読み取りを修正する必要あり。
+  - Observerログの呼び出しを `is_rls_initialized()` でガードすることで、初期化前のクラッシュを防止。
+  - 周波数推定機能を完全に削除したため、固定周波数（OBS_DIST_FREQ）でのRLS推定のみ動作する。
+
 ### 2026-01-29 19:45: [AP_Observer/Autotest] 最適パラメータ設定とCIテストの修正
 - 問題: 周波数推定の追従性を向上させる最適な `OBS_FREQ_ALPHA` を設定する必要がある。また、コード変更後に `TestRLSBasicEstimation` が周波数ドリフトにより失敗し、`TestRLSParameterChange` が終了時にArmed状態のままで失敗する問題が発生。
 - 調査:

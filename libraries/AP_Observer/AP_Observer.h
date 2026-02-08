@@ -32,34 +32,16 @@ public:
         return AP_HAL::millis() - last_update_ms;
     }
     
-    // RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
-    void set_freq_estimation_switch(bool enabled);
-    
-    // RCチャンネル読み取り（旧方式・互換性のため）
-    bool read_freq_estimation_switch();
-
     // RLS関連のゲッター関数
-    Vector3f get_rls_sin_coeff() const;      // A (sin係数)
-    Vector3f get_rls_cos_coeff() const;      // B (cos係数)
-    Vector3f get_rls_bias() const;           // C (定常偏差)
     Vector3f get_predicted_force() const;    // Δt秒後の予測外力
     bool is_rls_initialized() const { return rls_initialized; }
     
     // ログ記録関数
     void Write_Observer_Log();
     
-    // RLS周波数推定のリセット（アーム時に呼び出し）
-    void reset_frequency_estimation();
-
 // #ifdef AP_OBSERVER_REPLAY_TEST
     // リプレイテスト用
     void set_replay_time_ms(uint32_t ms) { _test_current_ms = ms; _replay_active = true; }
-    void set_freq_estimation_active(bool active) { _freq_estimation_active = active; }
-    void force_rls_update(const Vector3f& payload);
-    void set_params_for_replay(float freq, float bw, float gain);
-    void set_freq_est_alpha(float alpha) { _freq_est_alpha.set(alpha); }
-    float get_estimated_frequency() const { return estimated_frequency; }
-    float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal RLS state if needed
 // #endif
 
@@ -117,44 +99,10 @@ private:
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
     
-    // 位相補正用のパラメータ
-    AP_Int8  _phase_correction_enabled;  // 位相補正の有効/無効
-    AP_Float _phase_correction_threshold; // 位相補正を適用する閾値 [rad]
-    
-    // 周波数推定制御用（両方式サポート）
-    AP_Int8  _freq_estimation_rc_channel;  // 旧方式：チャンネル番号指定（0=無効、1-16=RC1-RC16）
-    volatile bool _freq_estimation_switch_state;     // 新方式：RC Aux Function経由
-    bool _combined_freq_est_switch;         // 統合されたスイッチ状態（新方式 OR 旧方式）
-    
-    // 位相補正用の変数
-    static constexpr uint8_t PHASE_BUFFER_SIZE = 60;   // 3.0s * 20Hz = 60 samples (データ3秒分)
-    float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
-    uint32_t phase_time_buffer_ms[PHASE_BUFFER_SIZE];  // 位相サンプルの時刻 [ms]
-    uint8_t phase_buffer_index = 0;                    // リングバッファの次回書き込みインデックス
-    uint8_t phase_buffer_count = 0;                    // バッファ内の有効データ数
-    uint8_t phase_decimation_counter = 0;              // ダウンサンプリング用カウンタ
-    uint8_t slope_estimation_trigger_counter = 0;      // 推定実行トリガー用カウンタ
-    float phase_correction;                            // 累積位相補正量 [rad]
-    float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
-
-    // A,B係数から推定した観測位相（MATLAB相当）
-    // phi_obs_axis = atan2(-B, A) をアンラップして連続化したもの
-    float ab_phase_unwrapped[RLS_NUM_AXES];
-    float ab_phase_prev_wrapped[RLS_NUM_AXES];
-    bool  ab_phase_initialized[RLS_NUM_AXES];
-    float ab_amp[RLS_NUM_AXES];
-    
     // RLS関数
     void rls_init();
     void rls_update(const Vector3f& x_input, const Vector3f& y_output);
     void update_prediction_cache();  // 予測用キャッシュ更新
-    
-    // 位相補正関数
-    void phase_correction_init();
-    void phase_correction_update();
-    float unwrap_phase(float prev, float curr);  // 位相アンラップ
-    float linear_fit_slope(const float* buffer, uint8_t count);  // 最小二乗法で傾きを計算
-    float linear_fit_slope_time(const float* phase, const uint32_t* time_ms, uint8_t count);  // 位相-時刻で傾きを計算[rad/s]
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
@@ -165,9 +113,6 @@ private:
     AP_Float    _correction_gain;
     // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）
     AP_Float    _filter_cutoff_freq;
-    
-    // 周波数推定フィルタ係数
-    AP_Float    _freq_est_alpha;
     
     // 補正角度の最大値
     AP_Float    _max_correction_angle;
@@ -186,19 +131,9 @@ private:
     static constexpr float    RLS_MIN_COVARIANCE    = 0.001f;
     static constexpr float    RLS_MAX_COVARIANCE    = 1000.0f;
     
-    // 周波数範囲制限（振り子長0.3m~2.0mに対応）
-    static constexpr float    FREQ_MIN              = 0.35f;  // 2.0m相当 [Hz]
-    static constexpr float    FREQ_MAX              = 0.91f;  // 0.3m相当 [Hz]
-    
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ
     
-    // 周波数推定制御用の変数
-    bool _freq_estimation_active = false;    // 現在推定中かどうか
-    bool _freq_estimation_prev_switch = false; // 前回のスイッチ状態
-    float _freq_estimation_result = 0.0f;    // 推定終了時の周波数結果 [Hz]
-    
     // ヘルパー関数
-    bool check_frequency_range(float freq);  // 周波数範囲チェック
     bool is_taking_off();  // 離陸検知
 };

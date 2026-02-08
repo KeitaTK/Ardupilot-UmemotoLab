@@ -915,6 +915,10 @@ void Copter::update_altitude()
 #if HAL_LOGGING_ENABLED
     if (should_log(MASK_LOG_CTUN)) {
         Log_Write_Control_Tuning();
+        // AP_Observer logging (only if RLS is initialized)
+        if (observer.is_rls_initialized()) {
+            observer.Write_Observer_Log();
+        }
         if (!should_log(MASK_LOG_FTN_FAST)) {
 #if AP_INERTIALSENSOR_HARMONICNOTCH_ENABLED
             AP::ins().write_notch_log_messages();
