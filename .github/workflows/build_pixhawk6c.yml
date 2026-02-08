@@ -1,0 +1,69 @@
+name: build Pixhawk6C
+
+on:
+  push:
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - 'build/**'
+      - 'logs/**'
+      - 'venv_ardupilot/**'
+      - 'docs/**'
+      - 'analysis/**'
+      - 'tests/**'
+      - 'Tools/**'
+      - 'AntennaTracker/**'
+      - 'ArduPlane/**'
+      - 'ArduSub/**'
+      - 'Blimp/**'
+      - 'Rover/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.github/**'
+      - 'build/**'
+      - 'logs/**'
+      - 'venv_ardupilot/**'
+      - 'docs/**'
+      - 'analysis/**'
+      - 'tests/**'
+      - 'Tools/**'
+      - 'AntennaTracker/**'
+      - 'ArduPlane/**'
+      - 'ArduSub/**'
+      - 'Blimp/**'
+      - 'Rover/**'
+  workflow_dispatch:
+
+jobs:
+  build-pixhawk6c:
+    runs-on: ubuntu-22.04
+    container: ardupilot/ardupilot-dev-base:v0.1.3
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+      - name: Prepare ccache timestamp
+        id: ccache_cache_timestamp
+        run: |
+          NOW=$(date -u +"%F-%T")
+          echo "timestamp=${NOW}" >> $GITHUB_OUTPUT
+      - name: ccache cache files
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ${{github.workflow}}-ccache-base-${{steps.ccache_cache_timestamp.outputs.timestamp}}
+          restore-keys: ${{github.workflow}}-ccache-base-
+      - name: setup ccache
+        run: |
+          . .github/workflows/ccache.env
+      - name: build Pixhawk6C
+        shell: bash
+        run: |
+          git config --global --add safe.directory ${GITHUB_WORKSPACE}
+          PATH="/github/home/.local/bin:$PATH"
+          rm -rf build/
+          ./waf configure --board Pixhawk6C
+          ./waf -j$(nproc) copter
+          ccache -s
+          ccache -z
