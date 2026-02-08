@@ -21,10 +21,7 @@
    - If needed, you may refer to `CHANGELOG_DEVELOPMENT.md` to search for past cases and examples.
    ```
    ### YYYY-MM-DD: [Component]
-   - Problem: [Issue]
-   - Investigation: [Root cause]
    - Attempted: [What was tried]
-   - Result: [Outcome]
    ```
 
 ---
@@ -34,7 +31,6 @@
 ### 1. ALWAYS Test Before Hardware
 - Run ALL mandatory tests after ANY change to AP_Observer
 - Tests must PASS before Pixhawk6C build (Phase 2)
-- See `.github/AUTOTEST_SPECIFICATION.md` for test details
 
 ### 2. ALWAYS Document Changes
 - Record in `CHANGELOG_DEVELOPMENT.md` (MANDATORY)
@@ -44,31 +40,17 @@
 ### 3. ALWAYS Use Clean Build for Hardware
 ```bash
 rm -rf build/
-./waf configure --board Pixhawk6C
 ./waf -j$(nproc) copter
 ```
 
----
 
-## Project-Specific Rules
-
-### AP_Observer Library (`libraries/AP_Observer/`)
 - **Coding style**: C++11, embedded-friendly
 - **Memory**: NO dynamic allocation (use stack arrays)
 - **Logging**: 4-char label max, 2-3 char field names
 - **Debug**: Use `gcs().send_text()` for messages, `AP_Logger::Write()` for logs
-
-### ArduPilot Coding Standards
-- **Headers**: `#pragma once` (not include guards)
-- **Naming**: `AP_` prefix for classes, `UPPER_SNAKE_CASE` for constants
 - **Includes**: Standard libs → ArduPilot libs → Local headers
 - **Error handling**: Always check pointers for nullptr
-- **Comments**: Explain algorithm intent, specify units `[rad/s]`, `[Hz]`, `[N]`
-
-### Common Issues
-
 | Issue | Cause | Fix |
-|-------|-------|-----|
 | Test fails with "label too long" | Log label > 4 chars | Shorten field names |
 | Compiler error "unused variable" | Unused variable defined | Remove or use `(void)var;` |
 | Phase correction = 0 | Wrong phase buffer | Use `ab_phase_unwrapped[0]` |

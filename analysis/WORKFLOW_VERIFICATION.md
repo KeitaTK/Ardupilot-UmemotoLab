@@ -1,4 +1,7 @@
+
 # Analysis Workflow Verification Report
+
+**[注] 2026-02-08時点: AP_Observer本体はRLS基本推定のみ実装。frequency estimation/alpha等の記述は過去の検証履歴として残しているが、現状のファームでは利用不可。**
 
 **Date**: 2026-01-29  
 **Status**: ✅ VERIFIED
