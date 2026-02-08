@@ -44,18 +44,20 @@ analysis/
 
 ### Step 2: Run Simulation ✅
 ```bash
-./build/sitl/examples/RLS_CSV_Replay
+./build/sitl/libraries/AP_Observer/examples/RLS_CSV_Replay
 ```
 **Output**:
 ```
-Read 11612 records.
-Finished: analysis/replay/results/result.csv (Alpha=0.05)
-Finished: analysis/replay/results/result_alpha001.csv (Alpha=0.01)
+Read records from CSV.
+Finished: analysis/replay/results/00000434_zero_cross.csv
+Finished: analysis/replay/results/00000443_result.csv
+Finished: analysis/replay/results/00000444_result.csv
 ```
 
 **Generated Files**:
-- `analysis/replay/results/result.csv` (697 KB)
-- `analysis/replay/results/result_alpha001.csv` (697 KB)
+- `analysis/replay/results/00000434_zero_cross.csv`
+- `analysis/replay/results/00000443_result.csv`
+- `analysis/replay/results/00000444_result.csv`
 
 ### Step 3: Generate Comparison Graph ✅
 ```bash
@@ -65,19 +67,10 @@ python3 analysis/scripts/plot_rls_freq_compare.py
 
 ## Results Summary
 
-### Alpha=0.05 (Standard)
-- **Initial Freq**: 0.5794 Hz
-- **Final Freq**: 0.5464 Hz
-- **Mean Freq**: 0.5586 Hz
-- **Std Dev**: 0.0167 Hz
-- **Characteristic**: Faster convergence, shows clear transient behavior
-
-### Alpha=0.01 (Conservative)
-- **Initial Freq**: 0.5794 Hz
-- **Final Freq**: 0.5682 Hz
-- **Mean Freq**: 0.5743 Hz
-- **Std Dev**: 0.0045 Hz
-- **Characteristic**: Slower but more stable, less oscillation
+### Zero-Cross (Windowed)
+- **Input**: 00000434 (RC8 ON at +20s, 10s window)
+- **Expected**: ~0.4913 Hz (0.90–1.10 m equivalent)
+- **Output**: `analysis/replay/results/00000434_zero_cross.csv`
 
 ## Path Verification
 
@@ -115,8 +108,8 @@ This ensures frequency estimation code changes are validated against flight data
 
 ## Next Steps
 
-1. Use `analysis/scripts/plot_rls_freq_compare.py` to compare Alpha values
-2. Use `analysis/scripts/analyze_log.py <csv>` to inspect individual flight logs
+1. Use `analysis/scripts/plot_rls_freq_compare.py` to generate PNGs (includes 00000434)
+2. Use `analysis/scripts/check_convergence.py` to validate 0.90–1.10m pass range
 3. Store simulation input data in `analysis/replay/data/`
 4. Archive results in `analysis/replay/results/` for version control
 5. All new log analysis outputs go to `analysis/results/`

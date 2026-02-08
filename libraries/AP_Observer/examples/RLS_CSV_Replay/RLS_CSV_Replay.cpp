@@ -54,7 +54,7 @@ static std::vector<ReplayData> read_csv(const char* filename) {
     return data;
 }
 
-static void run_case(float alpha, const char* out_filename, const std::vector<ReplayData>& data) {
+static void run_case(const char* out_filename, const std::vector<ReplayData>& data, bool force_window) {
     // Reset observer by reconstruction
     new (&observer) AP_Observer();
     observer.set_replay_time_ms(0); // Ensure time starts at 0 for init
@@ -63,12 +63,12 @@ static void run_case(float alpha, const char* out_filename, const std::vector<Re
     // Ensure start frequency matches 0.74m equivalent (0.5794Hz)
     // Code should converge to 1.04m equivalent (0.488Hz) if data supports it
     observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
-    observer.set_freq_est_alpha(alpha);
     
     if (AP_Param::set_by_name("OBS_RLS_LAMBDA", 0.99f)) {} 
     if (AP_Param::set_by_name("OBS_RLS_COV_INIT", 100.0f)) {} 
     if (AP_Param::set_by_name("OBS_PHASE_CORR", 1.0f)) {}
     if (AP_Param::set_by_name("OBS_CORR_GAIN", 0.0f)) {}
+    if (AP_Param::set_by_name("OBS_FREQ_WIN", 10.0f)) {}
     
     std::ofstream outfile(out_filename);
     // Write header
@@ -82,17 +82,21 @@ static void run_case(float alpha, const char* out_filename, const std::vector<Re
         
         observer.set_replay_time_ms(rel_time_ms);
         
-        // Use recorded switch state
-        bool current_sw = (d.sw != 0);
-        static bool prev_sw = false;
+            bool current_sw = (d.sw != 0);
+            bool estimation_sw = current_sw;
+            if (force_window) {
+                const float switch_on_s = 20.0f;
+                const float settle_delay_s = 10.0f;
+                const float window_s = 10.0f;
+                const float sample_catchup_s = 0.5f;
+                const float window_start_s = switch_on_s + settle_delay_s;
+                const float window_end_s = window_start_s + window_s + sample_catchup_s;
 
-        // Reset frequency estimation on OFF -> ON transition
-        if (current_sw && !prev_sw) {
-             observer.reset_frequency_estimation();
-        }
-        prev_sw = current_sw;
+                current_sw = (rel_time_s >= switch_on_s) && (rel_time_s < window_end_s);
+                estimation_sw = (rel_time_s >= window_start_s) && (rel_time_s < window_end_s);
+            }
 
-        observer.set_freq_estimation_active(current_sw);
+            observer.set_freq_estimation_active(estimation_sw);
         
         Vector3f payload(d.plx, d.ply, d.plz);
         observer.force_rls_update(payload);
@@ -100,17 +104,18 @@ static void run_case(float alpha, const char* out_filename, const std::vector<Re
         Vector3f A = observer.get_rls_sin_coeff();
         Vector3f B = observer.get_rls_cos_coeff();
         
-        char buf[256];
-        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f", 
-               rel_time_s, d.plx, d.ply, 
-               observer.get_estimated_frequency(), 
-               observer.get_phase_correction(),
-               d.sw, d.sw,
-               A.x, B.x,
-               d.real_freq, d.real_phase);
+         const int sw_out = current_sw ? 1 : 0;
+         char buf[256];
+         snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f", 
+             rel_time_s, d.plx, d.ply, 
+             observer.get_estimated_frequency(), 
+             observer.get_phase_correction(),
+             sw_out, sw_out,
+             A.x, B.x,
+             d.real_freq, d.real_phase);
         outfile << buf << "\n";
     }
-    printf("Finished: %s (Alpha=%.2f)\n", out_filename, alpha);
+    printf("Finished: %s\n", out_filename);
 }
 
 void setup() {
@@ -132,12 +137,10 @@ void loop() {
     // Instead of args, I will just iterate my sweep list here directly.
     
     const char* files[] = {
+        "analysis/replay/data/00000434.csv",
         "analysis/replay/data/00000443.csv",
         "analysis/replay/data/00000444.csv"
     };
-    
-    // Sweep parameters
-    float alphas[] = { 0.01f, 0.05f, 0.10f, 0.15f, 0.20f, 0.25f, 0.30f, 0.50f };
     
     for (const char* f : files) {
         std::vector<ReplayData> data = read_csv(f);
@@ -152,14 +155,12 @@ void loop() {
         if (lastslash != std::string::npos) base = base.substr(lastslash+1);
         base = base.substr(0, base.size()-4); // remove .csv
 
-        for (float alpha : alphas) {
-             char alpha_str[16];
-             snprintf(alpha_str, sizeof(alpha_str), "%.2f", alpha);
-             std::string out = "analysis/replay/results/" + base + "_alpha" + alpha_str + ".csv";
-             
-             printf("Running %s with Alpha=%s...\n", base.c_str(), alpha_str);
-             run_case(alpha, out.c_str(), data);
-        }
+           const bool force_window = (base == "00000434");
+           std::string suffix = force_window ? "_zero_cross" : "_result";
+           std::string out = "analysis/replay/results/" + base + suffix + ".csv";
+
+           printf("Running %s (%s)...\n", base.c_str(), force_window ? "zero-cross" : "standard");
+           run_case(out.c_str(), data, force_window);
     }
     
     exit(0);

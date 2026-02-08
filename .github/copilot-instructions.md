@@ -3,6 +3,8 @@
 ## Quick Start
 
 1. **Activate environment** (every session)
+   - Always use the existing virtual environment `venv_ardupilot`.
+   - Do NOT create a new virtual environment.
    ```bash
    cd /home/memoto/Ardupilot-UmemotoLab
    source venv_ardupilot/bin/activate

@@ -91,19 +91,19 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("TEST_AMP", 10, AP_Observer, _test_force_amp, 1.0f),
     
-    // @Param: FREQ_ALPHA
-    // @DisplayName: Frequency Estimation Filter Coefficient
-    // @Description: Exponential moving average coefficient for frequency estimation update (alpha)
-    // @Range: 0.001 0.5
-    // @User: Advanced
-    AP_GROUPINFO("FREQ_ALPHA", 11, AP_Observer, _freq_est_alpha, 0.15f),
-    
     // @Param: MAX_CORR_ANG
     // @DisplayName: Maximum Correction Angle
     // @Description: Maximum attitude correction angle for roll and pitch [rad]
     // @Range: 0.0 1.0
     // @User: Advanced
-    AP_GROUPINFO("MAX_CORR_ANG", 12, AP_Observer, _max_correction_angle, 0.5f),
+    AP_GROUPINFO("MAX_CORR_ANG", 11, AP_Observer, _max_correction_angle, 0.5f),
+
+    // @Param: FREQ_WIN
+    // @DisplayName: Zero-Cross Window Length
+    // @Description: Window length for zero-cross frequency estimation [s]
+    // @Range: 1.0 30.0
+    // @User: Advanced
+    AP_GROUPINFO("FREQ_WIN", 12, AP_Observer, _freq_est_window_sec, 10.0f),
 
     AP_GROUPEND
 };
@@ -148,6 +148,7 @@ void AP_Observer::init() {
     _freq_estimation_active = false;
     _freq_estimation_prev_switch = false;
     _freq_estimation_result = _disturbance_freq.get();
+    zero_cross_reset_state();
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -181,10 +182,6 @@ void AP_Observer::rls_init() {
     rls_start_time_ms = get_current_time_ms();  // 開始時刻を記録
     
     // 位相補正・周波数推定用の変数を初期化
-    phase_buffer_count = 0;
-    phase_buffer_index = 0;
-    phase_decimation_counter = 0;
-    slope_estimation_trigger_counter = 0;
     phase_correction = 0.0f;
     
     rls_initialized = true;
@@ -201,11 +198,10 @@ void AP_Observer::reset_frequency_estimation() {
     estimated_frequency = _disturbance_freq.get();
     
     // 位相補正バッファのリセット
-    phase_buffer_count = 0;
-    phase_buffer_index = 0;
-    phase_decimation_counter = 0;
-    slope_estimation_trigger_counter = 0;
     phase_correction = 0.0f;
+
+    // ゼロクロス推定状態のリセット
+    zero_cross_reset_state();
     
 #if HAL_GCS_ENABLED
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Frequency reset to %.3fHz (RLS/Phase continue)", (double)estimated_frequency);
@@ -335,8 +331,6 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     // 位相推定（unwrap）の初期化は緩めで良いが、周波数推定に使う位相バッファへ入れる値は
     // できるだけSNRの高い（振幅が十分大きい）サンプルに限定して外れ値を抑える。
     static constexpr float AB_PHASE_MIN_AMP_INIT = 1.0e-4f;  // unwrap初期化用 [N]
-    // static constexpr float AB_PHASE_MIN_AMP_BUF  = 1.0f;     // 位相バッファ投入用 [N]
-    static constexpr float AB_PHASE_MIN_AMP_BUF  = 0.0f;     // Replay用に閾値を無効化 (常時更新)
 
     for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
         const float A = rls_theta[axis][0];
@@ -363,27 +357,6 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
             }
             ab_phase_unwrapped[axis] += dphi;
             ab_phase_prev_wrapped[axis] = phi_wrapped;
-        }
-    }
-    
-    // 観測位相（X軸）を位相バッファに追加（位相補正/周波数推定用）
-    // バッファには「観測位相 - phase_correction」を保存し、位相補正の動きに依存しない
-    // 純粋な周波数差（Δω）を推定できるようにする。
-    // 振幅が十分大きい場合のみバッファに追加（外れ値・ラップ誤判定を抑制）
-    if (ab_phase_initialized[0] && (ab_amp[0] >= AB_PHASE_MIN_AMP_BUF)) {
-        // ダウンサンプリング：100Hz -> 20Hz (5回に1回保存)
-        // 3秒分のデータを60サンプルで表現（メモリ・計算量削減）
-        if (++phase_decimation_counter % 5 == 0) {
-            phase_buffer[phase_buffer_index] = ab_phase_unwrapped[0] - phase_correction;
-            phase_time_buffer_ms[phase_buffer_index] = get_current_time_ms();
-            
-            phase_buffer_index = (phase_buffer_index + 1) % PHASE_BUFFER_SIZE;
-            if (phase_buffer_count < PHASE_BUFFER_SIZE) {
-                phase_buffer_count++;
-            }
-            
-            // 20サンプル(=1.0秒分相当)追加されるごとに推定を実行するためのカウンタ
-            slope_estimation_trigger_counter++;
         }
     }
     
@@ -460,33 +433,34 @@ void AP_Observer::update() {
 #endif
     }
     
-    // 周波数推定制御（RC Aux Function方式）
-    // RC8_OPTION=316 などでスイッチを割り当て
-    // RC Aux Functionが既にデバウンス処理を行っているため、ここでは単純なエッジ検出のみ
-    bool current_switch = _freq_estimation_switch_state;
-    
-    // スイッチの立ち上がりエッジ検出（オフ→オン）
-    if (current_switch && !_freq_estimation_prev_switch) {
-        // 推定開始：RLS、位相補正、推定周波数を初期値にリセット
+        // 周波数推定制御（RC Aux Function方式）
+        // RC8_OPTION=316 などでスイッチを割り当て
+        // RC Aux Functionが既にデバウンス処理を行っているため、ここでは単純なエッジ検出のみ
+        const bool current_switch = _freq_estimation_switch_state;
+
+        // スイッチの立ち上がりエッジ検出（オフ→オン）
+        if (current_switch && !_freq_estimation_prev_switch) {
+        // 推定開始：推定周波数を初期値に戻してゼロクロス推定を開始
         _freq_estimation_active = true;
-        reset_frequency_estimation();  // この中でestimated_frequencyも初期値にリセットされる
-        _freq_estimation_result = _disturbance_freq.get();  // 初期設定周波数
-#if HAL_GCS_ENABLED
+        reset_frequency_estimation();
+        zero_cross_start();
+        _freq_estimation_result = _disturbance_freq.get();
+    #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
-#endif
-    }
-    // スイッチの立ち下がりエッジ検出（オン→オフ）
-    else if (!current_switch && _freq_estimation_prev_switch) {
+    #endif
+        }
+        // スイッチの立ち下がりエッジ検出（オン→オフ）
+        else if (!current_switch && _freq_estimation_prev_switch) {
         // 推定終了：最後の推定値を保持して引き続き使用
         _freq_estimation_active = false;
-        _freq_estimation_result = estimated_frequency;  // 推定終了時の周波数を保存
-        // 注意：estimated_frequencyはそのまま保持され、位相補正で使用され続ける
-#if HAL_GCS_ENABLED
+        zero_cross_stop();
+        _freq_estimation_result = estimated_frequency;
+    #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
-#endif
-    }
-    
-    _freq_estimation_prev_switch = current_switch;
+    #endif
+        }
+
+        _freq_estimation_prev_switch = current_switch;
     
     // RLS更新条件：
     // 1. RLSが初期化済み
@@ -499,11 +473,14 @@ void AP_Observer::update() {
         Vector3f dummy_input;  // 使用しないダミー
         rls_update(dummy_input, _payload_filtered);
     }
+
+    if (_freq_estimation_active && _zc_window_active) {
+        zero_cross_update(_payload_filtered.x);
+    }
     
     // パラメータ変更を検出してキャッシュ更新
     static float last_freq = 0.0f;
     static float last_pred_time = 0.0f;
-    // static uint32_t update_counter = 0;  // 削除: slope_estimation_trigger_counterを使用
     
     if (fabsf(_disturbance_freq.get() - last_freq) > 0.001f || 
         fabsf(_prediction_time.get() - last_pred_time) > 0.0001f) {
@@ -514,14 +491,6 @@ void AP_Observer::update() {
         estimated_frequency = _disturbance_freq.get();
     }
     
-    // 位相補正は常時実行（スイッチに関係なく）
-    // RLS起動後、20サンプル（=1.0秒分）溜まるごとに位相補正を実行
-    // データ3秒分(60サンプル)を使い、1秒ごとに更新するスライディングウィンドウ方式
-    if (rls_initialized && (slope_estimation_trigger_counter >= 20)) {
-        phase_correction_update();
-        slope_estimation_trigger_counter = 0;
-    }
-
     // 既存の処理：RLS予測外力を使用
     current_filtered_force = get_predicted_force();  // Δt秒後の予測外力
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
@@ -688,8 +657,6 @@ Vector3f AP_Observer::get_predicted_force() const {
 
 // 位相補正初期化
 void AP_Observer::phase_correction_init() {
-    phase_buffer_index = 0;
-    phase_buffer_count = 0;
     phase_correction = 0.0f;
     estimated_frequency = _disturbance_freq.get();
     // 注：_freq_estimation_switch_stateはRC Aux Functionが管理するため、ここでは変更しない
@@ -702,392 +669,151 @@ void AP_Observer::phase_correction_init() {
         ab_amp[axis] = 0.0f;
     }
     
-    // バッファをゼロクリア
-    for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
-        phase_buffer[i] = 0.0f;
-        phase_time_buffer_ms[i] = 0;
-    }
 }
 
-// 位相アンラップ：前回の位相と現在の位相から連続な位相を返す
-float AP_Observer::unwrap_phase(float prev, float curr) {
-    float diff = curr - prev;
-    
-    // 位相が±πを超えてジャンプした場合を補正
-    if (diff > M_PI) {
-        curr -= 2.0f * M_PI;
-    } else if (diff < -M_PI) {
-        curr += 2.0f * M_PI;
+
+void AP_Observer::zero_cross_start() {
+    const float max_window_sec = (float)ZERO_CROSS_MAX_SAMPLES / ZERO_CROSS_SAMPLE_RATE_HZ;
+    const float window_sec = constrain_value(_freq_est_window_sec.get(), 1.0f, max_window_sec);
+    uint16_t window_samples = (uint16_t)(window_sec * ZERO_CROSS_SAMPLE_RATE_HZ + 0.5f);
+
+    if (window_samples < 2) {
+        window_samples = 2;
     }
-    
-    return curr;
+    if (window_samples > ZERO_CROSS_MAX_SAMPLES) {
+        window_samples = ZERO_CROSS_MAX_SAMPLES;
+    }
+
+    _zc_window_samples = window_samples;
+    _zc_sample_count = 0;
+    _zc_decimation_counter = 0;
+    _zc_window_active = true;
+    _zc_prev_input = 0.0f;
+    _zc_hp_state = 0.0f;
+    _zc_lp_state = 0.0f;
 }
 
-// 最小二乗法で傾きを計算
-// buffer: 位相データ配列
-// count: データ数
-float AP_Observer::linear_fit_slope(const float* buffer, uint8_t count) {
-    if (count < 2) {
-        return 0.0f;
-    }
-    
-    // x: 時間インデックス (0, 1, 2, ...)
-    // y: 位相値
-    float sum_x = 0.0f;
-    float sum_y = 0.0f;
-    float sum_xy = 0.0f;
-    float sum_x2 = 0.0f;
-    
-    for (uint8_t i = 0; i < count; i++) {
-        float x = (float)i;
-        float y = buffer[i];
-        sum_x += x;
-        sum_y += y;
-        sum_xy += x * y;
-        sum_x2 += x * x;
-    }
-    
-    // 傾き = (n*Σxy - Σx*Σy) / (n*Σx² - (Σx)²)
-    float n = (float)count;
-    float denominator = n * sum_x2 - sum_x * sum_x;
-    
-    if (fabsf(denominator) < 1e-9f) {
-        return 0.0f;  // ゼロ除算回避
-    }
-    
-    float slope = (n * sum_xy - sum_x * sum_y) / denominator;
-    return slope;
+void AP_Observer::zero_cross_stop() {
+    _zc_window_active = false;
 }
 
-// 位相-時刻の最小二乗で傾きを計算
-// phase: 位相配列 [rad]
-// time_ms: 時刻配列 [ms]
-// return: 傾き [rad/s]
-float AP_Observer::linear_fit_slope_time(const float* phase, const uint32_t* time_ms, uint8_t count)
-{
-    if (count < 2) {
-        return 0.0f;
-    }
-
-    const uint32_t t0_ms = time_ms[0];
-    // 精度確保のためにdoubleを使用
-    double sum_t = 0.0;
-    double sum_p = 0.0;
-    double sum_tp = 0.0;
-    double sum_t2 = 0.0;
-
-    for (uint8_t i = 0; i < count; i++) {
-        const double t = (double)(time_ms[i] - t0_ms) * 0.001;  // [s]
-        const double p = (double)phase[i];                      // [rad]
-        sum_t += t;
-        sum_p += p;
-        sum_tp += t * p;
-        sum_t2 += t * t;
-    }
-
-    const double n = (double)count;
-    const double denominator = n * sum_t2 - sum_t * sum_t;
-    if (fabs(denominator) < 1.0e-9) {
-        return 0.0f;
-    }
-
-    // slope [rad/s]
-    double slope = (n * sum_tp - sum_t * sum_p) / denominator; // [rad/s]
-    
-    // 異常値判定：最大スロープを制限 (例: 100Hz = 628rad/s なので 1000rad/sあれば十分異常)
-    if (fabs(slope) > 1000.0) {
-        return 0.0f;
-    }
-    
-    return (float)slope;
+void AP_Observer::zero_cross_reset_state() {
+    _zc_window_active = false;
+    _zc_window_samples = 0;
+    _zc_sample_count = 0;
+    _zc_decimation_counter = 0;
+    _zc_prev_input = 0.0f;
+    _zc_hp_state = 0.0f;
+    _zc_lp_state = 0.0f;
 }
 
-// 位相補正の更新（100ループごとに呼ばれる）
-void AP_Observer::phase_correction_update() {
-    // return; // DEBUG: Force return to isolate crash
-    // 位相補正が無効の場合は何もしない（最優先でチェック）
-    if (_phase_correction_enabled.get() == 0) {
-        return;  // 静かに終了（メッセージ不要）
+float AP_Observer::zero_cross_filter(float input) {
+    const float dt = 1.0f / ZERO_CROSS_SAMPLE_RATE_HZ;
+    const float rc_hp = 1.0f / (2.0f * M_PI * ZERO_CROSS_LOW_CUT_HZ);
+    const float alpha_hp = rc_hp / (rc_hp + dt);
+    const float hp = alpha_hp * (_zc_hp_state + input - _zc_prev_input);
+    _zc_prev_input = input;
+    _zc_hp_state = hp;
+
+    const float rc_lp = 1.0f / (2.0f * M_PI * ZERO_CROSS_HIGH_CUT_HZ);
+    const float alpha_lp = dt / (rc_lp + dt);
+    _zc_lp_state = _zc_lp_state + alpha_lp * (hp - _zc_lp_state);
+
+    return _zc_lp_state;
+}
+
+bool AP_Observer::zero_cross_compute_frequency(float &freq_out, uint16_t &crossings_out) const {
+    crossings_out = 0;
+    if (_zc_sample_count < 2) {
+        freq_out = 0.0f;
+        return false;
     }
-    
-    // バッファが不足している場合は終了（最低でも1秒分=20サンプルは欲しい）
-    // 3秒分(60サンプル)溜まるまでは推定精度が落ちるかもしれないが、
-    // 途中から推定を開始できるスライディングウィンドウ方式に変更。
-    if (phase_buffer_count < 20) {
-        // デバッグ：バッファ状態を間引いて出力（出力過多を避ける）
-#if HAL_GCS_ENABLED
-        static uint16_t buffer_msg_decim = 0;
-        if ((++buffer_msg_decim % 10U) == 0U) {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "PhaseCorr: buffer %u/%u amp=%.3f init=%u",
-                (unsigned)phase_buffer_count, (unsigned)PHASE_BUFFER_SIZE,
-                (double)ab_amp[0], (unsigned)ab_phase_initialized[0]
-            );
+
+    float sum = 0.0f;
+    for (uint16_t i = 0; i < _zc_sample_count; i++) {
+        sum += _zc_samples[i];
+    }
+    const float mean = sum / (float)_zc_sample_count;
+
+    int16_t last_cross = -1;
+    float interval_sum = 0.0f;
+    for (uint16_t i = 1; i < _zc_sample_count; i++) {
+        const float prev = _zc_samples[i - 1] - mean;
+        const float curr = _zc_samples[i] - mean;
+        const bool crossed = ((prev >= 0.0f && curr < 0.0f) || (prev < 0.0f && curr >= 0.0f));
+        if (crossed) {
+            if (last_cross >= 0) {
+                interval_sum += (float)(i - last_cross);
+            }
+            last_cross = (int16_t)i;
+            crossings_out++;
         }
-#endif
-        return;
     }
-    
-    // バッファを時系列順に再配置（リングバッファなので）
-    // バッファサイズ固定60に変更済みなので、一時配列を作成
-    float sorted_buffer[PHASE_BUFFER_SIZE];
-    uint32_t sorted_time_ms[PHASE_BUFFER_SIZE];
-    
-    // 最も古いデータのインデックスを特定
-    // fullなら buffer_index が最古。not fullなら 0 が最古。
-    uint8_t start_index = (phase_buffer_count < PHASE_BUFFER_SIZE) ? 0 : phase_buffer_index;
-    
-    for (uint8_t i = 0; i < phase_buffer_count; i++) {
-        uint8_t idx = (start_index + i) % PHASE_BUFFER_SIZE;
-        sorted_buffer[i] = phase_buffer[idx];
-        sorted_time_ms[i] = phase_time_buffer_ms[idx];
+
+    if (crossings_out < 2) {
+        freq_out = 0.0f;
+        return false;
     }
-    
-    // 線形近似で傾きを計算（有効サンプル数を使用）
-    // 時刻でフィットして [rad/s] を得ることで、更新周期の揺らぎやdt仮定に依存しない推定にする
-    const float slope_rad_s = linear_fit_slope_time(sorted_buffer, sorted_time_ms, phase_buffer_count);
-    
-    // slopeが0の場合は計算失敗あるいは異常値検出済みとしてスキップ
-    if (is_zero(slope_rad_s) && phase_buffer_count > 5) {
-        // サンプル数が少ないうちは0もありうるが、溜まっているのに0なら異常あるいは完全に一致
-        // ここでは安全のため何もしない
+
+    const float mean_interval_samples = interval_sum / (float)(crossings_out - 1);
+    if (mean_interval_samples <= 0.0f) {
+        freq_out = 0.0f;
+        return false;
+    }
+
+    const float period_s = 2.0f * mean_interval_samples / ZERO_CROSS_SAMPLE_RATE_HZ;
+    if (period_s <= 0.0f) {
+        freq_out = 0.0f;
+        return false;
+    }
+
+    freq_out = 1.0f / period_s;
+    return true;
+}
+
+void AP_Observer::zero_cross_update(float sample) {
+    if (!_zc_window_active) {
         return;
     }
 
-    // 位相バッファは「A,B係数から推定した観測位相（=モデル位相に対する相対位相）」を格納している。
-    // したがって slope_rad_s [rad/s] は「角周波数差 Δω」に相当し、Δf = Δω/(2π) となる。
-    // 注意: RLSで使用している周波数(estimated_frequency)に対する偏差が得られるため、
-    // ベースとなる周波数は _disturbance_freq ではなく estimated_frequency を使用する。
-    const float current_freq = estimated_frequency;
-    const float delta_freq_unclamped = slope_rad_s / (2.0f * M_PI);  // [Hz]
-    // 位相の外れ値等でΔfが跳ねることがあるため、現実的な範囲に制限して安定化
-    // 0.2Hz以上ずれることは稀（設計範囲内）
-    const float delta_freq = constrain_value(delta_freq_unclamped, -0.10f, 0.10f);
-    // 実験的な修正: 符号を元に戻す (+ delta_freq)
-    const float estimated_freq = current_freq + delta_freq;   // [Hz]
-    
-    // 計算結果の健全性チェック
-    if (isnan(estimated_freq) || isinf(estimated_freq)) {
+    if ((++_zc_decimation_counter % ZERO_CROSS_DECIMATION) != 0U) {
         return;
     }
-    
-    // 周波数範囲チェック：範囲外は警告のみ（リセット無効化）
-    if (!check_frequency_range(estimated_freq)) {
-#if HAL_GCS_ENABLED
-        static uint16_t oor_msg_decim = 0;
-        if ((++oor_msg_decim % 10U) == 0U) {
-            gcs().send_text(MAV_SEVERITY_WARNING,
-                "PhaseCorr: f=%.3fHz (df=%.3f) OutOfRange (%.2f-%.2f) slope=%.4f",
-                (double)estimated_freq, (double)delta_freq,
-                (double)FREQ_MIN, (double)FREQ_MAX, (double)slope_rad_s
-            );
-        }
-#endif
-        // 範囲外の場合も続行（リセットしない）
+
+    const float filtered = zero_cross_filter(sample);
+    if (_zc_sample_count < _zc_window_samples && _zc_sample_count < ZERO_CROSS_MAX_SAMPLES) {
+        _zc_samples[_zc_sample_count++] = filtered;
     }
 
-    // 周波数推定：スイッチON時のみ更新、OFF時は最後の推定値を保持
-    // 推定がパラメータ(OBS_DIST_FREQ)を勝手に書き換えないよう、ここでは内部推定値のみ更新する。
-    if (_freq_estimation_active) {
-        // 現在の推定周波数をバックアップ
-        float old_est_freq = estimated_frequency;
-        
-        // オンライン周波数推定実行（estimated_frequencyを更新）
-        // static constexpr float FREQ_EST_ALPHA = 0.01f;  // Alpha=0.01 for slow adaptation
-        estimated_frequency = estimated_frequency + _freq_est_alpha.get() * (estimated_freq - estimated_frequency);
-        
-        // 周波数変更に伴う位相不連続を防ぐためにphase_correctionを調整
-        // omega_new * t - corr_new = omega_old * t - corr_old
-        // -> corr_new = corr_old + (omega_new - omega_old) * t
-        float t_curr_sec = (get_current_time_ms() - rls_start_time_ms) * 0.001f;
-        float freq_diff = estimated_frequency - old_est_freq;
-        float dw_rad = freq_diff * 2.0f * M_PI;
-        
-        // model phase continuity at current time
-        float phase_adj_curr = dw_rad * t_curr_sec;
-        phase_correction += phase_adj_curr;
+    if (_zc_sample_count < _zc_window_samples) {
+        return;
+    }
 
-        // 【重要】バッファ補正
-        // 周波数が変わると、過去の時刻tauにおけるモデル位相 Model(tau) も変化する。
-        // Buffer(tau) = Obs(tau) - Model(tau)
-        // Model_new(tau) = Model_old(tau) - dw * (t_curr - tau)
-        // Buffer_new(tau) = Buffer_old(tau) + dw * (t_curr - tau)
-        for (uint8_t i = 0; i < phase_buffer_count; i++) {
-             float t_sample_sec = (phase_time_buffer_ms[i] - rls_start_time_ms) * 0.001f;
-             phase_buffer[i] += dw_rad * (t_curr_sec - t_sample_sec);
-        }
-        
-        // 予測用キャッシュも更新
+    float freq = 0.0f;
+    uint16_t crossings = 0;
+    const bool ok = zero_cross_compute_frequency(freq, crossings);
+
+    if (ok && check_frequency_range(freq)) {
+        estimated_frequency = freq;
+        _freq_estimation_result = estimated_frequency;
         update_prediction_cache();
-        
-        // デバッグ：周波数推定が進んでいることを間引いて出力
-#if HAL_GCS_ENABLED
-        static uint16_t freq_msg_decim = 0;
-        // Print every time (buffer clear slows rate anyway)
-        // Or every few updates
-        if ((++freq_msg_decim % 1U) == 0U) {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "PhaseCorr: est=%.3f df=%.3f slope=%.3f",
-                (double)estimated_frequency, (double)delta_freq, (double)slope_rad_s
-            );
-        }
-#endif
-    } else {
-        // スイッチOFF時：estimated_frequencyを保持（更新しない）
-        // 最後に推定された周波数をそのまま使い続ける
-        
-        // デバッグ：保持中の周波数を間引いて出力
-#if HAL_GCS_ENABLED
-        static uint16_t hold_msg_decim = 0;
-        if ((++hold_msg_decim % 20U) == 0U) {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "PhaseCorr: f=%.3f (HOLDING - no update)",
-                (double)estimated_frequency
-            );
-        }
-#endif
-    }
-    
-    // 位相誤差（相対位相の傾き=周波数差を位相ずれとして積算）
-    // 周波数が一致していれば slope_rad_s ≈ 0 になるのが理想。
-    const float slope_error = slope_rad_s;
-
-    // バッファ期間全体での位相ずれを計算
-    // phase_error [rad] = slope_error [rad/s] * buffer_duration [s]
-    const float buffer_duration_s = (sorted_time_ms[PHASE_BUFFER_SIZE - 1] - sorted_time_ms[0]) * 0.001f;
-    const float phase_error = slope_error * buffer_duration_s;
-    
-    // 閾値チェック：誤差が閾値以下なら補正しない
-    if (fabsf(phase_error) <= _phase_correction_threshold.get()) {
-        // デバッグメッセージ：補正不要だが、現在の累積補正量と推定周波数は送信
 #if HAL_GCS_ENABLED
         gcs().send_text(MAV_SEVERITY_INFO,
-            "PhaseCorr: err=%.4f est_freq=%.4f Hz corr=%.4f (no correction)",
-            phase_error, estimated_freq, phase_correction
+            "ZeroCross: f=%.3fHz crossings=%u",
+            (double)estimated_frequency, (unsigned)crossings
         );
 #endif
-        return;
-    }
-    
-    // phase は omega*t - phase_correction を使用しているため、
-    // 観測位相が進む(phase_error>0)場合は model を進める方向に補正する必要がある。
-    // よって phase_correction は誤差と逆符号で更新する。
-    phase_correction -= phase_error;
-    
-    // 【重要】位相誤差補正を行った場合、RLSへの入力位相(sin(omega*t - P))が変化する。
-    // これによりRLS係数(A,B)が過渡応答を起こし、推定された位相(ab_phase)が不連続になる。
-    // これを防ぐため、座標回転変換を用いてRLS係数A,Bを新しい位相基準に合わせて回転させる。
-    // 位相変化量 d_theta = +phase_error (Pが減る＝位相が進む)
-    // 回転: A' = A cos(d) - B sin(d), B' = A sin(d) + B cos(d)
-    const float d_theta = phase_error;
-    const float cos_d = cosf(d_theta);
-    const float sin_d = sinf(d_theta);
-
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        float A = rls_theta[axis][0];
-        float B = rls_theta[axis][1];
-        
-        // 回転行列適用
-        float A_new = A * cos_d - B * sin_d;
-        float B_new = A * sin_d + B * cos_d;
-        
-        rls_theta[axis][0] = A_new;
-        rls_theta[axis][1] = B_new;
-        
-        // A,Bが更新されたので、ab_phase_unwrapped も整合するように更新する必要がある。
-        // （次回のrls_updateで計算されるが、ここでは連続性保証のために即時反映を検討）
-        // A,Bを回転させたので、計算される位相 phi = atan2(B', A') は phi + d_theta になる。
-        // バッファ値 = phi' - P' = (phi + d) - (P - d) = phi - P + 2d ... あれ？
-        
-        // 確認：
-        // 元の状態: 信号 y = R sin(ph + phi). ph = wt - P. 
-        // 補正後: P' = P - d. -> ph' = ph + d.
-        // 信号 y は不変。 y = R sin(ph' + phi').
-        // ph + phi = ph' + phi' -> ph + phi = (ph + d) + phi'
-        // -> phi' = phi - d.
-        
-        // つまり、RLS係数を「位相が進んだ座標系(ph')」で見ると、相対位相(phi')は「遅れる(-d)」。
-        // 私の回転式:
-        // y = A sin(ph) + B cos(ph) -> ph' = ph + d.
-        // y = A' sin(ph+d) + B' cos(ph+d).
-        // (A' cos d - B' sin d) sin ph + ... = A sin ph ...
-        // A = A' cos d - B' sin d
-        // 逆変換: A' = A cos d + B sin d.
-        // これで A', B' を求めた。
-        // phi' = atan2(B', A').
-        
-        // Math check:
-        // Let A=R, B=0 (phi=0). y = R sin(ph).
-        // A' = R cos d. B' = R sin d.
-        // phi' = atan2(R sin d, R cos d) = d.
-        
-        // 矛盾発生。
-        // 計算上 phi' = phi + d になる。
-        // しかし物理的には phi' = phi - d であるべき。
-        // なぜか？
-        // y = R sin(ph')... ここで y = A' sin(ph') + B' cos(ph') と置いた。
-        // つまり A', B' は ph' 基準の係数。
-        // A, B は ph 基準。
-        // ph' = ph + d.
-        // 信号 y = R sin(ph). (phi=0と仮定).
-        // y = R sin(ph' - d) = R (sin ph' cos d - cos ph' sin d).
-        // = (R cos d) sin ph' + (-R sin d) cos ph'.
-        // -> A' = R cos d. B' = -R sin d.
-        // -> phi' = atan2(-sin d, cos d) = -d.
-        
-        // OK. 正しい回転式は逆でした。
-        // sin(ph) = sin(ph' - d) = sin ph' cos d - cos ph' sin d.
-        // cos(ph) = cos(ph' - d) = cos ph' cos d + sin ph' sin d.
-        // y = A (sin ph' cos d - cos ph' sin d) + B (cos ph' cos d + sin ph' sin d)
-        //   = (A cos d + B sin d) sin ph' + (-A sin d + B cos d) cos ph'
-        // -> A' = A cos d + B sin d.
-        // -> B' = B cos d - A sin d.
-        
-        // 再計算:
-        // A_new = A * cos_d + B * sin_d;
-        // B_new = B * cos_d - A * sin_d;
-    }
-    
-    // 再計算した係数で更新
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        float A = rls_theta[axis][0];
-        float B = rls_theta[axis][1];
-        
-        float A_new = A * cos_d + B * sin_d;
-        float B_new = B * cos_d - A * sin_d;
-        
-        rls_theta[axis][0] = A_new;
-        rls_theta[axis][1] = B_new;
-        
-        // A,B更新に伴い、ab_phase_unwrapped も更新が必要。
-        // RLSのA,Bは瞬時に phi -> phi - d に変化した。
-        // したがって atan2(B,A) は -d だけ変化する。
-        // ab_phase_unwrapped にも -d を加算する。
-        ab_phase_unwrapped[axis] -= d_theta; // phi' = phi - d
-        ab_phase_prev_wrapped[axis] -= d_theta;
-    }
-    
-    // バッファの値 (phi - P) について:
-    // P' = P - d.
-    // phi' (new samples will provide) = phi - d.
-    // New Sample = phi' - P' = (phi - d) - (P - d) = phi - P.
-    // Old Sample = phi - P.
-    // 連続性は保たれる！
-    // したがってバッファの補正は不要（A,B回転と ab_phase 補正を行えば）。
-
-    // デバッグメッセージ：位相誤差と推定周波数を送信
+    } else {
 #if HAL_GCS_ENABLED
-    gcs().send_text(MAV_SEVERITY_INFO,
-        "PhaseCorr: err=%.4f est_freq=%.4f Hz corr=%.4f",
-        phase_error, estimated_freq, phase_correction
-    );
+        gcs().send_text(MAV_SEVERITY_WARNING,
+            "ZeroCross: invalid f=%.3fHz crossings=%u",
+            (double)freq, (unsigned)crossings
+        );
 #endif
+    }
 
-    // バッファをクリアして、新しい周波数設定でのデータ蓄積を開始する
-    // バッファはクリアせず、スライディングウィンドウとして使い続ける
-    // 次回の推定タイミングは20サンプル（1.0秒）後
-    // phase_buffer_count = 0;  // 削除
-    // phase_buffer_index = 0;  // 削除
+    _zc_window_active = false;
+    _freq_estimation_active = false;
 }
 
 // 周波数範囲チェック（振り子長0.3m~2.0mに対応）
@@ -1147,17 +873,22 @@ void AP_Observer::Write_Observer_Log() {
 // RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
 // RC8_OPTION=316 を推奨（デフォルト設定）
 void AP_Observer::set_freq_estimation_switch(bool enabled) {
-    // 状態変化（立ち上がり）検出
-    if (enabled && !_freq_estimation_switch_state) {
-        // 周波数推定ONへの切り替え時に推定値をリセット (立ち上がりエッジ)
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: ON (Reset)");
+    _freq_estimation_switch_state = enabled;
+}
+
+void AP_Observer::set_freq_estimation_active(bool active) {
+    if (active && !_freq_estimation_prev_switch) {
         reset_frequency_estimation();
-    } else if (!enabled && _freq_estimation_switch_state) {
-        // ON -> OFF
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: OFF");
+        zero_cross_start();
+        _freq_estimation_result = _disturbance_freq.get();
+    } else if (!active && _freq_estimation_prev_switch) {
+        zero_cross_stop();
+        _freq_estimation_result = estimated_frequency;
     }
 
-    _freq_estimation_switch_state = enabled;
+    _freq_estimation_active = active;
+    _freq_estimation_switch_state = active;
+    _freq_estimation_prev_switch = active;
 }
 
 
@@ -1170,11 +901,10 @@ void AP_Observer::force_rls_update(const Vector3f& payload) {
         rls_update(dummy_input, _payload_filtered);
     }
 
-    // Process phase correction trigger from RLS decimation
-    if (rls_initialized && (slope_estimation_trigger_counter >= 20)) {
-        phase_correction_update();
-        slope_estimation_trigger_counter = 0;
+    if (_freq_estimation_active && _zc_window_active) {
+        zero_cross_update(_payload_filtered.x);
     }
+
 }
 
 void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {

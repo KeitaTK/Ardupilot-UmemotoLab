@@ -163,10 +163,10 @@ for reviewing patches on their specific area.
 
 ## 🧪 Custom Features & Testing (Umemoto Lab)
 
-### RLS Frequency Estimation Switch Control
+### Zero-Cross Frequency Estimation Switch Control
 
-このプロジェクトでは、RLS（Recursive Least Squares）による周波数推定機能を実装しています。
-周波数推定の開始/停止を制御する方法として、以下の2つの方式をサポートしています：
+このプロジェクトでは、推定外力（PLX）を用いた**ゼロクロス法**で周波数推定を行います。
+推定はRCスイッチON時に開始し、`OBS_FREQ_WIN` 秒（デフォルト10秒）のウィンドウ完了後に結果を保持します。
 
 #### 設定方法
 
@@ -185,7 +185,7 @@ for reviewing patches on their specific area.
 ##### 旧方式（推奨）- RC8を使用
 ```
 OBS_FREQ_EST_CH = 8    # RC8チャンネルを使用
-OBS_PHASE_CORR = 1     # 位相補正ON
+OBS_FREQ_WIN  = 10     # ゼロクロス推定ウィンドウ [s]
 OBS_DIST_FREQ = 0.6    # 初期周波数 [Hz]
 ```
 
@@ -193,7 +193,7 @@ OBS_DIST_FREQ = 0.6    # 初期周波数 [Hz]
 ```
 RC7_OPTION = 316       # RC7にRLS周波数推定機能を割り当て
 OBS_FREQ_EST_CH = 0    # 旧方式無効
-OBS_PHASE_CORR = 1     # 位相補正ON
+OBS_FREQ_WIN  = 10     # ゼロクロス推定ウィンドウ [s]
 ```
 
 #### オートテスト
@@ -202,7 +202,9 @@ OBS_PHASE_CORR = 1     # 位相補正ON
 
 | テスト名 | 説明 | 実行方法 | 状態 |
 |---------|------|----------|------|
-| `TestRLSRC8SwitchControl` | 旧方式（OBS_FREQ_EST_CH）のテスト | `timeout 400 Tools/autotest/autotest.py test.Copter.TestRLSRC8SwitchControl` | ✅ PASS |
+| `TestRLSRC8SwitchControl` | ゼロクロス推定のスイッチ制御（10秒ウィンドウ） | `timeout 400 Tools/autotest/autotest.py test.Copter.TestRLSRC8SwitchControl` | ✅ PASS |
+| `TestRLSWindowedEstimation` | 20-30秒ウィンドウでの推定と保持 | `timeout 600 Tools/autotest/autotest.py test.Copter.TestRLSWindowedEstimation` | ✅ PASS |
+| `TestRLSFrequencyEstimationDetailed` | 00000434条件の再現テスト | `timeout 800 Tools/autotest/autotest.py test.Copter.TestRLSFrequencyEstimationDetailed` | ✅ PASS |
 | `TestRLSRCAuxFunction` | 新方式（RC_OPTION=316）のテスト | `timeout 400 Tools/autotest/autotest.py test.Copter.TestRLSRCAuxFunction` | ⚠️ SITL環境で動作不安定 |
 | `TestRLSDualMethodControl` | 両方式の併用・競合テスト | `timeout 600 Tools/autotest/autotest.py test.Copter.TestRLSDualMethodControl` | 🚧 開発中 |
 

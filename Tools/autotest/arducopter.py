@@ -7589,6 +7589,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
     # ========== AP_Observer Test Helper Functions ==========
     def extract_rls_frequency_stats_from_log(self, tstart, tend):
         '''Extract robust stats for estimated frequency from OBSV log between tstart and tend'''
+        import math
         import numpy
 
         mlog = self.dfreader_for_current_onboard_log()
@@ -7676,9 +7677,9 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         return corrections
 
     def _run_rls_frequency_estimation_case(self, config_freq, actual_freq, test_amplitude=10.0,
-                                          hover_time=120, analysis_window_s=30.0, tol_hz=0.03,
+                                          hover_time=60, analysis_window_s=10.0, tol_hz=0.03,
                                           phase_thresh_rad=5.0):
-        '''Run a single (config, injected) frequency estimation scenario and assert convergence.'''
+        '''Run a single (config, injected) zero-cross estimation scenario and assert convergence.'''
         try:
             self.progress(
                 f"RLS freq case: config={config_freq:.3f}Hz injected={actual_freq:.3f}Hz amp={test_amplitude:.1f}N"
@@ -7687,14 +7688,12 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.set_parameters({
                 'OBS_DIST_FREQ': float(config_freq),
                 'OBS_PHASE_CORR': 1,
-                # 位相補正は推定を安定させる用途だが、周波数推定(Δf)の検証では
-                # 補正適用が位相ドリフトを打ち消して推定が鈍ることがある。
-                # ここでは「推定モード有効(OBS_PHASE_CORR=1)」を維持しつつ、
-                # 補正適用は閾値で抑制して周波数推定の収束を評価する。
                 'OBS_PHASE_THRESH': float(phase_thresh_rad),
                 'OBS_TEST_INJECT': 1,
                 'OBS_TEST_FREQ': float(actual_freq),
                 'OBS_TEST_AMP': float(test_amplitude),
+                'OBS_FREQ_WIN': 10.0,
+                'RC8_OPTION': 316,
                 'LOG_DISARMED': 0,
             })
 
@@ -7708,6 +7707,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_TEST_INJECT': 1,
                 'OBS_TEST_FREQ': float(actual_freq),
                 'OBS_TEST_AMP': float(test_amplitude),
+                'OBS_FREQ_WIN': 10.0,
+                'RC8_OPTION': 316,
             })
             self.delay_sim_time(1)
 
@@ -7718,8 +7719,19 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.progress(f"Hovering for {hover_time} seconds")
             tstart, tend, _ = self.hover_for_interval(hover_time)
 
-            analysis_start = max(tstart, tend - float(analysis_window_s))
-            stats = self.extract_rls_frequency_stats_from_log(analysis_start, tend)
+            # Switch on for windowed estimation
+            self.set_rc(8, 2000)
+            self.delay_sim_time(1)
+            t_on = self.get_sim_time()
+            self.delay_sim_time(10)
+            t_off = self.get_sim_time()
+            self.set_rc(8, 1000)
+            self.delay_sim_time(1)
+            t_hold_start = self.get_sim_time()
+            self.delay_sim_time(analysis_window_s)
+            t_hold_end = self.get_sim_time()
+
+            stats = self.extract_rls_frequency_stats_from_log(t_hold_start, t_hold_end)
             if stats['count'] == 0:
                 raise NotAchievedException("No frequency estimation data found in log")
 
@@ -7883,7 +7895,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.context_pop()
 
     def TestRLSFrequencyEstimation(self):
-        '''Test RLS frequency estimation with phase correction enabled'''
+        '''Test zero-cross frequency estimation with injected force'''
         self.context_push()
         try:
             self._run_rls_frequency_estimation_case(
@@ -7900,7 +7912,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.context_pop()
 
     def TestRLSFrequencyEstimationMulti(self):
-        '''Run multiple frequency estimation scenarios to validate convergence across frequencies'''
+        '''Run multiple zero-cross estimation scenarios to validate convergence across frequencies'''
         self.context_push()
         try:
             # (configured model freq, injected test freq)
@@ -7931,166 +7943,206 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
     def TestRLSRC8SwitchControl(self):
         '''Test RC8 switch control for frequency estimation (RC Aux Function)'''
         self.context_push()
-        
-        # テストパラメータ設定
-        test_freq = 0.7
-        test_amplitude = 10.0
-        self.progress(f"Testing RC8 switch control with RC8_OPTION=316: {test_freq}Hz, {test_amplitude}N")
-        
-        self.set_parameters({
-            'OBS_DIST_FREQ': 0.6,  # 初期周波数（実際と異なる値）
-            'OBS_PHASE_CORR': 1,  # 位相補正ON
-            'OBS_TEST_INJECT': 1,  # テスト外力注入
-            'OBS_TEST_FREQ': test_freq,  # 実際の周波数
-            'OBS_TEST_AMP': test_amplitude,
-            'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
-            'LOG_DISARMED': 0,
-        })
-        
-        self.set_rc(8, 1000)  # reboot前にLOWを設定
-        self.reboot_sitl()
-        
-        # パラメータが正しく設定されているか確認
-        rc8_option = self.get_parameter('RC8_OPTION')
-        self.progress(f"RC8_OPTION after reboot: {rc8_option} (expected 316)")
-        if rc8_option != 316:
-            raise NotAchievedException(f"RC8_OPTION not set correctly: {rc8_option} != 316")
-        
-        # RCライブラリの初期化を待つ
-        self.delay_sim_time(2)
-        self.progress("RC library initialized, RC8 should be at LOW (OFF)")
-        # RCライブラリの初期化を待つ
-        self.delay_sim_time(2)
-        self.progress("RC library initialized, RC8 should be at LOW (OFF)")
-        
-        self.delay_sim_time(1)
-        
-        # 明示的にRC8をOFFに設定
-        self.set_rc(8, 1000)
-        self.delay_sim_time(1)
-        self.progress("RC8 explicitly set to OFF (PWM=1000)")
-        
-        # 離陸
-        self.progress("Taking off to 10m")
-        self.takeoff(10, mode='ALT_HOLD')
-        self.delay_sim_time(5)
-        
-        # 離陸後もRC8をOFFに再設定（念のため）
-        self.set_rc(8, 1000)
-        self.delay_sim_time(3)
-        
-        # Phase 1: RC8オフ状態で10秒ホバリング（推定なし）
-        self.progress("Phase 1: RC8 OFF - No estimation for 10 seconds")
-        t1_start = self.get_sim_time()
-        self.delay_sim_time(10)
-        t1_end = self.get_sim_time()
-        
-        # Phase 2: RC8をオンにして30秒推定
-        self.progress("Phase 2: RC8 ON - Estimating for 30 seconds")
-        self.set_rc(8, 2000)  # RC8オン
-        self.delay_sim_time(2)  # スイッチ反映待ち
-        t2_start = self.get_sim_time()
-        self.delay_sim_time(30)
-        t2_end = self.get_sim_time()
-        
-        # Phase 3: RC8をオフにして10秒ホバリング（推定停止、結果保持）
-        self.progress("Phase 3: RC8 OFF - Hold result for 10 seconds")
-        self.set_rc(8, 1000)  # RC8オフ
-        self.delay_sim_time(2)
-        t3_start = self.get_sim_time()
-        self.delay_sim_time(10)
-        t3_end = self.get_sim_time()
-        
-        # ログ解析
-        self.progress("Analyzing log data...")
-        import numpy
-        mlog = self.dfreader_for_current_onboard_log()
-        
-        # Phase 1のSWフィールドを確認（オフ=0）
-        phase1_sw = []
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t1_start * 1.0e6, t1_end * 1.0e6))
-            if m is None:
-                break
-            if hasattr(m, 'SW'):
-                phase1_sw.append(m.SW)
-        
-        # Phase 2のSWフィールドを確認（オン=1）
-        mlog = self.dfreader_for_current_onboard_log()
-        phase2_sw = []
-        phase2_freq = []
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t2_start * 1.0e6, t2_end * 1.0e6))
-            if m is None:
-                break
-            if hasattr(m, 'SW'):
-                phase2_sw.append(m.SW)
-            if hasattr(m, 'F'):
-                phase2_freq.append(m.F)
-        
-        # Phase 3のSWフィールドを確認（オフ=0）
-        mlog = self.dfreader_for_current_onboard_log()
-        phase3_sw = []
-        phase3_freq = []
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t3_start * 1.0e6, t3_end * 1.0e6))
-            if m is None:
-                break
-            if hasattr(m, 'SW'):
-                phase3_sw.append(m.SW)
-            if hasattr(m, 'F'):
-                phase3_freq.append(m.F)
-        
-        # 検証1: Phase1でSW=0（オフ）
-        if len(phase1_sw) > 0:
-            sw1_median = numpy.median(numpy.asarray(phase1_sw))
-            self.progress(f"Phase 1: SW median = {sw1_median} (expected 0)")
-            if sw1_median > 0.5:
-                raise NotAchievedException("Phase 1: RC8 switch should be OFF (0)")
-        
-        # 検証2: Phase2でSW=1（オン）
-        if len(phase2_sw) > 0:
-            sw2_median = numpy.median(numpy.asarray(phase2_sw))
-            self.progress(f"Phase 2: SW median = {sw2_median} (expected 1)")
-            if sw2_median < 0.5:
-                raise NotAchievedException("Phase 2: RC8 switch should be ON (1)")
-        
-        # 検証3: Phase3でSW=0（オフ）
-        if len(phase3_sw) > 0:
-            sw3_median = numpy.median(numpy.asarray(phase3_sw))
-            self.progress(f"Phase 3: SW median = {sw3_median} (expected 0)")
-            if sw3_median > 0.5:
-                raise NotAchievedException("Phase 3: RC8 switch should be OFF (0)")
-        
-        # 検証4: Phase2で周波数が推定されている（後半の平均）
-        if len(phase2_freq) > 10:
-            # 後半50%のデータを使用
-            phase2_freq_late = phase2_freq[len(phase2_freq)//2:]
-            freq2_mean = numpy.mean(numpy.asarray(phase2_freq_late))
-            self.progress(f"Phase 2: Estimated frequency = {freq2_mean:.3f}Hz (injected {test_freq}Hz)")
-            # 推定周波数が実際の周波数に近いことを確認（±0.05Hz）
-            if abs(freq2_mean - test_freq) > 0.05:
-                self.progress(f"Warning: Frequency error = {abs(freq2_mean - test_freq):.3f}Hz")
-        
-        # 検証5: Phase3で周波数が保持されている
-        if len(phase3_freq) > 5:
-            freq3_mean = numpy.mean(numpy.asarray(phase3_freq))
-            self.progress(f"Phase 3: Frequency held at {freq3_mean:.3f}Hz")
-        
-        self.progress("✅ RC8 SWITCH CONTROL TEST PASSED")
-        
-        self.do_RTL()
-        self.set_rc(8, 1000)
-        self.context_pop()
+        try:
+            # テストパラメータ設定
+            test_freq = 0.7
+            test_amplitude = 10.0
+            freq_window_s = 10.0
+            self.progress(f"Testing RC8 switch control (zero-cross) with RC8_OPTION=316: {test_freq}Hz, {test_amplitude}N")
+
+            test_params = {
+                'OBS_DIST_FREQ': 0.6,  # 初期周波数（実際と異なる値）
+                'OBS_PHASE_CORR': 1,  # 位相補正ON
+                'OBS_TEST_INJECT': 1,  # テスト外力注入
+                'OBS_TEST_FREQ': test_freq,  # 実際の周波数
+                'OBS_TEST_AMP': test_amplitude,
+                'OBS_FREQ_WIN': freq_window_s,
+                'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
+                'LOG_DISARMED': 0,
+            }
+            self.set_parameters(test_params)
+
+            self.set_rc(8, 1000)  # reboot前にLOWを設定
+            self.reboot_sitl()
+
+            # reboot後にテスト用パラメータを再設定（保持されない場合の保険）
+            self.set_parameters(test_params)
+
+            # パラメータが正しく設定されているか確認
+            rc8_option = self.get_parameter('RC8_OPTION')
+            self.progress(f"RC8_OPTION after reboot: {rc8_option} (expected 316)")
+            if rc8_option != 316:
+                raise NotAchievedException(f"RC8_OPTION not set correctly: {rc8_option} != 316")
+
+            obs_test_inject = self.get_parameter('OBS_TEST_INJECT')
+            obs_test_freq = self.get_parameter('OBS_TEST_FREQ')
+            obs_test_amp = self.get_parameter('OBS_TEST_AMP')
+            self.progress(
+                "OBS_TEST params after reboot: "
+                f"INJECT={obs_test_inject}, FREQ={obs_test_freq}, AMP={obs_test_amp}"
+            )
+            if obs_test_inject != 1:
+                raise NotAchievedException(
+                    f"OBS_TEST_INJECT not set correctly: {obs_test_inject} != 1"
+                )
+
+            # RCライブラリの初期化を待つ
+            self.delay_sim_time(2)
+            self.progress("RC library initialized, RC8 should be at LOW (OFF)")
+            # RCライブラリの初期化を待つ
+            self.delay_sim_time(2)
+            self.progress("RC library initialized, RC8 should be at LOW (OFF)")
+
+            self.delay_sim_time(1)
+
+            # 明示的にRC8をOFFに設定
+            self.set_rc(8, 1000)
+            self.delay_sim_time(1)
+            self.progress("RC8 explicitly set to OFF (PWM=1000)")
+
+            # 離陸
+            self.progress("Taking off to 10m")
+            self.takeoff(10, mode='ALT_HOLD')
+            self.delay_sim_time(5)
+
+            # 離陸後もRC8をOFFに再設定（念のため）
+            self.set_rc(8, 1000)
+            self.delay_sim_time(3)
+
+            # Phase 1: RC8オフ状態で10秒ホバリング（推定なし）
+            self.progress("Phase 1: RC8 OFF - No estimation for 10 seconds")
+            t1_start = self.get_sim_time()
+            self.delay_sim_time(10)
+            t1_end = self.get_sim_time()
+
+            # Phase 2: RC8をオンにして12秒推定（10秒窓 + 余裕）
+            self.progress("Phase 2: RC8 ON - Estimating for 12 seconds")
+            self.set_rc(8, 2000)  # RC8オン
+            self.delay_sim_time(2)  # スイッチ反映待ち
+            t2_start = self.get_sim_time()
+            self.delay_sim_time(12)
+            t2_end = self.get_sim_time()
+
+            # Phase 3: RC8をオフにして10秒ホバリング（推定停止、結果保持）
+            self.progress("Phase 3: RC8 OFF - Hold result for 10 seconds")
+            self.set_rc(8, 1000)  # RC8オフ
+            self.delay_sim_time(2)
+            t3_start = self.get_sim_time()
+            self.delay_sim_time(10)
+            t3_end = self.get_sim_time()
+
+            # ログ解析
+            self.progress("Analyzing log data...")
+            import numpy
+            mlog = self.dfreader_for_current_onboard_log()
+
+            # Phase 1のSWフィールドを確認（オフ=0）
+            phase1_sw = []
+            while True:
+                m = mlog.recv_match(
+                    type='OBSV',
+                    blocking=False,
+                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t1_start * 1.0e6, t1_end * 1.0e6))
+                if m is None:
+                    break
+                if hasattr(m, 'SW'):
+                    phase1_sw.append(m.SW)
+
+            # Phase 2のSWフィールドを確認（オン=1）
+            mlog = self.dfreader_for_current_onboard_log()
+            phase2_sw = []
+            phase2_freq = []
+            phase2_time = []
+            while True:
+                m = mlog.recv_match(
+                    type='OBSV',
+                    blocking=False,
+                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t2_start * 1.0e6, t2_end * 1.0e6))
+                if m is None:
+                    break
+                if hasattr(m, 'SW'):
+                    phase2_sw.append(m.SW)
+                if hasattr(m, 'F'):
+                    phase2_freq.append(m.F)
+                    phase2_time.append(m.TimeUS * 1.0e-6)
+
+            # Phase 3のSWフィールドを確認（オフ=0）
+            mlog = self.dfreader_for_current_onboard_log()
+            phase3_sw = []
+            phase3_freq = []
+            while True:
+                m = mlog.recv_match(
+                    type='OBSV',
+                    blocking=False,
+                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t3_start * 1.0e6, t3_end * 1.0e6))
+                if m is None:
+                    break
+                if hasattr(m, 'SW'):
+                    phase3_sw.append(m.SW)
+                if hasattr(m, 'F'):
+                    phase3_freq.append(m.F)
+
+            # 検証1: Phase1でSW=0（オフ）
+            if len(phase1_sw) > 0:
+                sw1_median = numpy.median(numpy.asarray(phase1_sw))
+                self.progress(f"Phase 1: SW median = {sw1_median} (expected 0)")
+                if sw1_median > 0.5:
+                    raise NotAchievedException("Phase 1: RC8 switch should be OFF (0)")
+
+            # 検証2: Phase2でSW=1（オン）
+            if len(phase2_sw) > 0:
+                sw2_median = numpy.median(numpy.asarray(phase2_sw))
+                self.progress(f"Phase 2: SW median = {sw2_median} (expected 1)")
+                if sw2_median < 0.5:
+                    raise NotAchievedException("Phase 2: RC8 switch should be ON (1)")
+
+            # 検証3: Phase3でSW=0（オフ）
+            if len(phase3_sw) > 0:
+                sw3_median = numpy.median(numpy.asarray(phase3_sw))
+                self.progress(f"Phase 3: SW median = {sw3_median} (expected 0)")
+                if sw3_median > 0.5:
+                    raise NotAchievedException("Phase 3: RC8 switch should be OFF (0)")
+
+            # 検証4: Phase2で周波数が推定されている（後半の平均）
+            freq2_mean = None
+            if len(phase2_freq) > 0:
+                # ウィンドウ終了後のデータを優先（推定値が更新されるタイミング）
+                window_end = t2_start + freq_window_s
+                phase2_freq_post_window = [
+                    f for f, t in zip(phase2_freq, phase2_time)
+                    if t >= window_end
+                ]
+                if len(phase2_freq_post_window) >= 3:
+                    freq2_mean = numpy.mean(numpy.asarray(phase2_freq_post_window))
+                    self.progress(
+                        "Phase 2: Estimated frequency (post-window) = "
+                        f"{freq2_mean:.3f}Hz (injected {test_freq}Hz)"
+                    )
+                else:
+                    freq2_mean = phase2_freq[-1]
+                    self.progress(
+                        "Phase 2: Estimated frequency (last sample) = "
+                        f"{freq2_mean:.3f}Hz (injected {test_freq}Hz)"
+                    )
+
+                if abs(freq2_mean - test_freq) > 0.05:
+                    raise NotAchievedException(
+                        f"Phase 2: Frequency error too large: {abs(freq2_mean - test_freq):.3f}Hz"
+                    )
+
+            # 検証5: Phase3で周波数が保持されている
+            if len(phase3_freq) > 5:
+                freq3_mean = numpy.mean(numpy.asarray(phase3_freq))
+                self.progress(f"Phase 3: Frequency held at {freq3_mean:.3f}Hz")
+                if freq2_mean is not None:
+                    if abs(freq3_mean - freq2_mean) > 0.02:
+                        raise NotAchievedException("Phase 3: Frequency not held after switch OFF")
+
+            self.progress("✅ RC8 SWITCH CONTROL TEST PASSED")
+        finally:
+            self.set_rc(8, 1000)
+            self.disarm_vehicle(force=True)
+            self.context_pop()
 
     def TestRLSRCAuxFunction(self):
         '''Test RC Aux Function (RC9_OPTION=316) for frequency estimation'''
@@ -8274,43 +8326,29 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.context_pop()
 
     def TestRLSParameterChange(self):
-        '''Test OBS_FREQ_ALPHA and OBS_MAX_CORR_ANG parameter changes'''
+        '''Test OBS_MAX_CORR_ANG and OBS_FREQ_WIN parameter changes'''
         
         test_freq = 0.6
         test_amplitude = 10.0
-        self.progress("Testing AP_Observer parameter changes: OBS_FREQ_ALPHA and OBS_MAX_CORR_ANG")
+        self.progress("Testing AP_Observer parameter changes: OBS_MAX_CORR_ANG, OBS_FREQ_WIN")
         
         # デフォルト値を確認
-        default_freq_alpha = self.get_parameter('OBS_FREQ_ALPHA')
         default_max_corr = self.get_parameter('OBS_MAX_CORR_ANG')
-        self.progress(f"Default OBS_FREQ_ALPHA: {default_freq_alpha}")
+        default_freq_win = self.get_parameter('OBS_FREQ_WIN')
         self.progress(f"Default OBS_MAX_CORR_ANG: {default_max_corr}")
+        self.progress(f"Default OBS_FREQ_WIN: {default_freq_win}")
         
         # 期待されるデフォルト値
-        if abs(default_freq_alpha - 0.15) > 0.001:
-            raise NotAchievedException(f"OBS_FREQ_ALPHA default should be 0.15, got {default_freq_alpha}")
         if abs(default_max_corr - 0.5) > 0.001:
             raise NotAchievedException(f"OBS_MAX_CORR_ANG default should be 0.5, got {default_max_corr}")
+        if abs(default_freq_win - 10.0) > 0.01:
+            raise NotAchievedException(f"OBS_FREQ_WIN default should be 10.0, got {default_freq_win}")
         
         self.progress("✅ Default values correct")
         
-        # Test 1: OBS_FREQ_ALPHAを変更
-        new_freq_alpha = 0.1
-        self.progress(f"Test 1: Setting OBS_FREQ_ALPHA to {new_freq_alpha}")
-        self.set_parameter('OBS_FREQ_ALPHA', new_freq_alpha)
-        self.delay_sim_time(1)
-        
-        actual_freq_alpha = self.get_parameter('OBS_FREQ_ALPHA')
-        self.progress(f"OBS_FREQ_ALPHA after change: {actual_freq_alpha}")
-        if abs(actual_freq_alpha - new_freq_alpha) > 0.001:
-            raise NotAchievedException(
-                f"OBS_FREQ_ALPHA not set correctly: expected {new_freq_alpha}, got {actual_freq_alpha}"
-            )
-        self.progress("✅ OBS_FREQ_ALPHA change successful")
-        
-        # Test 2: OBS_MAX_CORR_ANGを変更
+        # Test 1: OBS_MAX_CORR_ANGを変更
         new_max_corr = 0.3
-        self.progress(f"Test 2: Setting OBS_MAX_CORR_ANG to {new_max_corr}")
+        self.progress(f"Test 1: Setting OBS_MAX_CORR_ANG to {new_max_corr}")
         self.set_parameter('OBS_MAX_CORR_ANG', new_max_corr)
         self.delay_sim_time(1)
         
@@ -8322,6 +8360,20 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             )
         self.progress("✅ OBS_MAX_CORR_ANG change successful")
         
+        # Test 2: OBS_FREQ_WINを変更
+        new_freq_win = 12.5
+        self.progress(f"Test 2: Setting OBS_FREQ_WIN to {new_freq_win}")
+        self.set_parameter('OBS_FREQ_WIN', new_freq_win)
+        self.delay_sim_time(1)
+
+        actual_freq_win = self.get_parameter('OBS_FREQ_WIN')
+        self.progress(f"OBS_FREQ_WIN after change: {actual_freq_win}")
+        if abs(actual_freq_win - new_freq_win) > 0.01:
+            raise NotAchievedException(
+                f"OBS_FREQ_WIN not set correctly: expected {new_freq_win}, got {actual_freq_win}"
+            )
+        self.progress("✅ OBS_FREQ_WIN change successful")
+
         # Test 3: 実際にRLSを動かして動作確認
         # Note: SITL ではリブート時にデフォルトパラメータファイルがリロードされるため、
         # パラメータの永続性テストは省略し、実行時の動作確認のみを行う
@@ -8373,8 +8425,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         
         # デフォルト値に戻す
         self.progress("Restoring default parameter values")
-        self.set_parameter('OBS_FREQ_ALPHA', 0.15)
         self.set_parameter('OBS_MAX_CORR_ANG', 0.5)
+        self.set_parameter('OBS_FREQ_WIN', 10.0)
         
         self.do_RTL()
         self.wait_disarmed()
@@ -8384,209 +8436,248 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
     def TestRLSWindowedEstimation(self):
         '''Test RC8 switch control with specific time window (20-30s) using RC Aux Function'''
         self.context_push()
-        
-        # テストパラメータ設定（logs/Pixhawk6CLogs/00000422.BINを参考）
-        test_freq = 0.65  # 推定すべき周波数
-        test_amplitude = 8.0
-        self.progress(f"Testing windowed estimation (20-30s) with RC8_OPTION=316")
-        
-        self.set_parameters({
-            'OBS_DIST_FREQ': 0.6,  # 初期周波数
-            'OBS_PHASE_CORR': 1,  # 位相補正ON
-            'OBS_TEST_INJECT': 1,  # テスト外力注入
-            'OBS_TEST_FREQ': test_freq,
-            'OBS_TEST_AMP': test_amplitude,
-            'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
-            'LOG_DISARMED': 0,
-        })
-        
-        self.set_rc(8, 1000)  # reboot前にLOWを設定
-        self.reboot_sitl()
-        
-        # パラメータ確認
-        rc8_option = self.get_parameter('RC8_OPTION')
-        self.progress(f"RC8_OPTION: {rc8_option} (expected 316)")
-        if rc8_option != 316:
-            raise NotAchievedException(f"RC8_OPTION not set: {rc8_option}")
-        
-        # RCライブラリ初期化待ち
-        self.delay_sim_time(2)
-        
-        # RC8をオフで離陸
-        self.progress("Setting RC8 to OFF before takeoff")
-        self.set_rc(8, 1000)
-        
-        # 離陸
-        self.progress("Taking off to 10m")
-        self.takeoff(10, mode='ALT_HOLD')
-        self.delay_sim_time(5)
-        
-        # 時刻0秒を記録
-        t0 = self.get_sim_time()
-        self.progress(f"Time 0s reference: {t0:.2f}")
-        
-        # 0-20秒: RC8オフ（推定なし）
-        self.progress("Phase 1: 0-20s - RC8 OFF (no estimation)")
-        elapsed = self.get_sim_time() - t0
-        if elapsed < 20:
-            self.delay_sim_time(20 - elapsed)
-        
-        # 20秒時点でRC8をオンにする
-        t20 = self.get_sim_time()
-        self.progress(f"Time 20s: Turning RC8 ON at {t20:.2f}")
-        self.set_rc(8, 2000)
-        self.delay_sim_time(1)  # スイッチ反映待ち
-        
-        # 20-30秒: RC8オン（推定実行）
-        self.progress("Phase 2: 20-30s - RC8 ON (estimating)")
-        t_est_start = self.get_sim_time()
-        self.delay_sim_time(10)  # 10秒間推定
-        t_est_end = self.get_sim_time()
-        
-        # 30秒時点でRC8をオフにする
-        t30 = self.get_sim_time()
-        self.progress(f"Time 30s: Turning RC8 OFF at {t30:.2f}")
-        self.set_rc(8, 1000)
-        self.delay_sim_time(1)
-        
-        # 30-40秒: RC8オフ（推定停止、結果保持）
-        self.progress("Phase 3: 30-40s - RC8 OFF (hold result)")
-        t_hold_start = self.get_sim_time()
-        self.delay_sim_time(10)
-        t_hold_end = self.get_sim_time()
-        
-        # ログ解析
-        self.progress("Analyzing windowed estimation results...")
-        import numpy
-        
-        # 推定期間（20-30秒）のデータを抽出
-        mlog = self.dfreader_for_current_onboard_log()
-        est_sw = []
-        est_freq = []
-        est_amp = []
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_est_start * 1.0e6, t_est_end * 1.0e6))
-            if m is None:
-                break
-            if hasattr(m, 'SW'):
-                est_sw.append(m.SW)
-            if hasattr(m, 'F'):
-                est_freq.append(m.F)
-            if hasattr(m, 'AX') and hasattr(m, 'BX'):
-                amp = (m.AX**2 + m.BX**2)**0.5
-                est_amp.append(amp)
-        
-        # 保持期間（30-40秒）のデータを抽出
-        mlog = self.dfreader_for_current_onboard_log()
-        hold_sw = []
-        hold_freq = []
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_hold_start * 1.0e6, t_hold_end * 1.0e6))
-            if m is None:
-                break
-            if hasattr(m, 'SW'):
-                hold_sw.append(m.SW)
-            if hasattr(m, 'F'):
-                hold_freq.append(m.F)
-        
-        # 検証1: 推定期間でSW=1
-        if len(est_sw) > 0:
-            sw_est = numpy.median(numpy.asarray(est_sw))
-            self.progress(f"Estimation window (20-30s): SW={sw_est:.1f} (expected 1)")
-            if sw_est < 0.5:
-                raise NotAchievedException("Estimation window: RC8 should be ON")
-        
-        # 検証2: 保持期間でSW=0
-        if len(hold_sw) > 0:
-            sw_hold = numpy.median(numpy.asarray(hold_sw))
-            self.progress(f"Hold window (30-40s): SW={sw_hold:.1f} (expected 0)")
-            if sw_hold > 0.5:
-                raise NotAchievedException("Hold window: RC8 should be OFF")
-        
-        # 検証3: 推定期間で周波数が変化している
-        if len(est_freq) > 5:
-            # 前半と後半で周波数を比較
-            mid = len(est_freq) // 2
-            freq_early = numpy.mean(numpy.asarray(est_freq[:mid]))
-            freq_late = numpy.mean(numpy.asarray(est_freq[mid:]))
-            self.progress(f"Estimation: Early freq={freq_early:.3f}Hz, Late freq={freq_late:.3f}Hz")
-            self.progress(f"Frequency change: {abs(freq_late - freq_early):.3f}Hz")
-        
-        # 検証4: RLS振幅が適切
-        if len(est_amp) > 5:
-            amp_median = numpy.median(numpy.asarray(est_amp))
-            self.progress(f"RLS amplitude: {amp_median:.3f}N (injected {test_amplitude}N)")
-            if amp_median < test_amplitude * 0.5:
-                self.progress(f"Warning: Low amplitude {amp_median:.3f}N")
-        
-        # 検証5: 保持期間で周波数が安定している
-        if len(hold_freq) > 5:
-            freq_hold = numpy.mean(numpy.asarray(hold_freq))
-            freq_std = numpy.std(numpy.asarray(hold_freq))
-            self.progress(f"Hold period: Frequency={freq_hold:.3f}Hz ± {freq_std:.4f}Hz")
-        
-        self.progress("✅ WINDOWED ESTIMATION TEST PASSED")
-        self.progress(f"Summary: Estimation performed only during 20-30s window")
-        
-        self.do_RTL()
-        self.set_rc(8, 1000)
-        self.context_pop()
+
+        try:
+            # テストパラメータ設定（logs/Pixhawk6CLogs/00000434.BINを参考）
+            test_freq = 0.4913  # 推定すべき周波数
+            test_amplitude = 4.0
+            freq_window_s = 10.0
+            self.progress("Testing windowed estimation (20-30s) with RC8_OPTION=316")
+
+            test_params = {
+                'OBS_DIST_FREQ': 0.6,  # 初期周波数
+                'OBS_PHASE_CORR': 1,  # 位相補正ON
+                'OBS_TEST_INJECT': 1,  # テスト外力注入
+                'OBS_TEST_FREQ': test_freq,
+                'OBS_TEST_AMP': test_amplitude,
+                'OBS_FREQ_WIN': freq_window_s,
+                'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
+                'LOG_DISARMED': 0,
+            }
+
+            self.set_parameters(test_params)
+
+            self.set_rc(8, 1000)  # reboot前にLOWを設定
+            self.reboot_sitl()
+
+            # reboot後にテスト用パラメータを再設定（保持されない場合の保険）
+            self.set_parameters(test_params)
+
+            # パラメータ確認
+            rc8_option = self.get_parameter('RC8_OPTION')
+            self.progress(f"RC8_OPTION: {rc8_option} (expected 316)")
+            if rc8_option != 316:
+                raise NotAchievedException(f"RC8_OPTION not set: {rc8_option}")
+
+            obs_test_inject = self.get_parameter('OBS_TEST_INJECT')
+            obs_test_freq = self.get_parameter('OBS_TEST_FREQ')
+            obs_test_amp = self.get_parameter('OBS_TEST_AMP')
+            self.progress(
+                "OBS_TEST params after reboot: "
+                f"INJECT={obs_test_inject}, FREQ={obs_test_freq}, AMP={obs_test_amp}"
+            )
+            if obs_test_inject != 1:
+                raise NotAchievedException(
+                    f"OBS_TEST_INJECT not set correctly: {obs_test_inject} != 1"
+                )
+
+            # RCライブラリ初期化待ち
+            self.delay_sim_time(2)
+
+            # RC8をオフで離陸
+            self.progress("Setting RC8 to OFF before takeoff")
+            self.set_rc(8, 1000)
+
+            # 離陸
+            self.progress("Taking off to 10m")
+            self.takeoff(10, mode='ALT_HOLD')
+            self.delay_sim_time(5)
+
+            # 時刻0秒を記録
+            t0 = self.get_sim_time()
+            self.progress(f"Time 0s reference: {t0:.2f}")
+
+            # 0-20秒: RC8オフ（推定なし）
+            self.progress("Phase 1: 0-20s - RC8 OFF (no estimation)")
+            elapsed = self.get_sim_time() - t0
+            if elapsed < 20:
+                self.delay_sim_time(20 - elapsed)
+
+            # 20秒時点でRC8をオンにする
+            t20 = self.get_sim_time()
+            self.progress(f"Time 20s: Turning RC8 ON at {t20:.2f}")
+            self.set_rc(8, 2000)
+            self.delay_sim_time(1)  # スイッチ反映待ち
+
+            # 20-30秒: RC8オン（推定実行）
+            self.progress("Phase 2: 20-30s - RC8 ON (estimating)")
+            t_est_start = self.get_sim_time()
+            self.delay_sim_time(freq_window_s)
+            t_est_end = self.get_sim_time()
+
+            # 30秒時点でRC8をオフにする
+            t30 = self.get_sim_time()
+            self.progress(f"Time 30s: Turning RC8 OFF at {t30:.2f}")
+            self.set_rc(8, 1000)
+            self.delay_sim_time(1)
+
+            # 30-40秒: RC8オフ（推定停止、結果保持）
+            self.progress("Phase 3: 30-40s - RC8 OFF (hold result)")
+            t_hold_start = self.get_sim_time()
+            self.delay_sim_time(10)
+            t_hold_end = self.get_sim_time()
+
+            # ログ解析
+            self.progress("Analyzing windowed estimation results...")
+            import numpy
+
+            # 推定期間（20-30秒）のデータを抽出
+            mlog = self.dfreader_for_current_onboard_log()
+            est_sw = []
+            est_freq = []
+            est_time = []
+            est_amp = []
+            est_plx = []
+            while True:
+                m = mlog.recv_match(
+                    type='OBSV',
+                    blocking=False,
+                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_est_start * 1.0e6, t_est_end * 1.0e6))
+                if m is None:
+                    break
+                if hasattr(m, 'SW'):
+                    est_sw.append(m.SW)
+                if hasattr(m, 'F'):
+                    est_freq.append(m.F)
+                    est_time.append(m.TimeUS * 1.0e-6)
+                if hasattr(m, 'AX') and hasattr(m, 'BX'):
+                    amp = (m.AX**2 + m.BX**2)**0.5
+                    est_amp.append(amp)
+                if hasattr(m, 'PLX'):
+                    est_plx.append(m.PLX)
+
+            # 保持期間（30-40秒）のデータを抽出
+            mlog = self.dfreader_for_current_onboard_log()
+            hold_sw = []
+            hold_freq = []
+            hold_plx = []
+            while True:
+                m = mlog.recv_match(
+                    type='OBSV',
+                    blocking=False,
+                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_hold_start * 1.0e6, t_hold_end * 1.0e6))
+                if m is None:
+                    break
+                if hasattr(m, 'SW'):
+                    hold_sw.append(m.SW)
+                if hasattr(m, 'F'):
+                    hold_freq.append(m.F)
+                if hasattr(m, 'PLX'):
+                    hold_plx.append(m.PLX)
+
+            # 検証1: 推定期間でSW=1
+            if len(est_sw) > 0:
+                sw_est = numpy.median(numpy.asarray(est_sw))
+                self.progress(f"Estimation window (20-30s): SW={sw_est:.1f} (expected 1)")
+                if sw_est < 0.5:
+                    raise NotAchievedException("Estimation window: RC8 should be ON")
+
+            # 検証2: 保持期間でSW=0
+            if len(hold_sw) > 0:
+                sw_hold = numpy.median(numpy.asarray(hold_sw))
+                self.progress(f"Hold window (30-40s): SW={sw_hold:.1f} (expected 0)")
+                if sw_hold > 0.5:
+                    raise NotAchievedException("Hold window: RC8 should be OFF")
+
+            # 検証2b: ログにPLX/Fが記録されている
+            if len(est_plx) == 0 or len(hold_plx) == 0:
+                raise NotAchievedException("OBSV PLX not recorded in estimation/hold windows")
+            if len(est_freq) == 0 or len(hold_freq) == 0:
+                raise NotAchievedException("OBSV F not recorded in estimation/hold windows")
+            if numpy.isnan(numpy.asarray(est_plx)).any() or numpy.isnan(numpy.asarray(hold_plx)).any():
+                raise NotAchievedException("OBSV PLX contains NaN")
+
+            # 検証3: 推定期間で周波数が推定されている（ウィンドウ後半）
+            freq_late = None
+            if len(est_freq) > 0:
+                window_end = t_est_start + freq_window_s
+                est_freq_post_window = [
+                    f for f, t in zip(est_freq, est_time)
+                    if t >= window_end
+                ]
+                if len(est_freq_post_window) >= 3:
+                    freq_late = numpy.mean(numpy.asarray(est_freq_post_window))
+                else:
+                    freq_late = est_freq[-1]
+                self.progress(f"Estimation: Late freq={freq_late:.3f}Hz")
+
+            # 検証4: RLS振幅が適切
+            if len(est_amp) > 5:
+                amp_median = numpy.median(numpy.asarray(est_amp))
+                self.progress(f"RLS amplitude: {amp_median:.3f}N (injected {test_amplitude}N)")
+                if amp_median < test_amplitude * 0.5:
+                    self.progress(f"Warning: Low amplitude {amp_median:.3f}N")
+
+            # 検証5: 保持期間で周波数が安定している
+            if len(hold_freq) > 5:
+                freq_hold = numpy.mean(numpy.asarray(hold_freq))
+                freq_std = numpy.std(numpy.asarray(hold_freq))
+                self.progress(f"Hold period: Frequency={freq_hold:.3f}Hz ± {freq_std:.4f}Hz")
+
+                if freq_late is not None and abs(freq_hold - freq_late) > 0.02:
+                    raise NotAchievedException("Hold period: Frequency not held after switch OFF")
+
+                g = 9.8
+                f_min = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 1.10)
+                f_max = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 0.90)
+                self.progress(f"Expected range (0.90-1.10m): {f_min:.4f}Hz - {f_max:.4f}Hz")
+                if freq_hold < f_min or freq_hold > f_max:
+                    raise NotAchievedException("Estimated frequency outside length bounds")
+
+            self.progress("✅ WINDOWED ESTIMATION TEST PASSED")
+            self.progress("Summary: Estimation performed only during 20-30s window")
+        finally:
+            self.set_rc(8, 1000)
+            self.disarm_vehicle(force=True)
+            self.context_pop()
 
     def TestRLSFrequencyEstimationDetailed(self):
         '''Detailed test of frequency estimation during flight with timed logging'''
         self.context_push()
-        
-        # 周波数推定アルゴリズムのテスト：
-        # 初期周波数と注入周波数に明確な差を設定して、
-        # 位相誤差の進展から周波数を推定できることを確認
         import math
-        
-        # テストパラメータ設定
-        # ユーザー条件: 設定0.74m(0.58Hz), 実機1.04m(0.49Hz)
-        initial_freq = 0.58  # [Hz] 初期設定周波数（モデル周波数）
-        test_freq = 0.49     # [Hz] 実際に注入する周波数（真の周波数）
-        freq_error = test_freq - initial_freq  # -0.09Hz の誤差
-        test_amplitude = 2.0  # 外力振幅 [N] (ユーザー指定条件に合わせる)
-        
+        import numpy
+
+        initial_freq = 0.58
+        test_freq = 0.4913
+        test_amplitude = 4.0
+
         self.progress("=" * 80)
-        self.progress("DETAILED FREQUENCY ESTIMATION TEST (User Case Reproduction)")
-        self.progress("Algorithm: Phase drift detection for frequency estimation")
+        self.progress("DETAILED ZERO-CROSS ESTIMATION TEST (User Case Reproduction)")
         self.progress(f"Initial frequency (OBS_DIST_FREQ): {initial_freq:.4f}Hz")
         self.progress(f"Injected frequency (true): {test_freq:.4f}Hz")
-        self.progress(f"Frequency error: {freq_error:.4f}Hz ({freq_error/test_freq*100:.1f}%)")
         self.progress(f"Test amplitude: {test_amplitude}N")
-        self.progress("Expected: Phase drift slope should be detected and Freq updated")
+        self.progress("Expected: Zero-cross window (10s) updates frequency once, then holds")
         self.progress("=" * 80)
-        
+
         self.set_parameters({
-            'OBS_CORR_GAIN': 0.0,        # 補正ゲインは0（推定のみ）
+            'OBS_CORR_GAIN': 0.0,
             'OBS_FILT_CUTOFF': 20.0,
-            'OBS_RLS_LAMBDA': 0.99,      # 忘却係数
+            'OBS_RLS_LAMBDA': 0.99,
             'OBS_RLS_COV_INIT': 100.0,
-            'OBS_DIST_FREQ': initial_freq,  # 初期周波数（意図的に誤差あり）
+            'OBS_DIST_FREQ': initial_freq,
             'OBS_PRED_TIME': 0.00,
-            'OBS_PHASE_CORR': 1,         # 位相補正＝周波数推定を有効化
-            'OBS_PHASE_THRESH': 0.0,     # 閾値0（常に補正）
-            'OBS_TEST_INJECT': 1,        # テスト外力注入
-            'OBS_TEST_FREQ': test_freq,  # 真の周波数（initial_freq + 誤差）
+            'OBS_PHASE_CORR': 1,
+            'OBS_PHASE_THRESH': 0.0,
+            'OBS_TEST_INJECT': 1,
+            'OBS_TEST_FREQ': test_freq,
             'OBS_TEST_AMP': test_amplitude,
-            'RC8_OPTION': 316,           # RC8にRLS_FREQ_EST機能
-            'LOG_DISARMED': 1,           # 離陸後のログも記録
+            'OBS_FREQ_WIN': 10.0,
+            'RC8_OPTION': 316,
+            'LOG_DISARMED': 1,
         })
-        
-        # RC8をオフで開始
+
         self.set_rc(8, 1000)
-        
-        # NOTE: reboot_sitl()はパラメータをリセットするため、リブート後に再設定が必要
-        # ここではリブートせずにそのまま進む
-        
-        # パラメータ確認
+
         actual_obs_amp = self.get_parameter('OBS_TEST_AMP')
         actual_obs_freq = self.get_parameter('OBS_DIST_FREQ')
         actual_test_freq = self.get_parameter('OBS_TEST_FREQ')
@@ -8595,136 +8686,103 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.progress(f"Confirmed: OBS_DIST_FREQ={actual_obs_freq:.4f}Hz (model)")
         self.progress(f"Confirmed: OBS_TEST_FREQ={actual_test_freq:.4f}Hz (injected)")
         self.progress(f"Confirmed: RC8_OPTION={rc8_option}")
-        
+
         if abs(actual_obs_amp - test_amplitude) > 0.1:
             raise NotAchievedException(f"OBS_TEST_AMP not set correctly: {actual_obs_amp} != {test_amplitude}")
         if rc8_option != 316:
             raise NotAchievedException(f"RC8_OPTION not set: {rc8_option}")
-        
-        # RC初期化待ち
+
         self.delay_sim_time(2)
-        self.set_rc(8, 1000)  # RC8オフを確認
-        
-        # 離陸
+        self.set_rc(8, 1000)
+
         self.progress("Taking off to 10m (RC8 OFF)")
         self.takeoff(10, mode='ALT_HOLD')
         self.delay_sim_time(5)
-        
-        # 時刻0秒を記録
+
         t0 = self.get_sim_time()
         self.progress(f"Flight start time: {t0:.2f}s")
-        
-        # Phase 1: 5秒間RC8オフ
-        self.progress("=" * 80)
-        self.progress("PHASE 1: 0-5s - RC8 OFF")
-        self.progress("=" * 80)
-        t_phase1_start = self.get_sim_time()
-        self.delay_sim_time(5)
-        
-        # Phase 2: RC8をオンにして周波数推定開始（60秒間）
-        self.progress("=" * 80)
-        self.progress("PHASE 2: 5-65s - RC8 ON (frequency estimation active)")
-        self.progress("Turning RC8 ON now...")
-        self.progress("=" * 80)
+
+        self.progress("PHASE 1: 0-20s - RC8 OFF")
+        elapsed = self.get_sim_time() - t0
+        if elapsed < 20:
+            self.delay_sim_time(20 - elapsed)
+
+        self.progress("PHASE 2: 20-30s - RC8 ON (zero-cross window)")
         self.set_rc(8, 2000)
-        self.delay_sim_time(2)  # スイッチ反映待ち
-        
+        self.delay_sim_time(1)
         t_phase2_start = self.get_sim_time()
-        
-        # 10秒ごとに進捗を表示しながら60秒間推定
-        for i in range(6):
-            self.delay_sim_time(10)
-            elapsed = self.get_sim_time() - t_phase2_start
-            self.progress(f"  Estimation in progress: {elapsed:.0f}s / 60s")
-        
+        self.delay_sim_time(10)
         t_phase2_end = self.get_sim_time()
-        t_phase3_start = t_phase2_end
-        
-        # Phase 3: RC8をオフにして周波数を保持（5秒間）
-        self.progress("=" * 80)
-        self.progress("PHASE 3: 65-70s - RC8 OFF")
-        self.progress("Turning RC8 OFF now...")
-        self.progress("=" * 80)
+
+        self.progress("PHASE 3: 30-40s - RC8 OFF (hold result)")
         self.set_rc(8, 1000)
-        self.delay_sim_time(5)
+        self.delay_sim_time(1)
+        t_phase3_start = self.get_sim_time()
+        self.delay_sim_time(10)
         t_phase3_end = self.get_sim_time()
-        
-        # ログ解析開始
-        self.progress("=" * 80)
+
         self.progress("ANALYZING LOG DATA...")
-        self.progress("=" * 80)
-        
-        import numpy
-        
-        # Log parsing logic - read all OBSV data
+
         mlog = self.dfreader_for_current_onboard_log()
-        all_data = {'time': [], 'sw': [], 'freq': [], 'ax': [], 'bx': []}
-        
+        time_arr = []
+        sw_arr = []
+        freq_arr = []
+        plx_arr = []
+
         while True:
             m = mlog.recv_match(type='OBSV', blocking=False)
             if m is None:
                 break
-            
-            t = m.TimeUS * 1.0e-6
-            all_data['time'].append(t)
-            all_data['sw'].append(m.SW)
-            all_data['freq'].append(m.F)
-            all_data['ax'].append(m.AX)
-            all_data['bx'].append(m.BX)
+            time_arr.append(m.TimeUS * 1.0e-6)
+            sw_arr.append(m.SW)
+            freq_arr.append(m.F)
+            plx_arr.append(m.PLX)
 
-        time_arr = numpy.array(all_data['time'])
-        freq_arr = numpy.array(all_data['freq'])
-        sw_arr = numpy.array(all_data['sw'])
-        
         if len(time_arr) == 0:
             raise NotAchievedException("No OBSV log data found")
 
-        # Define Masks
-        mask_p1 = (time_arr >= t_phase1_start) & (time_arr < t_phase2_start)
+        time_arr = numpy.asarray(time_arr)
+        sw_arr = numpy.asarray(sw_arr)
+        freq_arr = numpy.asarray(freq_arr)
+        plx_arr = numpy.asarray(plx_arr)
+
+        mask_p1 = (time_arr >= t0) & (time_arr < t_phase2_start)
         mask_p2 = (time_arr >= t_phase2_start) & (time_arr < t_phase2_end)
-        
-        # Analysis Phase 2
-        freq_on = freq_arr[mask_p2]
-        
-        if len(freq_on) == 0:
-             # Fallback to switch based
-             mask_p2 = (sw_arr > 0.5)
-             freq_on = freq_arr[mask_p2]
-             
-        if len(freq_on) == 0:
-             raise NotAchievedException("No data during estimation phase (Phase 2)")
+        mask_p3 = (time_arr >= t_phase3_start) & (time_arr < t_phase3_end)
 
-        final_est_freq = freq_on[-1]
-        estimation_error = final_est_freq - test_freq
-        
-        self.progress(f"Estimated Freq: {initial_freq:.4f}Hz -> {final_est_freq:.4f}Hz")
-        self.progress(f"True Freq: {test_freq:.4f}Hz")
-        self.progress(f"Error: {estimation_error:.4f}Hz")
+        if mask_p2.sum() == 0 or mask_p3.sum() == 0:
+            raise NotAchievedException("Missing OBSV data during estimation/hold windows")
 
-        # 推定値の推移
-        initial_val = freq_on[0]
-        mid_val = freq_on[len(freq_on)//2]
-        
-        self.progress(f"Start: {initial_val:.4f} Hz")
-        self.progress(f"Mid  : {mid_val:.4f} Hz")
-        self.progress(f"End  : {final_est_freq:.4f} Hz")
-        
-        # Check standard deviation
-        freq_std = numpy.std(freq_on)
-        self.progress(f"Freq Std Dev during estimation: {freq_std:.6f}")
-        
-        # 評価
-        if abs(estimation_error) > 0.05:
-            self.progress("WARNING: Estimation accuracy is poor")
+        if mask_p1.sum() == 0:
+            raise NotAchievedException("Missing OBSV data before estimation window")
 
-        # Stuck check
-        diff1 = abs(mid_val - initial_val)
-        diff2 = abs(final_est_freq - mid_val)
-        
-        if diff1 < 1e-4 and diff2 < 1e-4:
-             raise NotAchievedException("Frequency estimate stuck! (No change observed)")
-             
-        # 着陸
+        freq_pre = float(numpy.mean(freq_arr[mask_p1]))
+        self.progress(f"Pre-window frequency: {freq_pre:.4f}Hz")
+
+        sw_p2 = numpy.median(sw_arr[mask_p2])
+        sw_p3 = numpy.median(sw_arr[mask_p3])
+        self.progress(f"SW median: phase2={sw_p2:.1f}, phase3={sw_p3:.1f}")
+        if sw_p2 < 0.5 or sw_p3 > 0.5:
+            raise NotAchievedException("SW state mismatch during estimation/hold")
+
+        freq_hold = float(numpy.mean(freq_arr[mask_p3]))
+        freq_std = float(numpy.std(freq_arr[mask_p3]))
+        self.progress(f"Hold frequency: {freq_hold:.4f}Hz ± {freq_std:.4f}")
+
+        g = 9.8
+        f_min = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 1.10)
+        f_max = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 0.90)
+        self.progress(f"Expected range (0.90-1.10m): {f_min:.4f}Hz - {f_max:.4f}Hz")
+        if freq_hold < f_min or freq_hold > f_max:
+            raise NotAchievedException("Estimated frequency outside length bounds")
+
+        if abs(freq_hold - freq_pre) < 0.01:
+            raise NotAchievedException("Frequency did not change from initial value")
+
+        if numpy.isnan(plx_arr).any():
+            raise NotAchievedException("OBSV PLX contains NaN")
+
+           # 着陸
         self.land_and_disarm()
         self.context_pop()
         
@@ -12961,6 +13019,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
              self.NoRCOnBootPreArmFailure,
              self.TestRLSBasicEstimation,  # AP_Observer RLS test (MANDATORY)
              self.TestRLSRC8SwitchControl,  # AP_Observer RC8 switch control test (MANDATORY)
+               self.TestRLSWindowedEstimation,  # AP_Observer windowed estimation test (MANDATORY)
              self.TestRLSParameterChange,  # AP_Observer parameter change test (NEW)
              self.TestRLSFrequencyEstimationDetailed,  # AP_Observer detailed frequency estimation test
         ])

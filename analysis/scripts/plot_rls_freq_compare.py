@@ -1,3 +1,4 @@
+import math
 import pandas as pd
 import matplotlib.pyplot as plt
 import glob
@@ -36,6 +37,14 @@ def plot_result(csv_path):
     plt.axhline(y=0.5794, color='g', linestyle=':', label='Start Target (0.74m)')
     plt.axhline(y=0.4880, color='r', linestyle=':', label='End Target (1.04m)')
 
+    if "00000434_zero_cross" in basename:
+        g = 9.8
+        f_len_min = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 1.10)
+        f_len_max = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 0.90)
+        plt.axhline(y=0.4913, color='b', linestyle='--', label='Target (0.4913Hz)')
+        plt.axhline(y=f_len_min, color='gray', linestyle='--', label='Len 1.10m')
+        plt.axhline(y=f_len_max, color='gray', linestyle='-.', label='Len 0.90m')
+
     plt.xlabel("Time [s]")
     plt.ylabel("Frequency [Hz]")
     basename = os.path.basename(csv_path)
@@ -49,6 +58,6 @@ def plot_result(csv_path):
     print(f"Saved {outpath}")
 
 # Find all result CSVs
-csv_files = glob.glob(results_dir + "*_result.csv")
+csv_files = glob.glob(results_dir + "*_result.csv") + glob.glob(results_dir + "*_zero_cross.csv")
 for f in csv_files:
     plot_result(f)

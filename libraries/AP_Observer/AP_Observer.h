@@ -54,10 +54,9 @@ public:
 // #ifdef AP_OBSERVER_REPLAY_TEST
     // リプレイテスト用
     void set_replay_time_ms(uint32_t ms) { _test_current_ms = ms; _replay_active = true; }
-    void set_freq_estimation_active(bool active) { _freq_estimation_active = active; }
+    void set_freq_estimation_active(bool active);
     void force_rls_update(const Vector3f& payload);
     void set_params_for_replay(float freq, float bw, float gain);
-    void set_freq_est_alpha(float alpha) { _freq_est_alpha.set(alpha); }
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal RLS state if needed
@@ -127,13 +126,6 @@ private:
     bool _combined_freq_est_switch;         // 統合されたスイッチ状態（新方式 OR 旧方式）
     
     // 位相補正用の変数
-    static constexpr uint8_t PHASE_BUFFER_SIZE = 60;   // 3.0s * 20Hz = 60 samples (データ3秒分)
-    float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
-    uint32_t phase_time_buffer_ms[PHASE_BUFFER_SIZE];  // 位相サンプルの時刻 [ms]
-    uint8_t phase_buffer_index = 0;                    // リングバッファの次回書き込みインデックス
-    uint8_t phase_buffer_count = 0;                    // バッファ内の有効データ数
-    uint8_t phase_decimation_counter = 0;              // ダウンサンプリング用カウンタ
-    uint8_t slope_estimation_trigger_counter = 0;      // 推定実行トリガー用カウンタ
     float phase_correction;                            // 累積位相補正量 [rad]
     float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
@@ -151,10 +143,6 @@ private:
     
     // 位相補正関数
     void phase_correction_init();
-    void phase_correction_update();
-    float unwrap_phase(float prev, float curr);  // 位相アンラップ
-    float linear_fit_slope(const float* buffer, uint8_t count);  // 最小二乗法で傾きを計算
-    float linear_fit_slope_time(const float* phase, const uint32_t* time_ms, uint8_t count);  // 位相-時刻で傾きを計算[rad/s]
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
@@ -166,8 +154,8 @@ private:
     // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）
     AP_Float    _filter_cutoff_freq;
     
-    // 周波数推定フィルタ係数
-    AP_Float    _freq_est_alpha;
+    // 周波数推定ウィンドウ長 [s]
+    AP_Float    _freq_est_window_sec;
     
     // 補正角度の最大値
     AP_Float    _max_correction_angle;
@@ -189,6 +177,14 @@ private:
     // 周波数範囲制限（振り子長0.3m~2.0mに対応）
     static constexpr float    FREQ_MIN              = 0.35f;  // 2.0m相当 [Hz]
     static constexpr float    FREQ_MAX              = 0.91f;  // 0.3m相当 [Hz]
+
+    // ゼロクロス推定用の定数
+    static constexpr bool     ZERO_CROSS_ESTIMATION_ENABLED = true;
+    static constexpr float    ZERO_CROSS_SAMPLE_RATE_HZ = 20.0f;
+    static constexpr uint8_t  ZERO_CROSS_DECIMATION = 5;  // 100Hz -> 20Hz
+    static constexpr float    ZERO_CROSS_LOW_CUT_HZ = 0.4f;
+    static constexpr float    ZERO_CROSS_HIGH_CUT_HZ = 0.8f;
+    static constexpr uint16_t ZERO_CROSS_MAX_SAMPLES = 600;  // 30s @20Hz
     
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ
@@ -197,8 +193,26 @@ private:
     bool _freq_estimation_active = false;    // 現在推定中かどうか
     bool _freq_estimation_prev_switch = false; // 前回のスイッチ状態
     float _freq_estimation_result = 0.0f;    // 推定終了時の周波数結果 [Hz]
+
+    // ゼロクロス推定の状態
+    bool _zc_window_active = false;
+    uint16_t _zc_window_samples = 0;
+    uint16_t _zc_sample_count = 0;
+    uint8_t _zc_decimation_counter = 0;
+    float _zc_samples[ZERO_CROSS_MAX_SAMPLES];
+    float _zc_prev_input = 0.0f;
+    float _zc_hp_state = 0.0f;
+    float _zc_lp_state = 0.0f;
     
     // ヘルパー関数
     bool check_frequency_range(float freq);  // 周波数範囲チェック
     bool is_taking_off();  // 離陸検知
+
+    // ゼロクロス推定
+    void zero_cross_start();
+    void zero_cross_stop();
+    void zero_cross_reset_state();
+    void zero_cross_update(float sample);
+    bool zero_cross_compute_frequency(float &freq_out, uint16_t &crossings_out) const;
+    float zero_cross_filter(float input);
 };
