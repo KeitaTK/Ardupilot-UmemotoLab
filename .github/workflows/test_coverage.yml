@@ -1,7 +1,10 @@
-name: test coverage
-
-on:
-  workflow_dispatch:
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: test coverage
+#
+# on:
+#   workflow_dispatch:
   schedule:
     - cron: '0 0 * * 0'  # every sunday at midnight
 # paths:

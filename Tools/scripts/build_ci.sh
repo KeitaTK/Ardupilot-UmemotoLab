@@ -105,6 +105,12 @@ for t in $CI_BUILD_TARGET; do
         run_autotest "Heli" "build.Helicopter" "test.Helicopter"
         continue
     fi
+    # Custom RLS basic estimation test (MANDATORY for AP_Observer)
+    if [ "$t" == "sitltest-copter-rls-basic" ]; then
+        run_autotest "Copter" "build.Copter" "test.Copter.ArmFeatures"
+        run_autotest "Copter" "build.Copter" "test.Copter.TestRLSBasicEstimation"
+        continue
+    fi
     #github actions ci
     if [ "$t" == "sitltest-copter-tests1a" ]; then
         run_autotest "Copter" "build.Copter" "test.CopterTests1a"

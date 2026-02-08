@@ -1,7 +1,10 @@
-name: test scripting
-
-on:
-  push:
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: test scripting
+#
+# on:
+#   push:
     paths: # only run for scripting changes
       - 'libraries/AP_Scripting/tests/docs_check.py'
       - 'libraries/AP_Scripting/generator/**'

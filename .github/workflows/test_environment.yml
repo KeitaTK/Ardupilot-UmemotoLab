@@ -1,6 +1,9 @@
-name: test environment setup
-on:
-  schedule:
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: test environment setup
+# on:
+#   schedule:
     - cron: '0 0 * * 6'  # every saturday at midnight
   workflow_dispatch:
   push:

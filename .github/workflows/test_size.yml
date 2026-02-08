@@ -1,7 +1,10 @@
-name: test size
-
-on:
-  pull_request:
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: test size
+#
+# on:
+#   pull_request:
     paths-ignore:  # ignore autotest stuffs
       - 'Tools/autotest/**'
       # Remove markdown files as irrelevant

@@ -1,6 +1,9 @@
-name: test scripts
-
-on: [push, pull_request, workflow_dispatch]
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: test scripts
+#
+# on: [push, pull_request, workflow_dispatch]
 
 concurrency:
   group: ci-${{github.workflow}}-${{ github.ref }}

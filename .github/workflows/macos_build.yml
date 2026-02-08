@@ -1,7 +1,10 @@
-name: Macos Build
-
-on:
-  push:
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: Macos Build
+#
+# on:
+#   push:
     paths-ignore:
       # remove other env install scripts
       - 'Tools/environment_install/APM_install.sh'

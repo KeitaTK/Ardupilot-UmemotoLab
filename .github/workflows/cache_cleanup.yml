@@ -1,6 +1,9 @@
-name: cleanup caches by a branch
-on:
-  pull_request:
+######################################################################
+# このワークフローは無効化されています（2026/02/08）
+########################################################################
+# name: cleanup caches by a branch
+# on:
+#   pull_request:
     types:
       - closed
   workflow_dispatch:
