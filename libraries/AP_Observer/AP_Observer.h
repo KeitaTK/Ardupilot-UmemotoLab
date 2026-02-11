@@ -91,6 +91,10 @@ private:
     AP_Float _disturbance_freq;        // ω: 外乱周波数 [Hz]
     AP_Float _prediction_time;         // Δt: 予測時間 [秒]
     
+    // 位相補正用パラメータ
+    AP_Int8  _phase_correction_enabled;    // 位相補正の有効/無効
+    AP_Float _phase_correction_threshold;  // 位相補正の閾値 [rad]
+    
     // テスト用パラメータ（外力注入）
     AP_Int8  _test_force_inject_enable;  // テスト用外力注入の有効/無効
     AP_Float _test_force_freq;           // テスト用外力の周波数 [Hz]
@@ -99,10 +103,25 @@ private:
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
     
+    // 位相補正用変数
+    static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 1秒分のバッファ（100Hzサンプリング）
+    float phase_buffer[PHASE_BUFFER_SIZE];             // 位相履歴バッファ
+    uint8_t phase_buffer_index;                        // バッファインデックス
+    uint8_t phase_buffer_count;                        // バッファ内データ数
+    float previous_phase;                              // 前回の位相値
+    float phase_correction;                            // 位相補正量 [rad]
+    bool phase_initialized;                            // 位相初期化フラグ
+    
     // RLS関数
     void rls_init();
     void rls_update(const Vector3f& x_input, const Vector3f& y_output);
     void update_prediction_cache();  // 予測用キャッシュ更新
+    
+    // 位相補正関数
+    void phase_correction_init();
+    float unwrap_phase(float prev, float curr);
+    float linear_fit_slope(const float* buffer, uint8_t count);
+    void phase_correction_update();
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;

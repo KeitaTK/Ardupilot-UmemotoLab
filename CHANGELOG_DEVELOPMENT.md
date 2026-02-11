@@ -23,6 +23,40 @@
 
 ---
 
+### 2026-02-11: [AP_Observer] 姿勢補正量のログ記録と補正方向の修正
+- 問題: 
+  1. 姿勢補正量（roll, pitch）がSDカードに記録されていない
+  2. `update()`関数内で補正量が計算されていない
+  3. 補正方向が物理的に間違っている（`pitch = -force.x`となっており、外力と逆方向に補正されていた）
+- 調査:
+  - `current_correction_euler`変数はヘッダーで定義されているが、`update()`で計算されていなかった
+  - `calculate_correction_from_force()`と`calculate_correction_euler_from_force()`の両方で`pitch = -force.x`を使用
+  - 物理的には、正のX方向（前）に外力を受けた場合、ドローンは前に引っ張られるため前に傾くべき（positive pitch）だが、負符号により逆方向に補正されていた
+  - これでは外力に逆らって傾くため、振動を増幅させる可能性がある
+- 試行:
+  1. `update()`関数内に補正量計算を追加：
+     - `current_filtered_force = get_predicted_force()`
+     - `current_correction_quat = calculate_correction_from_force(current_filtered_force)`
+     - `current_correction_euler = calculate_correction_euler_from_force(current_filtered_force)`
+     - `last_update_ms = get_current_time_ms()`
+  2. 補正方向を修正：
+     - `pitch = -force.x` → `pitch = force.x`（両方の関数で）
+     - これにより、正のX力→正のpitch（前傾）、正のY力→正のroll（右傾）となる
+  3. ログフォーマットを変更：
+     - `OBSV`メッセージに`Roll`と`Pitch`フィールドを追加
+     - `current_correction_euler.x`（Roll補正量[rad]）
+     - `current_correction_euler.y`（Pitch補正量[rad]）
+     - 予測外力（PRX, PRY）も追加
+- 結果:
+  - 補正量がSDカードのOBSVログに記録されるようになった
+  - 外力を受けた方向に正しく傾く物理的に正しい挙動に修正された
+  - ログフォーマット: `OBSV,TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,Roll,Pitch`
+- 備考:
+  - ユーザー提供のコードも同じ問題（`pitch = -force.x`）があった
+  - 今回の修正により、物理法則に沿った補正となり、制振性能が向上する見込み
+
+---
+
 ### 2026-02-04 20:30: [AP_Observer / Autotest] RLSテストのタイムアウト修正
 - 問題: `test.Copter.TestRLSBasicEstimation` がタイムアウト (Exit 143/124) で失敗する。シミュレーションが正常に起動またはアームしていない可能性があった。
 - 調査:
