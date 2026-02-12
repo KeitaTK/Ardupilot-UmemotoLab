@@ -247,8 +247,9 @@ source venv/bin/activate
    source venv/bin/activate
    ./waf configure --board sitl
    ./waf copter
-   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=100 build.Copter test.Copter.ModeLoiter || exit 1
-   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=100 build.Copter test.Copter.GCSFailsafe || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ModeLoiter || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GCSFailsafe || exit 1
+      timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ArmFeatures || exit 1
    ```
 
 ### 仕様追加・リリース前・重要な検証時
@@ -264,10 +265,11 @@ source venv/bin/activate
    source venv/bin/activate
    ./waf configure --board sitl
    ./waf copter
-   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ModeLoiter || exit 1
-   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.GCSFailsafe || exit 1
-   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.GuidedSubModeChange || exit 1
-   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TakeoffCheck || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ModeLoiter || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GCSFailsafe || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GuidedSubModeChange || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.TakeoffCheck || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ArmFeatures || exit 1
    ```
 
    または、VS Codeの「Build & Mandatory Tests (SITL)」スキルで全テストを自動実行してください。
