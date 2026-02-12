@@ -50,6 +50,16 @@ This virtual environment includes all required dependencies (empy 3.3.4, MAVProx
 
 ### Complete Command Sequence
 
+
+#### 仮想環境の有効化状態の確認について
+
+**必ずテストやビルドの前に、仮想環境(venv)が有効化されていることを確認してください。**
+もし有効化されていない場合は、必ず `source venv/bin/activate` をコマンドの先頭に追加してください。
+スクリプトや自動化コマンドでは、常に仮想環境の有効化コマンドを明示的に含めることを推奨します。
+（すでに有効化済みの場合は、再度有効化しても問題ありません）
+
+---
+
 Always execute these commands in order **every time** before running any autotest:
 
 ```bash
@@ -155,9 +165,9 @@ source venv/bin/activate
 
 # Run all mandatory SITL tests
 timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ModeLoiter || exit 1
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_gcs_failsafe || exit 1
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_guided_local_position_target || exit 1
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_takeoff_check_mode || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.GCSFailsafe || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.GuidedSubModeChange || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TakeoffCheck || exit 1
 ```
 
 **When to use**: After ANY code change to AP_Observer or ArduCopter
@@ -223,43 +233,50 @@ source venv/bin/activate
 
 ## 必須オートテスト（通信・モード動作検証）
 
-**Copterの通信・モード（guided, stabilize, loiter）を検証するには、以下のテストを必ず実行してください：**
 
-- `test.Copter.ModeLoiter` … Loiterモードの自動検証
-- `test.Copter.test_gcs_failsafe` … GCS通信フェイルセーフ検証
-- `test.Copter.test_guided_local_position_target` … GUIDED位置指令の応答検証
-- `test.Copter.test_takeoff_check_mode("STABILIZE")` … Stabilizeモードの離陸・アーミング検証
+## テスト運用方針
 
-**完全実行手順：**
-```bash
-# Step 1: ワークスペースディレクトリに移動
-cd ~/Ardupilot-UmemotoLab
+### 日常的な開発・小規模な変更時
+- **通信・モード系の動作確認のみで十分な場合は、以下の2テストのみを実行してください（高速化推奨）：**
+   - `test.Copter.ModeLoiter` … Loiterモードの自動検証
+   - `test.Copter.GCSFailsafe` … GCS通信フェイルセーフ検証
 
-# Step 2: 仮想環境を有効化（必須）
-source venv/bin/activate
+   **実行例（100倍速・ビルド再利用）：**
+   ```bash
+   cd ~/Ardupilot-UmemotoLab
+   source venv/bin/activate
+   ./waf configure --board sitl
+   ./waf copter
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=100 build.Copter test.Copter.ModeLoiter || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean --speedup=100 build.Copter test.Copter.GCSFailsafe || exit 1
+   ```
 
-# Step 3: 前のビルド成果物をクリア
-./waf clean
+### 仕様追加・リリース前・重要な検証時
+- **下記の全必須テストを必ず実行し、すべてパスすることを確認してください：**
+   - `test.Copter.ModeLoiter`
+   - `test.Copter.GCSFailsafe`
+   - `test.Copter.GuidedSubModeChange`
+   - `test.Copter.TakeoffCheck`
 
-# Step 4: SITLシミュレータ用に設定
-./waf configure --board sitl
+   **実行例：**
+   ```bash
+   cd ~/Ardupilot-UmemotoLab
+   source venv/bin/activate
+   ./waf configure --board sitl
+   ./waf copter
+   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ModeLoiter || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.GCSFailsafe || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.GuidedSubModeChange || exit 1
+   timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TakeoffCheck || exit 1
+   ```
 
-# Step 5: ArduCopterをビルド
-./waf copter
+   または、VS Codeの「Build & Mandatory Tests (SITL)」スキルで全テストを自動実行してください。
 
-# Step 6: 各テストを個別に実行
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ModeLoiter || exit 1
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_gcs_failsafe || exit 1
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_guided_local_position_target || exit 1
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_takeoff_check_mode || exit 1
-```
-
-あるいは、VS Codeの「Build & Mandatory Tests (SITL)」スキルに、上記テストが含まれていることを確認し、必ず実行してください。
-
-**ワークフローへの組み込み例：**
-- コード変更後は、必ず上記テストを全てSITLでパスさせること。
-- テスト失敗時は原因を調査し、`CHANGELOG_DEVELOPMENT.md`に記録すること。
-- テスト追加や仕様変更時は`.github/AUTOTEST_SPECIFICATION.md`も更新すること。
+**ワークフロー例：**
+- 日常的な開発では通信系2テストのみでOK
+- 重要な変更・リリース前は全必須テストを実施
+- テスト失敗時は原因を調査し、`CHANGELOG_DEVELOPMENT.md`に記録
+- テスト追加や仕様変更時は`.github/AUTOTEST_SPECIFICATION.md`も更新
 
 
 ### Phase 1: SITL Development (MANDATORY)
