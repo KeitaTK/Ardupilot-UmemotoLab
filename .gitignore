@@ -7,8 +7,8 @@
 /Tools/autotest/param_metadata/ParametersLatex.rst
 /Tools/autotest/param_metadata/Parameters.wiki
 /Tools/autotest/param_metadata/Parameters.md
-/Tools/autotest/param_metadata/apm.pdef.xml
-/Tools/autotest/param_metadata/apm.pdef.json
+/Tools/autotest/apm.pdef.xml
+/Tools/autotest/apm.pdef.json
 /Tools/autotest/jsb_sim/fgout.xml
 /Tools/autotest/jsb_sim/rascal_test.xml
 /Tools/autotest/jsbsim_fgout_0.xml
@@ -58,7 +58,10 @@
 .vagrant
 Tools/vagrant/*.log
 Rover/test.Rover/
-Rover/way.txt
+# Python virtual environments
+venv/
+.venv/
+venv_ardupilot/
 ArduCopter/Debug/
 ArduCopter/arducopter.exe.stackdump
 ArduCopter/fence.txt
@@ -161,16 +164,3 @@ modules/esp_idf
 ScriptingDocs.md
 /lua-language-server/
 repo-LuaLS-lua-language-server.cache
-
-# Ignore Python virtual environments
-#   from: https://github.com/github/gitignore/blob/4488915eec0b3a45b5c63ead28f286819c0917de/Python.gitignore#L125
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-autotest_result_*_junit.xml
-.python-version
-venv_ardupilot/

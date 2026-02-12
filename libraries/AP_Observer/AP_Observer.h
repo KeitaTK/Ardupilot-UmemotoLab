@@ -80,29 +80,10 @@ private:
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
     
-    // 位相補正用のパラメータ
-    AP_Int8  _phase_correction_enabled;  // 位相補正の有効/無効
-    AP_Float _phase_correction_threshold; // 位相補正を適用する閾値 [rad]
-    
-    // 位相補正用の変数
-    static constexpr uint8_t PHASE_BUFFER_SIZE = 100;  // 位相データバッファのサイズ（1秒分）
-    float phase_buffer[PHASE_BUFFER_SIZE];             // 位相データバッファ
-    uint8_t phase_buffer_index;                        // バッファの現在のインデックス
-    uint8_t phase_buffer_count;                        // バッファ内の有効データ数
-    float previous_phase;                              // 前回の位相 [rad]
-    float phase_correction;                            // 累積位相補正量 [rad]
-    bool phase_initialized;                            // 位相初期化フラグ
-    
     // RLS関数
     void rls_init();
     void rls_update(const Vector3f& x_input, const Vector3f& y_output);
     void update_prediction_cache();  // 予測用キャッシュ更新
-    
-    // 位相補正関数
-    void phase_correction_init();
-    void phase_correction_update();
-    float unwrap_phase(float prev, float curr);  // 位相アンラップ
-    float linear_fit_slope(const float* buffer, uint8_t count);  // 最小二乗法で傾きを計算
     
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
