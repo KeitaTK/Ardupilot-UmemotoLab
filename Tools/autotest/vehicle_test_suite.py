@@ -6943,12 +6943,6 @@ class TestSuite(ABC):
         return major, minor, patch, fw_type
 
     def get_autopilot_firmware_version(self):
-        self.progress("Skipping AUTOPILOT_VERSION check as requested due to custom MAVLink protocol")
-        # Dummy values to satisfy the rest of the test suite
-        self.fcu_firmware_version = (0, 0, 0, "dev")
-        self.fcu_firmware_hash = "00000000"
-        return
-
         self.mav.mav.command_long_send(self.sysid_thismav(),
                                        1,
                                        mavutil.mavlink.MAV_CMD_REQUEST_AUTOPILOT_CAPABILITIES,
