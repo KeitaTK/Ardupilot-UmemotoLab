@@ -1,21 +1,40 @@
 # ArduPilot Custom Observer - Development Instructions
 
+## Virtual Environment Setup
+
+**IMPORTANT**: Before running any tests or builds, activate the Python virtual environment:
+
+```bash
+source venv/bin/activate
+```
+
+This virtual environment includes all required dependencies (empy 3.3.4, MAVProxy, etc.) for ArduPilot development and testing.
+
+---
+
 ## Quick Start
 
-1. **Make code changes** to `libraries/AP_Observer/` or `ArduCopter/`
+1. **Activate virtual environment** (required before any testing):
+   ```bash
+   source venv/bin/activate
+   ```
 
-2. **Run the "Build & Mandatory Tests" skill**
+2. **Make code changes** to `libraries/AP_Observer/` or `ArduCopter/`
+
+3. **Run the "Build & Mandatory Tests" skill**
+   - Make sure venv is activated first (see step 1)
    - Open VS Code Command Palette (Ctrl+Shift+P / Cmd+Shift+P)
    - Type: **"Build & Mandatory Tests (SITL)"**
-   - The skill will handle venv activation, build, and all mandatory SITL tests
+   - The skill will build ArduCopter and run all mandatory SITL tests
    - ✅ All tests MUST PASS before hardware build
 
-3. **Run replay validation** (if frequency estimation logic changed)
+4. **Run replay validation** (if frequency estimation logic changed)
+   - Ensure venv is activated
    - Open VS Code Command Palette
    - Type: **"RLS CSV Replay & Analysis"**
    - Verify convergence in `analysis/replay/results/`
 
-4. **Document changes** in `CHANGELOG_DEVELOPMENT.md` with format:
+5. **Document changes** in `CHANGELOG_DEVELOPMENT.md` with format:
    - If needed, you may refer to `CHANGELOG_DEVELOPMENT.md` to search for past cases and examples.
    ```
    ### YYYY-MM-DD: [Component]
@@ -27,9 +46,40 @@
 
 ---
 
+## Pre-Test Setup Sequence (Execute Before Running ANY Tests)
+
+### Complete Command Sequence
+
+Always execute these commands in order **every time** before running any autotest:
+
+```bash
+# Step 1: Navigate to workspace directory
+cd ~/Ardupilot-UmemotoLab
+
+# Step 2: Activate the Python virtual environment (MANDATORY)
+source venv/bin/activate
+
+# Step 3: Clean any previous build artifacts
+./waf clean
+
+# Step 4: Configure for SITL (software-in-the-loop simulator)
+./waf configure --board sitl
+
+# Step 5: Build ArduCopter
+./waf copter
+
+# Step 6: You are now ready to run any mandatory autotest
+# (Proceed to the test execution section below)
+```
+
+**⚠️ CRITICAL**: Never skip the venv activation in Step 2. All subsequent commands depend on it.
+
+---
+
 ## Mandatory Rules
 
 ### 1. ALWAYS Test Before Hardware
+- Activate venv first: `source venv/bin/activate`
 - Run ALL mandatory tests after ANY change to AP_Observer
 - Tests must PASS before Pixhawk6C build (Phase 2)
 - See `.github/AUTOTEST_SPECIFICATION.md` for test details
@@ -87,15 +137,130 @@
 
 Three automated skills are available in VS Code Command Palette (Ctrl+Shift+P):
 
-| Skill Name | Purpose | When to Use |
-|-----------|---------|-------------|
-| **Build & Mandatory Tests (SITL)** | Activate venv → Build → Run all mandatory SITL tests | After ANY code change to AP_Observer |
-| **RLS CSV Replay & Analysis** | Build replay tool → Run simulation → Generate graphs | After frequency estimation logic changes |
-| **Clean Build for Pixhawk6C Hardware** | Remove build cache → Configure board → Build hardware firmware | Only after Phase 1 tests PASS |
+### 1. Build & Mandatory Tests (SITL)
+
+**Purpose**: Full build and SITL test automation
+
+**Commands executed by this skill**:
+```bash
+# Activate venv
+source venv/bin/activate
+
+# Clean and configure
+./waf clean
+./waf configure --board sitl
+
+# Build
+./waf copter
+
+# Run all mandatory SITL tests
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ModeLoiter || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_gcs_failsafe || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_guided_local_position_target || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_takeoff_check_mode || exit 1
+```
+
+**When to use**: After ANY code change to AP_Observer or ArduCopter
+**Expected time**: ~30-45 minutes
+**Success criteria**: All 4 tests PASS ✅
 
 ---
 
-## Development Phases
+### 2. RLS CSV Replay & Analysis
+
+**Purpose**: Validates frequency estimation logic with recorded flight data
+
+**Commands executed by this skill**:
+```bash
+# Activate venv
+source venv/bin/activate
+
+# Build replay tool
+cd Tools/Replay
+make
+
+# Run analysis
+./replay -r ../../analysis/logs/flight_log.bin -o ../../analysis/replay/results/
+
+# Generate graphs
+python3 analyze_results.py
+```
+
+**When to use**: After any change to frequency estimation algorithm (RLS observer)
+**Expected time**: ~5-10 minutes
+**Output**: Convergence graphs in `analysis/replay/results/`
+
+---
+
+### 3. Clean Build for Pixhawk6C Hardware
+
+**Purpose**: Complete hardware build with no artifacts
+
+**Commands executed by this skill**:
+```bash
+# Activate venv
+source venv/bin/activate
+
+# Remove all build artifacts
+./waf distclean
+
+# Configure for Pixhawk6C
+./waf configure --board Pixhawk6C
+
+# Build firmware
+./waf copter
+
+# Binary location
+# Output firmware: build/Pixhawk6C/bin/arducopter.elf
+```
+
+**⚠️ When to use**: ONLY after all Phase 1 SITL tests PASS
+**Expected time**: ~20-30 minutes
+**Result**: `build/Pixhawk6C/bin/arducopter.elf` (ready for upload)
+
+---
+
+
+## 必須オートテスト（通信・モード動作検証）
+
+**Copterの通信・モード（guided, stabilize, loiter）を検証するには、以下のテストを必ず実行してください：**
+
+- `test.Copter.ModeLoiter` … Loiterモードの自動検証
+- `test.Copter.test_gcs_failsafe` … GCS通信フェイルセーフ検証
+- `test.Copter.test_guided_local_position_target` … GUIDED位置指令の応答検証
+- `test.Copter.test_takeoff_check_mode("STABILIZE")` … Stabilizeモードの離陸・アーミング検証
+
+**完全実行手順：**
+```bash
+# Step 1: ワークスペースディレクトリに移動
+cd ~/Ardupilot-UmemotoLab
+
+# Step 2: 仮想環境を有効化（必須）
+source venv/bin/activate
+
+# Step 3: 前のビルド成果物をクリア
+./waf clean
+
+# Step 4: SITLシミュレータ用に設定
+./waf configure --board sitl
+
+# Step 5: ArduCopterをビルド
+./waf copter
+
+# Step 6: 各テストを個別に実行
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ModeLoiter || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_gcs_failsafe || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_guided_local_position_target || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.test_takeoff_check_mode || exit 1
+```
+
+あるいは、VS Codeの「Build & Mandatory Tests (SITL)」スキルに、上記テストが含まれていることを確認し、必ず実行してください。
+
+**ワークフローへの組み込み例：**
+- コード変更後は、必ず上記テストを全てSITLでパスさせること。
+- テスト失敗時は原因を調査し、`CHANGELOG_DEVELOPMENT.md`に記録すること。
+- テスト追加や仕様変更時は`.github/AUTOTEST_SPECIFICATION.md`も更新すること。
+
 
 ### Phase 1: SITL Development (MANDATORY)
 1. **Modify code** in `libraries/AP_Observer/` or `ArduCopter/`
@@ -131,12 +296,14 @@ Three automated skills are available in VS Code Command Palette (Ctrl+Shift+P):
 ## Summary
 
 ✅ **ALWAYS**
+- Activate venv first: `source venv/bin/activate` (required before any testing)
 - Use the **"Build & Mandatory Tests (SITL)"** skill after ANY code change
 - Run **"RLS CSV Replay & Analysis"** skill when frequency estimation logic changes
 - Document in CHANGELOG_DEVELOPMENT.md (MANDATORY)
 - Use **"Clean Build for Pixhawk6C Hardware"** skill only after Phase 1 tests PASS
 
 ❌ **NEVER**
+- Skip venv activation before running tests
 - Skip Phase 1 tests
 - Deploy to hardware without SITL validation
 - Use dynamic memory allocation in embedded code

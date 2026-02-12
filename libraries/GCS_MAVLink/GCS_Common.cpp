@@ -3038,28 +3038,28 @@ void GCS_MAVLINK::send_local_position() const
     }
 
     // 関数の開始をログ出力
-    send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: Function called - starting position data collection");
+    // send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: Function called - starting position data collection");
 
     // 現在のシステム時刻をログ出力（データ取得のタイミング確認用）
-    send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: Timestamp - %lu ms", (unsigned long)AP_HAL::millis());
+    // send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: Timestamp - %lu ms", (unsigned long)AP_HAL::millis());
 
     // AHRSの状態確認
     #if AP_AHRS_ENABLED
-    send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: AHRS is enabled and available");
+    // send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: AHRS is enabled and available");
     #else
-    send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: AHRS is NOT enabled");
+    // send_text(MAV_SEVERITY_INFO, "LPOS_STREAM: AHRS is NOT enabled");
     #endif
 
     // ── ここから追加 ──
-    send_text(MAV_SEVERITY_INFO,
-        "LPOS_STREAM: x=%.3f y=%.3f z=%.3f vx=%.3f vy=%.3f vz=%.3f",
-        (double)local_position.x,
-        (double)local_position.y,
-        (double)local_position.z,
-        (double)velocity.x,
-        (double)velocity.y,
-        (double)velocity.z
-    );
+    // send_text(MAV_SEVERITY_INFO,
+    //     "LPOS_STREAM: x=%.3f y=%.3f z=%.3f vx=%.3f vy=%.3f vz=%.3f",
+    //     (double)local_position.x,
+    //     (double)local_position.y,
+    //     (double)local_position.z,
+    //     (double)velocity.x,
+    //     (double)velocity.y,
+    //     (double)velocity.z
+    // );
     // ── ここまで追加 ──
 
     // 既存：LOCAL_POSITION_NEDメッセージをGCSへ送信

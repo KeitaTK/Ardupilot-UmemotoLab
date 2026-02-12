@@ -43,20 +43,6 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 0.5
     // @User: Advanced
     AP_GROUPINFO("PRED_TIME", 5, AP_Observer, _prediction_time, 0.01f),
-    
-    // @Param: PHASE_CORR
-    // @DisplayName: Phase Correction Enable
-    // @Description: Enable or disable phase correction for disturbance frequency
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Advanced
-    AP_GROUPINFO("PHASE_CORR", 6, AP_Observer, _phase_correction_enabled, 1),
-    
-    // @Param: PHASE_THRESH
-    // @DisplayName: Phase Correction Threshold
-    // @Description: Threshold for applying phase correction [rad]. Correction is only applied if error exceeds this value.
-    // @Range: 0.0 20.0
-    // @User: Advanced
-    AP_GROUPINFO("PHASE_THRESH", 7, AP_Observer, _phase_correction_threshold, 10.0f),
 
     AP_GROUPEND
 };
@@ -81,9 +67,6 @@ void AP_Observer::init() {
     
     // 予測用キャッシュ初期化
     update_prediction_cache();
-    
-    // 位相補正初期化
-    phase_correction_init();
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -132,29 +115,13 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
     // 角周波数 ω = 2πf [rad/s]
     float omega = _disturbance_freq.get() * 2.0f * M_PI;
     
-    // 位相計算（補正を適用）
-    float phase = omega * t - phase_correction;
-    
-    // 位相のアンラップとバッファ更新
-    if (!phase_initialized) {
-        previous_phase = phase;
-        phase_initialized = true;
-    } else {
-        phase = unwrap_phase(previous_phase, phase);
-        previous_phase = phase;
-    }
-    
-    // 位相バッファに追加
-    phase_buffer[phase_buffer_index] = phase;
-    phase_buffer_index = (phase_buffer_index + 1) % PHASE_BUFFER_SIZE;
-    if (phase_buffer_count < PHASE_BUFFER_SIZE) {
-        phase_buffer_count++;
-    }
+    // 位相計算
+    float phase = omega * t;
     
     // 入力ベクトル x[n] = [sin(phase), cos(phase), 1]
     float x_extended[RLS_PARAM_SIZE];
-    x_extended[0] = sinf(phase);  // sin項（補正済み位相）
-    x_extended[1] = cosf(phase);  // cos項（補正済み位相）
+    x_extended[0] = sinf(phase);  // sin項
+    x_extended[1] = cosf(phase);  // cos項
     x_extended[2] = 1.0f;         // 定常偏差項
     
     // デバッグ用
@@ -227,18 +194,18 @@ void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) 
         
         // デバッグ出力（X軸のみ）
         if (do_debug && axis == 0) {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: t=%.2fs ω=%.3f sin=%.3f cos=%.3f",
-                axis, t, omega, x_extended[0], x_extended[1]
-            );
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: y=%.3f y_pred=%.3f err=%.3f",
-                axis, y_n, y_pred, prediction_error
-            );
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: A=%.3f B=%.3f C=%.3f",
-                axis, rls_theta[axis][0], rls_theta[axis][1], rls_theta[axis][2]
-            );
+            // gcs().send_text(MAV_SEVERITY_INFO,
+            //     "RLS[%d]: t=%.2fs ω=%.3f sin=%.3f cos=%.3f",
+            //     axis, t, omega, x_extended[0], x_extended[1]
+            // );
+            // gcs().send_text(MAV_SEVERITY_INFO,
+            //     "RLS[%d]: y=%.3f y_pred=%.3f err=%.3f",
+            //     axis, y_n, y_pred, prediction_error
+            // );
+            // gcs().send_text(MAV_SEVERITY_INFO,
+            //     "RLS[%d]: A=%.3f B=%.3f C=%.3f",
+            //     axis, rls_theta[axis][0], rls_theta[axis][1], rls_theta[axis][2]
+            // );
         }
     }
     
@@ -291,11 +258,6 @@ void AP_Observer::update() {
         last_pred_time = _prediction_time.get();
     }
     
-    // 100ループごとに位相補正を更新
-    if ((counter % 100) == 0) {
-        phase_correction_update();
-    }
-
     // 既存の処理：RLS予測外力を使用
     current_filtered_force = get_predicted_force();  // Δt秒後の予測外力
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
@@ -308,34 +270,34 @@ void AP_Observer::update() {
     // デバッグメッセージ - 簡潔な形式（10回に1回）
     if ((++counter % 10) == 0) {
         // 経過時間 [秒]
-        float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
+        // float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
         
         // タイムスタンプ付き元の外力
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "t=%.2f PL: %.3f %.3f %.3f",
-            t, _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
-        );
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "t=%.2f PL: %.3f %.3f %.3f",
+        //     t, _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
+        // );
         
         // RLS推定パラメータ（XY軸のみ）
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "A: %.3f %.3f",
-            rls_theta[0][0], rls_theta[1][0]
-        );
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "B: %.3f %.3f",
-            rls_theta[0][1], rls_theta[1][1]
-        );
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "C: %.3f %.3f",
-            rls_theta[0][2], rls_theta[1][2]
-        );
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "A: %.3f %.3f",
+        //     rls_theta[0][0], rls_theta[1][0]
+        // );
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "B: %.3f %.3f",
+        //     rls_theta[0][1], rls_theta[1][1]
+        // );
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "C: %.3f %.3f",
+        //     rls_theta[0][2], rls_theta[1][2]
+        // );
         
         // 予測外力
-        Vector3f pred = get_predicted_force();
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "PRED: %.3f %.3f %.3f",
-            pred.x, pred.y, pred.z
-        );
+        // Vector3f pred = get_predicted_force();
+        // gcs().send_text(MAV_SEVERITY_INFO,
+        //     "PRED: %.3f %.3f %.3f",
+        //     pred.x, pred.y, pred.z
+        // );
         
         // 共分散行列（コメントアウト）
         // gcs().send_text(MAV_SEVERITY_INFO,
@@ -409,8 +371,8 @@ Vector3f AP_Observer::get_predicted_force() const {
     // 現在時刻 [秒]
     float t = (AP_HAL::millis() - rls_start_time_ms) / 1000.0f;
     
-    // Δt秒後の位相 ω(t+Δt) - 補正量 [rad]
-    float omega_t_dt = _omega_rad * (t + _prediction_time.get()) - phase_correction;
+    // Δt秒後の位相 ω(t+Δt) [rad]
+    float omega_t_dt = _omega_rad * (t + _prediction_time.get());
     
     // Δt秒後のsin/cos値を直接計算
     float sin_omega_t_dt = sinf(omega_t_dt);
@@ -435,128 +397,6 @@ Vector3f AP_Observer::get_predicted_force() const {
     return predicted;
 }
 
-// 位相補正初期化
-void AP_Observer::phase_correction_init() {
-    phase_buffer_index = 0;
-    phase_buffer_count = 0;
-    previous_phase = 0.0f;
-    phase_correction = 0.0f;
-    phase_initialized = false;
-    
-    // バッファをゼロクリア
-    for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
-        phase_buffer[i] = 0.0f;
-    }
-}
-
-// 位相アンラップ：前回の位相と現在の位相から連続な位相を返す
-float AP_Observer::unwrap_phase(float prev, float curr) {
-    float diff = curr - prev;
-    
-    // 位相が±πを超えてジャンプした場合を補正
-    if (diff > M_PI) {
-        curr -= 2.0f * M_PI;
-    } else if (diff < -M_PI) {
-        curr += 2.0f * M_PI;
-    }
-    
-    return curr;
-}
-
-// 最小二乗法で傾きを計算
-// buffer: 位相データ配列
-// count: データ数
-float AP_Observer::linear_fit_slope(const float* buffer, uint8_t count) {
-    if (count < 2) {
-        return 0.0f;
-    }
-    
-    // x: 時間インデックス (0, 1, 2, ...)
-    // y: 位相値
-    float sum_x = 0.0f;
-    float sum_y = 0.0f;
-    float sum_xy = 0.0f;
-    float sum_x2 = 0.0f;
-    
-    for (uint8_t i = 0; i < count; i++) {
-        float x = (float)i;
-        float y = buffer[i];
-        sum_x += x;
-        sum_y += y;
-        sum_xy += x * y;
-        sum_x2 += x * x;
-    }
-    
-    // 傾き = (n*Σxy - Σx*Σy) / (n*Σx² - (Σx)²)
-    float n = (float)count;
-    float denominator = n * sum_x2 - sum_x * sum_x;
-    
-    if (fabsf(denominator) < 1e-9f) {
-        return 0.0f;  // ゼロ除算回避
-    }
-    
-    float slope = (n * sum_xy - sum_x * sum_y) / denominator;
-    return slope;
-}
-
-// 位相補正の更新（100ループごとに呼ばれる）
-void AP_Observer::phase_correction_update() {
-    // 位相補正が無効の場合は何もしない
-    if (_phase_correction_enabled.get() == 0) {
-        return;
-    }
-    
-    // バッファが満杯になるまで待つ（100サンプル = 1秒分）
-    if (phase_buffer_count < PHASE_BUFFER_SIZE) {
-        return;
-    }
-    
-    // バッファを時系列順に再配置（リングバッファなので）
-    float sorted_buffer[PHASE_BUFFER_SIZE];
-    for (uint8_t i = 0; i < phase_buffer_count; i++) {
-        uint8_t idx = (phase_buffer_index - phase_buffer_count + i + PHASE_BUFFER_SIZE) % PHASE_BUFFER_SIZE;
-        sorted_buffer[i] = phase_buffer[idx];
-    }
-    
-    // 線形近似で傾きを計算（100サンプル全て使用）
-    float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
-    
-    // 理想的な傾き（設定された周波数から計算）
-    // 1ループあたりの理想的な位相変化 = ω * dt
-    // dt = 0.01秒（100Hzサンプリングを想定）
-    float ideal_slope = _omega_rad * 0.01f;
-    
-    // 実測周波数を計算 [Hz]
-    // slope [rad/sample] → frequency [Hz]
-    float estimated_freq = slope / (2.0f * M_PI * 0.01f);
-    
-    // 位相誤差（傾きの差）
-    float slope_error = slope - ideal_slope;
-    
-    // バッファ期間全体での位相ずれを計算（1秒分）
-    // phase_error = slope_error * (データ点数 - 1)
-    float phase_error = slope_error * (PHASE_BUFFER_SIZE - 1);
-    
-    // 閾値チェック：誤差が閾値以下なら補正しない
-    if (fabsf(phase_error) <= _phase_correction_threshold.get()) {
-        // デバッグメッセージ：補正不要
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "PhaseCorr: err=%.4f est_freq=%.4f (no correction)",
-            phase_error, estimated_freq
-        );
-        return;
-    }
-    
-    // 補正量を一気に修正（累積ではなく、誤差分を直接加算）
-    phase_correction += phase_error;
-    
-    // デバッグメッセージ：位相誤差と推定周波数を送信
-    gcs().send_text(MAV_SEVERITY_INFO,
-        "PhaseCorr: err=%.4f est_freq=%.4f Hz corr=%.4f",
-        phase_error, estimated_freq, phase_correction
-    );
-}
-
 // ログをSDカードに記録
 void AP_Observer::Write_Observer_Log() {
 #if HAL_LOGGING_ENABLED
@@ -567,28 +407,11 @@ void AP_Observer::Write_Observer_Log() {
     
     Vector3f pred = get_predicted_force();
 
-    // 位相補正用の最新データを計算
-    float err = 0.0f;
-    float est_freq = 0.0f;
-    // 位相バッファが満杯のときのみ計算
-    if (phase_buffer_count == PHASE_BUFFER_SIZE) {
-        float sorted_buffer[PHASE_BUFFER_SIZE];
-        for (uint8_t i = 0; i < PHASE_BUFFER_SIZE; i++) {
-            uint8_t idx = (phase_buffer_index - PHASE_BUFFER_SIZE + i + PHASE_BUFFER_SIZE) % PHASE_BUFFER_SIZE;
-            sorted_buffer[i] = phase_buffer[idx];
-        }
-        float slope = linear_fit_slope(sorted_buffer, PHASE_BUFFER_SIZE);
-        float ideal_slope = _omega_rad * 0.01f;
-        est_freq = slope / (2.0f * M_PI * 0.01f);
-        float slope_error = slope - ideal_slope;
-        err = slope_error * (PHASE_BUFFER_SIZE - 1);
-    }
-
     // ログメッセージをカスタムフォーマットで書き込み
-    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ, ERR, EST_FREQ, CORR
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,ERR,EST_FREQ,CORR",
-                  "sNNNNNNNNNNNNfff", "F---------------",
-                  "Qfffffffffffffff",
+    // フォーマット: OBSV, TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, PRX, PRY, PRZ
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ",
+                  "s------------", "F------------",
+                  "Qffffffffffff",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -601,9 +424,6 @@ void AP_Observer::Write_Observer_Log() {
                   rls_theta[1][2],  // 定常偏差 Y軸
                   pred.x,
                   pred.y,
-                  pred.z,
-                  err,
-                  est_freq,
-                  phase_correction);
+                  pred.z);
 #endif
 }

@@ -369,7 +369,6 @@ struct PACKED log_Observer {
     float pred_x;
     float pred_y;
     float pred_z;
-    float phase_correction;
 };
 
 // Write a Guided mode position target
@@ -605,7 +604,7 @@ const struct LogStructure Copter::log_structure[] = {
 // @Field: PhC: Phase correction
 
     { LOG_OBSERVER_MSG, sizeof(log_Observer),
-      "OBSV", "Qfffffffffffff", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ,PhC", "sNNNNNNNNNNNNr", "F-------------" , true },
+      "OBSV", "Qffffffffffff", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ", "s------------", "F------------" , true },
 
 };
 
