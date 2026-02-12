@@ -164,3 +164,4 @@ modules/esp_idf
 ScriptingDocs.md
 /lua-language-server/
 repo-LuaLS-lua-language-server.cache
+venv_ardupilot/
