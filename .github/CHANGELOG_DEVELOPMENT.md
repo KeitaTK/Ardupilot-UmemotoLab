@@ -26,6 +26,18 @@
 
 ---
 
+### 2026-02-12 19:50: [GCS_MAVLink] AUTOPILOT_VERSIONメッセージの完全なデフォルト復帰
+- 問題: MAVLinkメッセージ定義(XML)および`GCS_Common.cpp`の変更により、`AUTOPILOT_VERSION`メッセージが標準仕様から逸脱し、オートテストでの通信不全を引き起こしていた。また、これを回避するためにオートテストスクリプト側でバージョンチェックをスキップする一時的な修正（ハック）が行われていた。
+- 調査:
+  1. `libraries/GCS_MAVLink/GCS_Common.cpp` で `uid_taki` という独自フィールドが使用されていた。
+  2. `modules/mavlink/message_definitions/v1.0/common.xml` で `uid` フィールド名が `uid_taki` に変更されていた。
+  3. `Tools/autotest/vehicle_test_suite.py` で `get_autopilot_firmware_version` がダミー値を返すよう変更されていた。
+- 試行:
+  1. `GCS_Common.cpp` を標準実装（`uid` 使用）に復元。
+  2. `common.xml` を標準定義（`uid` フィールド）に復元。
+  3. `vehicle_test_suite.py` のバージョンチェック回避コードを削除し、正常なチェックに復元。
+- 結果: `Build & Mandatory Tests` (SITL) を実行し、オートテストがバージョンチェックを含めて正常に通過することを確認。MAVLink通信が完全にデフォルト状態に戻った。
+
 ### 2026-02-12 02:20: [Autotest] MAVLinkプロトコル変更に伴うバージョンチェックのスキップ
 - 問題: MAVLinkプロトコルのカスタム変更により、オートテスト時の `AUTOPILOT_VERSION` 取得がタイムアウトし、テストが失敗する。
 - 調査: `Tools/autotest/vehicle_test_suite.py` の `get_autopilot_firmware_version` メソッドで、`MAV_CMD_REQUEST_AUTOPILOT_CAPABILITIES` に対する応答を待機している箇所で停止していることが判明。
