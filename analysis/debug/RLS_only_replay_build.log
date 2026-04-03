@@ -1,0 +1,56 @@
+Setting top to                           : /home/memoto/Ardupilot-UmemotoLab 
+Setting out to                           : /home/memoto/Ardupilot-UmemotoLab/build 
+Autoconfiguration                        : enabled 
+Checking for program 'python'            : /home/memoto/Ardupilot-UmemotoLab/venv/bin/python3 
+Checking for python version >= 3.6.9     : 3.12.3 
+Setting board to                         : sitl 
+Using toolchain                          : native 
+Checking for 'g++' (C++ compiler)        : /usr/lib/ccache/g++ 
+Checking for 'gcc' (C compiler)          : /usr/lib/ccache/gcc 
+Checking for c flags '-MMD'              : yes 
+Checking for cxx flags '-MMD'            : yes 
+CXX Compiler                             : g++ 13.3.0 
+Checking for need to link with librt     : not necessary 
+Checking for feenableexcept              : yes 
+Enabling -Werror                         : no 
+Enabled OpenDroneID                      : no 
+Enabled firmware ID checking             : no 
+GPS Debug Logging                        : no 
+Enabled custom controller                : yes 
+Checking for HAVE_CMATH_ISFINITE         : yes 
+Checking for HAVE_CMATH_ISINF            : yes 
+Checking for HAVE_CMATH_ISNAN            : yes 
+Checking for NEED_CMATH_ISFINITE_STD_NAMESPACE : yes 
+Checking for NEED_CMATH_ISINF_STD_NAMESPACE    : yes 
+Checking for NEED_CMATH_ISNAN_STD_NAMESPACE    : yes 
+Checking for header endian.h                   : yes 
+Checking for header byteswap.h                 : yes 
+Checking for HAVE_MEMRCHR                      : yes 
+Configured VSCode Intellisense:                : no 
+DC_DSDL compiler in                            : /home/memoto/Ardupilot-UmemotoLab/modules/DroneCAN/dronecan_dsdlc 
+Source is git repository                       : yes 
+Update submodules                              : yes 
+Checking for program 'git'                     : /usr/bin/git 
+Littlefs                                       : disabled 
+Checking for program 'size'                    : /usr/bin/size 
+Benchmarks                                     : disabled 
+Unit tests                                     : enabled 
+Scripting                                      : maybe 
+Scripting runtime checks                       : enabled 
+Debug build                                    : enabled 
+VS Code launch                                 : disabled 
+Coverage build                                 : disabled 
+Force 32-bit build                             : disabled 
+Checking for program 'rsync'                   : /usr/bin/rsync 
+Removing target_list file /home/memoto/Ardupilot-UmemotoLab/build/sitl/target_list
+Waf: Entering directory `/home/memoto/Ardupilot-UmemotoLab/build/sitl'
+Embedding file locations.txt:Tools/autotest/locations.txt
+Embedding file models/Callisto.json:Tools/autotest/models/Callisto.json
+Embedding file models/freestyle.json:Tools/autotest/models/freestyle.json
+Embedding file models/plane-3d.parm:Tools/autotest/models/plane-3d.parm
+Embedding file models/plane.parm:Tools/autotest/models/plane.parm
+Embedding file models/skywalker_2013.json:Tools/autotest/models/skywalker_2013.json
+Embedding file models/xplane_heli.json:Tools/autotest/models/xplane_heli.json
+Embedding file models/xplane_plane.json:Tools/autotest/models/xplane_plane.json
+Waf: Leaving directory `/home/memoto/Ardupilot-UmemotoLab/build/sitl'
+Could not find a task generator for the name 'examples/RLS_CSV_Replay'
