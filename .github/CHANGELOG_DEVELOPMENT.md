@@ -756,3 +756,35 @@ README.md
 - Result: 
     - ✅ Convergence verified: Estimated freq reached ~0.508Hz (Taget 0.49Hz) within test duration.
     - ✅ Verified with `Tools/autotest/arducopter.py` (Passed).
+
+### 2026-04-03: [RLS_only branch sync and stabilization]
+- Problem: `RLS_only` branch could not run replay target (`examples/RLS_CSV_Replay` missing), and RLS-related autotest/replay were not passing end-to-end.
+- Investigation:
+  - Compared branch deltas against `RLS_ZEROcross` and identified missing AP_Observer replay implementation and RC aux switch integration pieces.
+  - Found build break from missing `AUX_FUNC::RLS_FREQ_EST` enum in `libraries/RC_Channel/RC_Channel.h`.
+  - Found replay runtime crash (FPE) on zero-cross window path when using 5-column legacy replay CSV files.
+  - Found autotest runtime failure caused by non-ASCII progress messages (`✅`, `✓`, `±`) in `Tools/autotest/arducopter.py`.
+- Attempted:
+  - Migrated required implementation files from `RLS_ZEROcross` to `RLS_only`:
+    - `libraries/AP_Observer/AP_Observer.cpp`, `libraries/AP_Observer/AP_Observer.h`
+    - `ArduCopter/RC_Channel_Copter.cpp`
+    - `Tools/autotest/arducopter.py`
+    - `libraries/AP_Observer/wscript`
+    - `libraries/AP_Observer/examples/RLS_CSV_Replay/*`
+    - `libraries/RC_Channel/RC_Channel.h`
+  - Added replay robustness in `RLS_CSV_Replay.cpp`:
+    - initialize parsed CSV fields explicitly
+    - detect short (legacy) CSV format
+    - disable forced zero-cross window for short CSV input
+  - Migrated available replay CSV data into `analysis/replay/data/00000434.csv`, `00000443.csv`, `00000444.csv`.
+  - Replaced non-ASCII `self.progress()` strings in autotest with ASCII-safe text.
+- Result:
+  - Replay build and execution now complete successfully, producing:
+    - `analysis/replay/results/00000434_result.csv`
+    - `analysis/replay/results/00000443_result.csv`
+    - `analysis/replay/results/00000444_result.csv`
+  - Verified SITL build success: `./waf -j$(nproc) copter`
+  - Verified autotest pass:
+    - `test.Copter.TestRLSBasicEstimation`
+    - `test.Copter.TestRLSRC8SwitchControl`
+    - `test.Copter.TestRLSWindowedEstimation`

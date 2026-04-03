@@ -1,0 +1,17 @@
+def build(bld):
+    bld.ap_example(
+        source='RLS_CSV_Replay.cpp',
+        use=[
+            'ap',
+            'AP_Observer',
+            'AP_Math',
+            'AP_Common',
+            'AP_Param',
+            'AP_Logger',
+            'GCS_MAVLink',
+            'mavlink_c_library_v2',
+        ],
+        includes=[
+            '../../../../build/sitl/libraries/GCS_MAVLink',
+        ]
+    )
