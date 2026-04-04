@@ -26,6 +26,41 @@
 
 ---
 
+### 2026-04-04 23:10: [AP_Observer EKF] 外力しきい値ゲートと常時推定/スイッチ推定の比較レポート作成
+- 問題: 外力が小さい区間でω推定を揺らしすぎず、大きすぎる外力を推定に混ぜない条件で、常時推定とSW連動推定、および複数パラメータの滑らかさ比較をしたい。
+- 調査:
+  1. `AP_Observer::ekf_update_axis()` の測定更新が、低外力区間でもωを過剰に変化させる可能性を確認。
+  2. `always-on` と `switch-controlled` の差分を同一しきい値(1.5N/5.0N)で比較する必要があると整理。
+  3. 3軸それぞれと3軸平均を並べて、低い `Qw` と高い `R_meas` がどこまで平滑化に効くかを確認。
+- 試行:
+  1. `EKF_FHOLD` / `EKF_FREJ` を追加し、|force|<=1.5N では予測保持、|force|>=5.0N では更新対象外にした。
+  2. `RLS_CSV_Replay` に `--ekf-force-hold-max` / `--ekf-force-reject-min` を追加。
+  3. `analysis/replay/ekf_force_gate_smoothing_analysis.py` を新規追加し、常時推定とSW連動推定の比較、ならびに複数 `Qw/R_meas` 組の3軸/融合値比較を自動化。
+  4. 新規レポート `analysis/replay/results/diagnostics/EKF_FORCE_GATE_SMOOTHING_REPORT_2026-04-04.md` を作成し、図付きで考察をまとめた。
+- 結果:
+  - しきい値条件(1.5N/5.0N)で replay が安定動作することを確認。
+  - `always_default`: MAE 0.156Hz、P95 step 0.0011Hz。
+  - `switch_default`: MAE 0.154Hz、P95 step 0.0008Hz。
+  - `always_smooth_2 (Qw=1e-5, R=0.5)`: MAE 0.152Hz、P95 step 0.0001Hz で最も滑らか。
+- 備考: hold区間は予測保持にして数値不安定を回避。reject区間は更新対象外にし、推定の飛びを抑制した。
+
+### 2026-04-04 22:10: [AP_Observer EKF] ノイズ過大推定の原因切り分けスイープと図付きレポート作成
+- 問題: EKF推定周波数がノイズを拾いすぎ、想定していた「オフセット付きで減衰した滑らかな挙動」に見えない。
+- 調査:
+  1. `AP_Observer.cpp` を確認し、観測入力が実質生データ (`_payload_filtered = payload`) でEKF更新されることを確認。
+  2. 周波数状態 `omega` の雑音注入 (`Qw`) と、trusted軸平均による融合が出力形状へ与える影響を確認。
+  3. 期待する形状が周波数出力Fではなく、内部状態 `d/c` 側に現れやすい点を再確認。
+- 試行:
+  1. `analysis/replay/ekf_noise_sweep_analysis.py` を新規追加。
+  2. 00000444ログで always-on の Qw×R グリッド(6x4)と代表ケース比較を自動実行。
+  3. 指標CSV/JSONと、トレース比較・ヒートマップ・内部状態比較図を自動生成。
+  4. 新規レポート `analysis/replay/results/diagnostics/EKF_NOISE_ROOT_CAUSE_REPORT_2026-04-04.md` を作成。
+- 結果:
+  - `Qw`低減および `R_meas` 増加で段差ノイズ(P95 step)は大きく改善。
+  - 本データでは `Qw≈0, R=1.0` が MAE 0.0148Hz / P95 step 0.0001Hz で最良。
+  - `always_default` は MAE 0.1824Hz と高バイアス、`noreset_log_ref` は MAE 0.0335Hz で追従良好。
+- 備考: `Qw=0` は条件によりFPEを誘発しうるため、運用上は極小正値での評価を推奨。
+
 ### 2026-04-04 20:30: [AP_Observer EKF] SWリセット無効化パラメータと軸信頼度ゲート実装
 - 問題: SW ON時の周波数リセット由来ジャンプを解消しつつ、always-on運用で空体固有振動の影響を軸選別で抑えたい。
 - 調査:
