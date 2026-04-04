@@ -26,6 +26,20 @@
 
 ---
 
+### 2026-04-04 09:55: [Replay/AP_Observer EKF] replay実行可否確認と報告資料作成
+- 問題: EKF移行作業の継続として、現在のワークスペースで replay 検証を再実行できるか不明だった。
+- 調査:
+  1. `./waf examples --targets=RLS_CSV_Replay` はターゲット解決失敗。
+  2. 生成物探索で実行バイナリが `build/sitl/examples/RLS_CSV_Replay` に存在することを確認。
+  3. `analysis/replay/data/00000434.csv` / `00000443.csv` / `00000444.csv` のハッシュを比較。
+- 試行:
+  1. `build/sitl/examples/RLS_CSV_Replay` を直接実行し、3本の結果CSVを再生成。
+  2. 結果統計（開始/終了/最小/最大周波数、SW比率）を抽出。
+  3. `analysis/replay/results/REPLAY_VALIDATION_2026-04-04.md` を作成して手順と結果を記録。
+- 結果:
+  - replay 実行自体は成功（再現可能）。
+  - ただし3入力CSVが同一ハッシュで、3結果も同一（多ログ比較としては入力再抽出が必要）。
+
 ### 2026-04-04 09:45: [Autotest/AP_Observer EKF] OBSVログ抽出の不安定性修正（TimeUS基準ずれ対策）
 - 問題: `TestRLSBasicEstimation` / `TestRLSWindowedEstimation` が `no valid frequency data` や `No SW=1 samples` で不安定に失敗した。
 - 調査:
