@@ -1,28 +1,22 @@
-name: "RLS CSV Replay & Analysis"
-description: "Build RLS_CSV_Replay -> Run simulation -> Generate baseline comparison graphs (RLS/EKF migration)"
+name: "RLS CSV/BIN Replay & Analysis"
+description: "Build RLS_CSV_Replay -> Run BIN/CSV replay -> Generate frequency and waveform comparison graphs"
 steps:
   - name: "Activate virtual environment"
     run: |
       cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
+      source venv/bin/activate
 
   - name: "Build RLS_CSV_Replay example"
     run: |
       cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
-      ./waf examples --targets=RLS_CSV_Replay
+      source venv/bin/activate
+      ./waf build --target examples/RLS_CSV_Replay
 
-  - name: "Run CSV replay simulation"
+  - name: "Run BIN replay simulation"
     run: |
       cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
-      ./build/sitl/libraries/AP_Observer/examples/RLS_CSV_Replay
+      source venv/bin/activate
+      ./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --plot
 
-  - name: "Generate comparison graphs"
-    run: |
-      cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
-      python3 analysis/scripts/plot_rls_freq_compare.py
-
-success_message: "✅ Replay completed! Use these results as baseline for RLS/EKF comparison in analysis/replay/results/"
+success_message: "✅ Replay completed! See analysis/replay/results/runs/<tag>/plots for frequency transition and waveform comparison graphs."
 failure_message: "❌ Replay failed. Verify observer estimation logic and replay inputs."

@@ -10,6 +10,9 @@
 #include <vector>
 #include <string>
 #include <new>
+#include <cctype>
+#include <cstring>
+#include <unistd.h>
 
 const AP_HAL::HAL& hal = AP_HAL::get_HAL();
 
@@ -27,6 +30,279 @@ struct ReplayData {
     float real_freq;
     float real_phase;
 };
+
+struct ReplayRunConfig;
+static std::vector<ReplayData> read_csv(const char* filename, bool& has_extended_columns);
+static void run_case(const char* out_filename, const std::vector<ReplayData>& data, bool force_window, const ReplayRunConfig& cfg);
+
+static bool ends_with_ignore_case(const std::string& value, const std::string& suffix) {
+    if (value.size() < suffix.size()) {
+        return false;
+    }
+    const size_t offset = value.size() - suffix.size();
+    for (size_t i = 0; i < suffix.size(); i++) {
+        if (std::tolower(static_cast<unsigned char>(value[offset + i])) !=
+            std::tolower(static_cast<unsigned char>(suffix[i]))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static std::string basename_without_ext(const std::string& path) {
+    std::string base = path;
+    const size_t lastslash = base.find_last_of("/");
+    if (lastslash != std::string::npos) {
+        base = base.substr(lastslash + 1);
+    }
+    const size_t dot = base.find_last_of('.');
+    if (dot != std::string::npos) {
+        base = base.substr(0, dot);
+    }
+    return base;
+}
+
+static std::string shell_quote(const std::string& input) {
+    std::string out;
+    out.reserve(input.size() + 2);
+    out.push_back('\'');
+    for (const char c : input) {
+        if (c == '\'') {
+            out += "'\\''";
+        } else {
+            out.push_back(c);
+        }
+    }
+    out.push_back('\'');
+    return out;
+}
+
+static bool convert_bin_to_csv(const std::string& bin_path, const std::string& csv_path) {
+    const char* script_path = "analysis/replay/bin_to_replay_csv.py";
+    const char* venv_python = "venv/bin/python3";
+    const char* python_cmd = (access(venv_python, X_OK) == 0) ? venv_python : "python3";
+
+    const std::string command =
+        std::string(python_cmd) + " " + shell_quote(script_path) +
+        " --input " + shell_quote(bin_path) +
+        " --output " + shell_quote(csv_path);
+
+    printf("Converting BIN -> CSV: %s\n", bin_path.c_str());
+    const int rc = system(command.c_str());
+    if (rc != 0) {
+        printf("BIN conversion failed (rc=%d): %s\n", rc, command.c_str());
+        return false;
+    }
+    return true;
+}
+
+static bool generate_plots_from_result(const std::string& result_csv,
+                                       const std::string& plot_dir,
+                                       const std::string& title) {
+    const char* script_path = "analysis/replay/plot_replay_results.py";
+    const char* venv_python = "venv/bin/python3";
+    const char* python_cmd = (access(venv_python, X_OK) == 0) ? venv_python : "python3";
+
+    const std::string command =
+        std::string(python_cmd) + " " + shell_quote(script_path) +
+        " --input " + shell_quote(result_csv) +
+        " --outdir " + shell_quote(plot_dir) +
+        " --title " + shell_quote(title);
+
+    printf("Generating replay plots: %s\n", result_csv.c_str());
+    const int rc = system(command.c_str());
+    if (rc != 0) {
+        printf("Plot generation failed (rc=%d): %s\n", rc, command.c_str());
+        return false;
+    }
+    return true;
+}
+
+static bool ensure_directory(const std::string& path) {
+    const std::string command = "mkdir -p " + shell_quote(path);
+    const int rc = system(command.c_str());
+    return rc == 0;
+}
+
+struct ReplayRunConfig {
+    bool single_mode = false;
+    bool generate_plots = false;
+    bool force_window_override = false;
+    std::string input_path;
+    std::string output_dir;
+    std::string tag;
+    bool has_ekf_w_init_hz = false;
+    float ekf_w_init_hz = 0.0f;
+    bool has_ekf_q_w = false;
+    float ekf_q_w = 0.0f;
+    bool has_ekf_r_meas = false;
+    float ekf_r_meas = 0.0f;
+};
+
+static bool parse_replay_args(ReplayRunConfig& cfg) {
+    uint8_t argc = 0;
+    char * const *argv = nullptr;
+    hal.util->commandline_arguments(argc, argv);
+
+    if (argc <= 1) {
+        return true;
+    }
+
+    for (uint8_t i = 1; i < argc; i++) {
+        const char* arg = argv[i];
+        if (strcmp(arg, "--help") == 0 || strcmp(arg, "-h") == 0) {
+            printf("Usage:\n");
+            printf("  ./build/sitl/examples/RLS_CSV_Replay\n");
+            printf("  ./build/sitl/examples/RLS_CSV_Replay --input <path_to_csv_or_bin> [--outdir <dir>] [--tag <name>] [--plot] [--force-window]\n");
+            printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-r-meas <var>]\n");
+            printf("\n");
+            printf("Default mode runs the built-in regression file list.\n");
+            exit(0);
+        }
+
+        const char* next = (i + 1 < argc) ? argv[i + 1] : nullptr;
+
+        if ((strcmp(arg, "--input") == 0) && next != nullptr) {
+            cfg.input_path = next;
+            cfg.single_mode = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--input=", 8) == 0) {
+            cfg.input_path = std::string(arg + 8);
+            cfg.single_mode = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--outdir") == 0) && next != nullptr) {
+            cfg.output_dir = next;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--outdir=", 9) == 0) {
+            cfg.output_dir = std::string(arg + 9);
+            continue;
+        }
+
+        if ((strcmp(arg, "--tag") == 0) && next != nullptr) {
+            cfg.tag = next;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--tag=", 6) == 0) {
+            cfg.tag = std::string(arg + 6);
+            continue;
+        }
+
+        if (strcmp(arg, "--plot") == 0) {
+            cfg.generate_plots = true;
+            continue;
+        }
+        if (strcmp(arg, "--no-plot") == 0) {
+            cfg.generate_plots = false;
+            continue;
+        }
+        if (strcmp(arg, "--force-window") == 0) {
+            cfg.force_window_override = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-w-init-hz") == 0) && next != nullptr) {
+            cfg.ekf_w_init_hz = strtof(next, nullptr);
+            cfg.has_ekf_w_init_hz = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-w-init-hz=", 16) == 0) {
+            cfg.ekf_w_init_hz = strtof(arg + 16, nullptr);
+            cfg.has_ekf_w_init_hz = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-q-w") == 0) && next != nullptr) {
+            cfg.ekf_q_w = strtof(next, nullptr);
+            cfg.has_ekf_q_w = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-q-w=", 10) == 0) {
+            cfg.ekf_q_w = strtof(arg + 10, nullptr);
+            cfg.has_ekf_q_w = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-r-meas") == 0) && next != nullptr) {
+            cfg.ekf_r_meas = strtof(next, nullptr);
+            cfg.has_ekf_r_meas = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-r-meas=", 13) == 0) {
+            cfg.ekf_r_meas = strtof(arg + 13, nullptr);
+            cfg.has_ekf_r_meas = true;
+            continue;
+        }
+
+        printf("Unknown argument: %s\n", arg);
+        return false;
+    }
+
+    if (cfg.single_mode && cfg.input_path.empty()) {
+        printf("--input is required for single-input mode.\n");
+        return false;
+    }
+
+    return true;
+}
+
+static bool run_single_input_case(const ReplayRunConfig& cfg) {
+    std::string input_path = cfg.input_path;
+    const std::string input_base = basename_without_ext(input_path);
+    std::string output_base = cfg.tag.empty() ? input_base : cfg.tag;
+
+    std::string output_dir = cfg.output_dir;
+    if (output_dir.empty()) {
+        output_dir = "analysis/replay/results/runs/" + output_base;
+    }
+    const std::string plot_dir = output_dir + "/plots";
+    if (!ensure_directory(plot_dir)) {
+        printf("Failed to create output directories: %s\n", output_dir.c_str());
+        return false;
+    }
+
+    std::string csv_path = input_path;
+    if (ends_with_ignore_case(input_path, ".bin")) {
+        csv_path = output_dir + "/" + input_base + "_from_bin.csv";
+        if (!convert_bin_to_csv(input_path, csv_path)) {
+            return false;
+        }
+        if (cfg.tag.empty()) {
+            output_base = input_base + "_bin";
+        }
+    }
+
+    bool has_extended_columns = false;
+    std::vector<ReplayData> data = read_csv(csv_path.c_str(), has_extended_columns);
+    if (data.empty()) {
+        printf("Failed to read CSV: %s\n", csv_path.c_str());
+        return false;
+    }
+    printf("Read %lu records from %s.\n", data.size(), csv_path.c_str());
+
+    bool force_window = (input_base == "00000434") && has_extended_columns;
+    if (cfg.force_window_override) {
+        force_window = true;
+    }
+
+    const std::string result_csv = output_dir + "/" + output_base + "_result.csv";
+    printf("Running %s (%s)...\n", output_base.c_str(), force_window ? "zero-cross" : "standard");
+    run_case(result_csv.c_str(), data, force_window, cfg);
+
+    if (cfg.generate_plots) {
+        generate_plots_from_result(result_csv, plot_dir, output_base);
+    }
+    return true;
+}
 
 static std::vector<ReplayData> read_csv(const char* filename, bool& has_extended_columns) {
     std::vector<ReplayData> data;
@@ -67,7 +343,7 @@ static std::vector<ReplayData> read_csv(const char* filename, bool& has_extended
     return data;
 }
 
-static void run_case(const char* out_filename, const std::vector<ReplayData>& data, bool force_window) {
+static void run_case(const char* out_filename, const std::vector<ReplayData>& data, bool force_window, const ReplayRunConfig& cfg) {
     // Reset observer by reconstruction
     new (&observer) AP_Observer();
     observer.set_replay_time_ms(0); // Ensure time starts at 0 for init
@@ -80,9 +356,21 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     if (AP_Param::set_by_name("OBS_EKF_Q_C", 0.001f)) {}
     if (AP_Param::set_by_name("OBS_EKF_Q_W", 0.0005f)) {}
     if (AP_Param::set_by_name("OBS_EKF_R_MEAS", 0.08f)) {}
+    if (cfg.has_ekf_w_init_hz) {
+        observer.set_ekf_w_init_hz_for_replay(cfg.ekf_w_init_hz);
+    }
+    if (cfg.has_ekf_q_w) {
+        observer.set_ekf_q_w_for_replay(cfg.ekf_q_w);
+    }
+    if (cfg.has_ekf_r_meas) {
+        observer.set_ekf_r_meas_for_replay(cfg.ekf_r_meas);
+    }
     if (AP_Param::set_by_name("OBS_PHASE_CORR", 1.0f)) {}
     if (AP_Param::set_by_name("OBS_CORR_GAIN", 0.0f)) {}
     if (AP_Param::set_by_name("OBS_FREQ_WIN", 10.0f)) {}
+
+    // Apply EKF parameter overrides by forcing EKF reinitialization after AP_Param updates.
+    observer.reset_frequency_estimation();
     
     std::ofstream outfile(out_filename);
     // Write header
@@ -148,45 +436,52 @@ void setup() {
 }
 
 void loop() {
-    // Check command line arguments
-    // Usage: ./RLS_CSV_Replay <csv_path> <alpha> <output_path>
-    // If no args, run default behavior (loop over files and fixed alphas)
-    
-    // In ArduPilot examples, accessing raw argc/argv isn't standard in loop(), 
-    // but for Linux port (SITL), we can access global args or just assume this IS main on some platforms.
-    // However, AP_HAL_MAIN uses a specific entry.
-    // Let's rely on hardcoded loop for now if we can't get args easily without changing HAL.
-    // Wait, SITL allows passing args?
-    // Usually not through to the sketch easily.
-    
-    // Instead of args, I will just iterate my sweep list here directly.
+    ReplayRunConfig cfg;
+    if (!parse_replay_args(cfg)) {
+        exit(1);
+    }
+
+    if (cfg.single_mode) {
+        if (!run_single_input_case(cfg)) {
+            exit(1);
+        }
+        exit(0);
+    }
     
     const char* files[] = {
         "analysis/replay/data/00000434.csv",
         "analysis/replay/data/00000443.csv",
-        "analysis/replay/data/00000444.csv"
+        "analysis/replay/data/00000444.BIN"
     };
     
     for (const char* f : files) {
+        std::string input_path(f);
+        const std::string input_base = basename_without_ext(input_path);
+        std::string csv_path = input_path;
+        std::string output_base = input_base;
+
+        if (ends_with_ignore_case(input_path, ".bin")) {
+            csv_path = "analysis/replay/results/" + input_base + "_from_bin.csv";
+            output_base = input_base + "_bin";
+            if (!convert_bin_to_csv(input_path, csv_path)) {
+                continue;
+            }
+        }
+
         bool has_extended_columns = false;
-        std::vector<ReplayData> data = read_csv(f, has_extended_columns);
+        std::vector<ReplayData> data = read_csv(csv_path.c_str(), has_extended_columns);
         if (data.empty()) {
-            printf("Failed to read CSV: %s\n", f);
+            printf("Failed to read CSV: %s\n", csv_path.c_str());
             continue;
         }
-        printf("Read %lu records from %s.\n", data.size(), f);
+        printf("Read %lu records from %s.\n", data.size(), csv_path.c_str());
 
-        std::string base = f; 
-        size_t lastslash = base.find_last_of("/");
-        if (lastslash != std::string::npos) base = base.substr(lastslash+1);
-        base = base.substr(0, base.size()-4); // remove .csv
+        const bool force_window = (input_base == "00000434") && has_extended_columns;
+        std::string suffix = force_window ? "_zero_cross" : "_result";
+        std::string out = "analysis/replay/results/" + output_base + suffix + ".csv";
 
-           const bool force_window = (base == "00000434") && has_extended_columns;
-           std::string suffix = force_window ? "_zero_cross" : "_result";
-           std::string out = "analysis/replay/results/" + base + suffix + ".csv";
-
-           printf("Running %s (%s)...\n", base.c_str(), force_window ? "zero-cross" : "standard");
-           run_case(out.c_str(), data, force_window);
+        printf("Running %s (%s)...\n", output_base.c_str(), force_window ? "zero-cross" : "standard");
+        run_case(out.c_str(), data, force_window, cfg);
     }
     
     exit(0);

@@ -31,7 +31,7 @@ This virtual environment includes all required dependencies (empy 3.3.4, MAVProx
 4. **Run replay validation** (if observer estimation logic changed)
    - Ensure venv is activated
    - Open VS Code Command Palette
-   - Type: **"RLS CSV Replay & Analysis"**
+   - Type: **"RLS CSV/BIN Replay & Analysis"**
    - Verify convergence in `analysis/replay/results/`
 
 5. **Run MATLAB EKF reference comparison** (required during EKF migration)
@@ -181,7 +181,7 @@ timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.Takeo
 
 ---
 
-### 2. RLS CSV Replay & Analysis (Baseline Replay)
+### 2. RLS CSV/BIN Replay & Analysis (Baseline Replay)
 
 **Purpose**: Validates frequency estimation logic with recorded flight data
 
@@ -190,20 +190,22 @@ timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.Takeo
 # Activate venv
 source venv/bin/activate
 
-# Build replay tool
-cd Tools/Replay
-make
+# Build replay example
+./waf build --target examples/RLS_CSV_Replay
 
-# Run analysis
-./replay -r ../../analysis/logs/flight_log.bin -o ../../analysis/replay/results/
+# Run replay directly from BIN (or CSV)
+./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --plot
 
-# Generate graphs
-python3 analyze_results.py
+# Optional: regenerate plots from an existing replay result CSV
+python3 analysis/replay/plot_replay_results.py \
+   --input analysis/replay/results/runs/00000444/00000444_bin_result.csv \
+   --outdir analysis/replay/results/runs/00000444/plots \
+   --title 00000444
 ```
 
 **When to use**: After any change to observer estimation algorithm (RLS or EKF path)
 **Expected time**: ~5-10 minutes
-**Output**: Convergence graphs in `analysis/replay/results/`
+**Output**: `analysis/replay/results/runs/<tag>/` with result CSV and plots
 
 ---
 
@@ -289,7 +291,7 @@ source venv/bin/activate
 ### Phase 1: SITL Development (MANDATORY)
 1. **Modify code** in `libraries/AP_Observer/` or `ArduCopter/`
 2. **Run "Build & Mandatory Tests (SITL)" skill** (tests must PASS)
-3. **Run "RLS CSV Replay & Analysis" skill** (if observer estimation changed)
+3. **Run "RLS CSV/BIN Replay & Analysis" skill** (if observer estimation changed)
 4. **Compare with MATLAB EKF reference** (`C:\Users\Umemoto\Documents\Taki_Local\Matlab\EKF`) when EKF logic is touched
 5. **Document in CHANGELOG_DEVELOPMENT.md** (mandatory after any change)
 
@@ -323,7 +325,7 @@ source venv/bin/activate
 ✅ **ALWAYS**
 - Activate venv first: `source venv/bin/activate` (required before any testing)
 - Use the **"Build & Mandatory Tests (SITL)"** skill after ANY code change
-- Run **"RLS CSV Replay & Analysis"** skill when frequency estimation logic changes
+- Run **"RLS CSV/BIN Replay & Analysis"** skill when frequency estimation logic changes
 - During EKF migration, compare replay behavior against MATLAB EKF reference workspace
 - Document in CHANGELOG_DEVELOPMENT.md (MANDATORY)
 - Use **"Clean Build for Pixhawk6C Hardware"** skill only after Phase 1 tests PASS

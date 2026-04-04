@@ -29,23 +29,31 @@ During EKF migration, replay analysis must additionally evaluate:
 ### 1. Build & Run Replay
 ```bash
 # Build the replay example
-./waf examples --targets=RLS_CSV_Replay
-# Run simulation (Input: analysis/replay/data/00000434.csv)
-./build/sitl/libraries/AP_Observer/examples/RLS_CSV_Replay
+./waf build --target examples/RLS_CSV_Replay
+
+# Run simulation from BIN directly (single-input mode)
+./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --plot
 ```
 
 ### 2. Generate Comparison Graph
 ```bash
-# Generate PNG (Output: analysis/replay/results/*.png)
-python3 analysis/scripts/plot_rls_freq_compare.py
+# Optional standalone plotting from replay output CSV
+python3 analysis/replay/plot_replay_results.py \
+  --input analysis/replay/results/runs/00000444/00000444_bin_result.csv \
+  --outdir analysis/replay/results/runs/00000444/plots \
+  --title 00000444
 ```
 
 ### 3. Analyze SITL/Flight BIN Logs
 If you have a `.BIN` log from SITL or flight:
 ```bash
-# Convert BIN to CSV using MAVExplorer or Mavlink tools, then:
-python3 analysis/scripts/analyze_log.py path/to/log.csv
-# Output: analysis/results/log_analysis.png
+# Replay can now read BIN directly and emit plots in one run:
+./build/sitl/examples/RLS_CSV_Replay --input path/to/log.BIN --plot
+# Output: analysis/replay/results/runs/<tag>/
+#   - *_from_bin.csv
+#   - *_result.csv
+#   - plots/frequency_transition.png
+#   - plots/waveform_compare_x.png
 ```
 
 ---
@@ -65,7 +73,7 @@ These tests are experimental or require long execution time:
 
 ```bash
 cd /home/memoto/Ardupilot-UmemotoLab
-source venv_ardupilot/bin/activate
+source venv/bin/activate
 ./waf -j$(nproc) copter
 timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures || exit 1
 timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation || exit 1
