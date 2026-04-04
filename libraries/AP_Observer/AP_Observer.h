@@ -57,6 +57,9 @@ public:
     void set_freq_estimation_active(bool active);
     void force_rls_update(const Vector3f& payload);
     void set_params_for_replay(float freq, float bw, float gain);
+    void set_ekf_w_init_hz_for_replay(float freq_hz);
+    void set_ekf_q_w_for_replay(float q_w);
+    void set_ekf_r_meas_for_replay(float r_meas);
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal EKF state if needed

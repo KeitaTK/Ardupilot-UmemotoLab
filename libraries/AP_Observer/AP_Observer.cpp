@@ -891,4 +891,20 @@ void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
     update_prediction_cache();
     ekf_init();
 }
+
+void AP_Observer::set_ekf_w_init_hz_for_replay(float freq_hz) {
+    const float omega = freq_hz * 2.0f * M_PI;
+    _ekf_omega_init.set(omega);
+    estimated_frequency = constrain_value(omega, _ekf_omega_min.get(), _ekf_omega_max.get()) / (2.0f * M_PI);
+    update_prediction_cache();
+    ekf_init();
+}
+
+void AP_Observer::set_ekf_q_w_for_replay(float q_w) {
+    _ekf_q_omega.set(q_w);
+}
+
+void AP_Observer::set_ekf_r_meas_for_replay(float r_meas) {
+    _ekf_r_meas.set(r_meas);
+}
 #endif

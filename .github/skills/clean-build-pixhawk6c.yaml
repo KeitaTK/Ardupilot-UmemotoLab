@@ -8,7 +8,7 @@ steps:
   - name: "Activate virtual environment"
     run: |
       cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
+      source venv/bin/activate
 
   - name: "Remove build cache (clean build)"
     run: |
@@ -18,13 +18,13 @@ steps:
   - name: "Configure for Pixhawk6C"
     run: |
       cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
+      source venv/bin/activate
       ./waf configure --board Pixhawk6C
 
   - name: "Build copter firmware for Pixhawk6C"
     run: |
       cd /home/memoto/Ardupilot-UmemotoLab
-      source venv_ardupilot/bin/activate
+      source venv/bin/activate
       ./waf -j$(nproc) copter
 
 success_message: "✅ Hardware firmware built successfully! Ready for Pixhawk6C deployment."

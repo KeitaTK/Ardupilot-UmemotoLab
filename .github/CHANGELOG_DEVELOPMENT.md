@@ -26,6 +26,35 @@
 
 ---
 
+### 2026-04-04 15:00: [Replay/AP_Observer EKF] 引数指定BINリプレイ・図出力・ドキュメント整備
+- 問題: replay は固定ファイル配列実行のみで、任意BINを引数指定して単発実行・整理された可視化出力を得る運用ができなかった。
+- 調査:
+  1. AP_HAL example では `hal.util->commandline_arguments(argc, argv)` で引数取得可能なことを確認。
+  2. 既存 replay 出力には `PLX`（実波形）と `PRX`（オブザーバー出力）が含まれており、比較図を直接生成できることを確認。
+- 試行:
+  1. `RLS_CSV_Replay.cpp` に単発引数モードを実装（`--input`, `--outdir`, `--tag`, `--plot`, `--force-window`）。
+  2. BIN入力時は `analysis/replay/bin_to_replay_csv.py` を自動実行し、指定出力ディレクトリへ変換CSVを保存。
+  3. `analysis/replay/plot_replay_results.py` を追加し、周波数遷移図と x軸波形比較図を生成。
+  4. `.github/AUTOTEST_SPECIFICATION.md`、`.github/copilot-instructions.md`、`.github/skills/replay-and-analyze.yaml` を新フローに更新。
+  5. skill の venv パス不整合を是正（`build-and-test.yaml`, `clean-build-pixhawk6c.yaml`）。
+- 結果:
+  - `./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --outdir analysis/replay/results/runs/00000444_cli_debug --tag 00000444_cli --plot` で実行成功。
+  - 生成物: `00000444_from_bin.csv`, `00000444_cli_result.csv`, `plots/frequency_transition.png`, `plots/waveform_compare_x.png`, `plots/summary.json`。
+
+### 2026-04-04 14:55: [Replay/AP_Observer EKF] BIN直接入力でのリプレイ実行を実装
+- 問題: 既存 `RLS_CSV_Replay` は CSV 入力専用で、`analysis/replay/data/00000444.BIN` を直接使えなかった。
+- 調査:
+  1. `00000444.BIN` を `DFReader_binary` で確認し、`OBSV` に `TimeUS/PLX/PLY/PLZ/SW/F/P` が揃っていることを確認。
+  2. 既存 `RLS_CSV_Replay.cpp` は `read_csv()` 固定実装で、拡張列有無のみ判定していた。
+- 試行:
+  1. `analysis/replay/bin_to_replay_csv.py` を新規追加し、BIN から `OBSV` を抽出して replay 互換 CSV を生成。
+  2. `RLS_CSV_Replay.cpp` を拡張し、入力が `.BIN` の場合は自動で `bin_to_replay_csv.py` を呼び出して変換後に既存リプレイ処理を実行。
+  3. デフォルト入力の3本目を `analysis/replay/data/00000444.BIN` に切り替え、出力は `00000444_bin_result.csv` として保存。
+  4. `./waf build --target examples/RLS_CSV_Replay` でビルドし、`./build/sitl/examples/RLS_CSV_Replay` を実行してデバッグ確認。
+- 結果:
+  - BIN→CSV 変換と replay 本体の連結実行が成功。
+  - `analysis/replay/results/00000444_from_bin.csv`（15332行）と `analysis/replay/results/00000444_bin_result.csv` を生成し、BIN直接入力経路で再現可能になった。
+
 ### 2026-04-04 09:55: [Replay/AP_Observer EKF] replay実行可否確認と報告資料作成
 - 問題: EKF移行作業の継続として、現在のワークスペースで replay 検証を再実行できるか不明だった。
 - 調査:
