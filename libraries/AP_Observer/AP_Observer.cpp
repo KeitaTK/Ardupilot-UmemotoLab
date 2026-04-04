@@ -196,12 +196,26 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_NIS_MAX", 25, AP_Observer, _ekf_nis_max, 4.0f),
 
+    // @Param: EKF_FHOLD
+    // @DisplayName: EKF Force Hold Threshold
+    // @Description: Hold the previous omega estimate when |force| is at or below this threshold [N]
+    // @Range: 0.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_FHOLD", 26, AP_Observer, _ekf_force_hold_max, 1.5f),
+
+    // @Param: EKF_FREJ
+    // @DisplayName: EKF Force Reject Threshold
+    // @Description: Reject force samples from estimation when |force| is at or above this threshold [N]
+    // @Range: 0.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_FREJ", 27, AP_Observer, _ekf_force_reject_min, 5.0f),
+
     // @Param: EKF_SW_RST
     // @DisplayName: EKF Reset On Switch Edge
     // @Description: Reset frequency estimator when switch toggles OFF->ON
     // @Values: 0:NoReset,1:Reset
     // @User: Advanced
-    AP_GROUPINFO("EKF_SW_RST", 26, AP_Observer, _ekf_reset_on_switch, 0),
+    AP_GROUPINFO("EKF_SW_RST", 28, AP_Observer, _ekf_reset_on_switch, 0),
 
     AP_GROUPEND
 };
@@ -256,6 +270,7 @@ void AP_Observer::ekf_init() {
         ekf_axis_innovation[axis] = 0.0f;
         ekf_axis_nis[axis] = 0.0f;
         ekf_axis_amp[axis] = 0.0f;
+        ekf_axis_force_abs[axis] = 0.0f;
         ekf_axis_trusted[axis] = 1U;
 
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
@@ -290,6 +305,11 @@ void AP_Observer::reset_frequency_estimation() {
 
 bool AP_Observer::is_axis_frequency_trusted(uint8_t axis) const {
     if (axis >= EKF_NUM_AXES) {
+        return false;
+    }
+
+    const float force_reject_min = MAX(0.0f, _ekf_force_reject_min.get());
+    if (ekf_axis_force_abs[axis] >= force_reject_min) {
         return false;
     }
 
@@ -357,6 +377,14 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
 void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     float* x = ekf_state[axis];
     float (*P)[EKF_STATE_SIZE] = ekf_P[axis];
+    const float omega_prev = x[3];
+    const float force_abs = fabsf(measurement);
+    ekf_axis_force_abs[axis] = force_abs;
+
+    const float force_hold_max = MAX(0.0f, _ekf_force_hold_max.get());
+    const float force_reject_min = MAX(force_hold_max + 1.0e-3f, _ekf_force_reject_min.get());
+    const bool force_hold_omega = force_abs <= force_hold_max;
+    const bool force_reject = force_abs >= force_reject_min;
 
     const float omega = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
     const float d = x[0];
@@ -403,11 +431,44 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float q_d = _ekf_q_d.get();
     const float q_ddot = _ekf_q_d_dot.get();
     const float q_c = _ekf_q_c.get();
-    const float q_omega = _freq_estimation_active ? _ekf_q_omega.get() : 0.0f;
+    const float q_omega_base = _freq_estimation_active ? _ekf_q_omega.get() : 0.0f;
+    const float q_omega = (_freq_estimation_active && !force_hold_omega && !force_reject)
+        ? q_omega_base
+        : ((_freq_estimation_active && (force_hold_omega || force_reject)) ? MAX(q_omega_base, 1.0e-6f) : 0.0f);
     P_pred[0][0] += q_d;
     P_pred[1][1] += q_ddot;
     P_pred[2][2] += q_c;
     P_pred[3][3] += q_omega;
+
+    if (force_hold_omega) {
+        const float y_pred_hold = x_pred[0] + x_pred[2];
+        const float innov_hold = measurement - y_pred_hold;
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            x[i] = x_pred[i];
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = P_pred[i][j];
+            }
+        }
+        x[3] = omega_prev;
+        ekf_axis_innovation[axis] = innov_hold;
+        ekf_axis_nis[axis] = 0.0f;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        return;
+    }
+
+    if (force_reject) {
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            x[i] = x_pred[i];
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = P_pred[i][j];
+            }
+        }
+        x[3] = omega_prev;
+        ekf_axis_innovation[axis] = 0.0f;
+        ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        return;
+    }
 
     const float y_pred = x_pred[0] + x_pred[2];
     const float innov = measurement - y_pred;
@@ -422,7 +483,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     }
 
     const float S = PHt[0] + PHt[2] + R;
-    if (fabsf(S) < 1.0e-9f) {
+    if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
         ekf_axis_innovation[axis] = innov;
         ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
         ekf_axis_amp[axis] = fabsf(x[0]);
@@ -436,8 +497,15 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         K[i] = PHt[i] / S;
     }
 
+    if (force_hold_omega) {
+        K[3] = 0.0f;
+    }
+
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         x[i] = x_pred[i] + K[i] * innov;
+    }
+    if (force_hold_omega) {
+        x[3] = omega_prev;
     }
 
     float KH[EKF_STATE_SIZE][EKF_STATE_SIZE];
@@ -469,6 +537,14 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
             P[i][j] = 0.5f * (P_new[i][j] + P_new[j][i]);
+        }
+    }
+
+    if (force_hold_omega) {
+        x[3] = omega_prev;
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            P[3][i] = P_pred[3][i];
+            P[i][3] = P_pred[i][3];
         }
     }
 
@@ -1020,6 +1096,12 @@ void AP_Observer::set_ekf_axis_gate_for_replay(bool enabled,
     _ekf_amp_max.set(MAX(_ekf_amp_min.get() + 1.0e-3f, amp_max));
     _ekf_innov_max.set(MAX(1.0e-3f, innov_max));
     _ekf_nis_max.set(MAX(1.0e-3f, nis_max));
+}
+
+void AP_Observer::set_ekf_force_thresholds_for_replay(float hold_max,
+                                                      float reject_min) {
+    _ekf_force_hold_max.set(MAX(0.0f, hold_max));
+    _ekf_force_reject_min.set(MAX(_ekf_force_hold_max.get() + 1.0e-3f, reject_min));
 }
 
 void AP_Observer::set_ekf_reset_on_switch_for_replay(bool enabled) {

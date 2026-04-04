@@ -148,6 +148,10 @@ struct ReplayRunConfig {
     float ekf_innov_max = 0.7f;
     bool has_ekf_nis_max = false;
     float ekf_nis_max = 4.0f;
+    bool has_ekf_force_hold_max = false;
+    float ekf_force_hold_max = 1.5f;
+    bool has_ekf_force_reject_min = false;
+    float ekf_force_reject_min = 5.0f;
     bool has_ekf_reset_on_switch = false;
     int ekf_reset_on_switch = 0;
 };
@@ -170,6 +174,7 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-r-meas <var>]\n");
             printf("      [--sw-mode log|always-on|always-off] [--ekf-reset-on-switch 0|1]\n");
             printf("      [--ekf-axis-gate 0|1] [--ekf-amp-min <v>] [--ekf-amp-max <v>] [--ekf-innov-max <v>] [--ekf-nis-max <v>]\n");
+            printf("      [--ekf-force-hold-max <n>] [--ekf-force-reject-min <n>]\n");
             printf("\n");
             printf("Default mode runs the built-in regression file list.\n");
             exit(0);
@@ -301,6 +306,30 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-nis-max=", 14) == 0) {
             cfg.ekf_nis_max = strtof(arg + 14, nullptr);
             cfg.has_ekf_nis_max = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-force-hold-max") == 0) && next != nullptr) {
+            cfg.ekf_force_hold_max = strtof(next, nullptr);
+            cfg.has_ekf_force_hold_max = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-force-hold-max=", 21) == 0) {
+            cfg.ekf_force_hold_max = strtof(arg + 21, nullptr);
+            cfg.has_ekf_force_hold_max = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-force-reject-min") == 0) && next != nullptr) {
+            cfg.ekf_force_reject_min = strtof(next, nullptr);
+            cfg.has_ekf_force_reject_min = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-force-reject-min=", 23) == 0) {
+            cfg.ekf_force_reject_min = strtof(arg + 23, nullptr);
+            cfg.has_ekf_force_reject_min = true;
             continue;
         }
 
@@ -479,6 +508,12 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
             cfg.ekf_amp_max,
             cfg.ekf_innov_max,
             cfg.ekf_nis_max
+        );
+    }
+    if (cfg.has_ekf_force_hold_max || cfg.has_ekf_force_reject_min) {
+        observer.set_ekf_force_thresholds_for_replay(
+            cfg.has_ekf_force_hold_max ? cfg.ekf_force_hold_max : 1.5f,
+            cfg.has_ekf_force_reject_min ? cfg.ekf_force_reject_min : 5.0f
         );
     }
     if (AP_Param::set_by_name("OBS_PHASE_CORR", 1.0f)) {}

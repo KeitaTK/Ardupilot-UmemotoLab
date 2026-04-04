@@ -65,6 +65,8 @@ public:
                                       float amp_max,
                                       float innov_max,
                                       float nis_max);
+    void set_ekf_force_thresholds_for_replay(float hold_max,
+                                             float reject_min);
     void set_ekf_reset_on_switch_for_replay(bool enabled);
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
@@ -121,6 +123,7 @@ private:
     float ekf_axis_innovation[RLS_NUM_AXES];
     float ekf_axis_nis[RLS_NUM_AXES];
     float ekf_axis_amp[RLS_NUM_AXES];
+    float ekf_axis_force_abs[RLS_NUM_AXES];
     uint8_t ekf_axis_trusted[RLS_NUM_AXES];
 
     // EKF tuning parameters
@@ -137,6 +140,8 @@ private:
     AP_Float _ekf_amp_max;
     AP_Float _ekf_innov_max;
     AP_Float _ekf_nis_max;
+    AP_Float _ekf_force_hold_max;
+    AP_Float _ekf_force_reject_min;
     AP_Int8  _ekf_reset_on_switch;
 
     // Legacy parameters retained for compatibility during migration
