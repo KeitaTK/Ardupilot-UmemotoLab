@@ -26,6 +26,22 @@
 
 ---
 
+### 2026-04-04 20:30: [AP_Observer EKF] SWリセット無効化パラメータと軸信頼度ゲート実装
+- 問題: SW ON時の周波数リセット由来ジャンプを解消しつつ、always-on運用で空体固有振動の影響を軸選別で抑えたい。
+- 調査:
+  1. `AP_Observer` の周波数融合が3軸単純平均で、SW ONエッジで強制リセットされる実装を確認。
+  2. 既存diagnostic結果で、00000444のON後高周波化はY/Z寄与が主因であることを再確認。
+- 試行:
+  1. `OBS_EKF_SW_RST`（0:no reset, 1:reset）を追加し、SW ON時リセット可否を切替可能にした。
+  2. `OBS_EKF_AX_GAT`, `OBS_EKF_AMP_MIN/MAX`, `OBS_EKF_INN_MAX`, `OBS_EKF_NIS_MAX` を追加し、|d| + innovation/NIS で trusted 軸のみ融合するロジックを実装。
+  3. `RLS_CSV_Replay` に `--sw-mode`, `--ekf-reset-on-switch`, `--ekf-axis-gate`, 閾値引数を追加。
+  4. `ekf_frequency_jump_diagnostic.py` を拡張し、no-reset/log/always-on比較と閾値スキャンを自動化。
+- 結果:
+  - baseline_reset_log: SW=1区間 MAE 0.1831Hz、ON時ジャンプ +0.1340Hz。
+  - noreset_log: SW=1区間 MAE 0.0335Hz、ON時ジャンプ 0.0Hz（大幅改善）。
+  - noreset_always_on: MAE 0.1229Hz、軸ゲート閾値スキャン(best)でも MAE 0.1540Hz で改善限定。
+- 備考: 「SW OFF時omega完全固定」は今回ユーザー要望により未実装（現状維持）。always-on改善には軸間整合性を使う追加ロジックが必要。
+
 ### 2026-04-04 17:30: [Replay/AP_Observer EKF] 軸単独EKF再現解析と0.45Hz目標明記
 - 問題: ON前は0.45Hz付近に収束する一方、ON後は高周波側へ偏る現象について、どの軸が原因か不明だった。
 - 調査:

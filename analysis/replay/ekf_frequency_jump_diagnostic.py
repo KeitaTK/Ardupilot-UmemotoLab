@@ -168,9 +168,8 @@ def plot_overview(series: ReplaySeries, out_png: Path, anchor_time: float) -> No
     fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=False)
 
     axes[0].plot(t, series.est_freq, label="Replay est", linewidth=1.0)
-    axes[0].plot(t, series.real_freq, label="Logged real", linewidth=1.0, alpha=0.8)
     axes[0].set_ylabel("Freq [Hz]")
-    axes[0].set_title(f"{series.tag}: estimated frequency vs log")
+    axes[0].set_title(f"{series.tag}: estimated frequency")
     axes[0].grid(True, alpha=0.3)
     axes[0].legend(loc="best")
 
@@ -181,7 +180,6 @@ def plot_overview(series: ReplaySeries, out_png: Path, anchor_time: float) -> No
 
     zoom_mask = (t >= (anchor_time - 6.0)) & (t <= (anchor_time + 6.0))
     axes[2].plot(t[zoom_mask], series.est_freq[zoom_mask], label="Replay est", linewidth=1.2)
-    axes[2].plot(t[zoom_mask], series.real_freq[zoom_mask], label="Logged real", linewidth=1.0, alpha=0.8)
     axes[2].axvline(anchor_time, color="red", linestyle="--", linewidth=1.0, label="anchor")
     axes[2].set_ylabel("Freq [Hz]")
     axes[2].set_xlabel("Time [s]")
@@ -515,11 +513,145 @@ def write_synthetic_input(path: Path, sw_mode: str, duration_s: float, dt_s: flo
             writer.writerow([time_us, f"{plx:.6f}", "0.0", "0.0", sw, f"{base_freq_hz:.4f}", "0.0"])
 
 
-def run_replay(binary: Path, input_csv: Path, outdir: Path, tag: str) -> Path:
+def run_replay(
+    binary: Path,
+    input_path: Path,
+    outdir: Path,
+    tag: str,
+    extra_args: List[str] | None = None,
+) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
-    cmd = [str(binary), "--input", str(input_csv), "--outdir", str(outdir), "--tag", tag]
+    cmd = [str(binary), "--input", str(input_path), "--outdir", str(outdir), "--tag", tag]
+    if extra_args:
+        cmd.extend(extra_args)
     subprocess.run(cmd, check=True, capture_output=True, text=True)
     return outdir / f"{tag}_result.csv"
+
+
+def summarize_target_tracking(series: ReplaySeries, target_hz: float) -> Dict[str, float]:
+    on_mask = series.sw == 1
+    eval_mask = on_mask if np.any(on_mask) else np.ones_like(series.est_freq, dtype=bool)
+    freq = series.est_freq[eval_mask]
+    err = freq - target_hz
+
+    rising_edges = np.where(np.diff(series.sw) > 0)[0]
+    jump_on = float("nan")
+    if rising_edges.size:
+        idx = int(rising_edges[0])
+        jump_on = float(series.est_freq[idx + 1] - series.est_freq[idx])
+
+    return {
+        "samples": int(freq.size),
+        "mean_hz": float(np.mean(freq)),
+        "std_hz": float(np.std(freq)),
+        "min_hz": float(np.min(freq)),
+        "max_hz": float(np.max(freq)),
+        "mae_vs_target_hz": float(np.mean(np.abs(err))),
+        "rmse_vs_target_hz": float(np.sqrt(np.mean(err * err))),
+        "jump_at_first_on_hz": jump_on,
+    }
+
+
+def plot_reset_gate_scenarios(
+    traces: Dict[str, ReplaySeries],
+    out_png: Path,
+    target_hz: float,
+) -> None:
+    fig, ax = plt.subplots(figsize=(12, 4))
+    order = ["baseline_reset_log", "noreset_log", "noreset_always_on", "best_gate_always_on"]
+    for key in order:
+        if key in traces:
+            ax.plot(traces[key].time_s, traces[key].est_freq, linewidth=1.0, label=key)
+    ax.axhline(target_hz, color="black", linestyle="--", linewidth=1.0, label=f"target={target_hz:.2f}Hz")
+    ax.set_title("Switch reset / always-on / axis-gate comparison")
+    ax.set_xlabel("Time [s]")
+    ax.set_ylabel("Estimated freq [Hz]")
+    ax.grid(True, alpha=0.3)
+    ax.legend(loc="best")
+    fig.tight_layout()
+    fig.savefig(out_png, dpi=160)
+    plt.close(fig)
+
+
+def noreset_gate_validation(
+    binary: Path,
+    outdir: Path,
+    input_bin_444: Path,
+    target_hz: float = 0.45,
+) -> Dict[str, object]:
+    outdir.mkdir(parents=True, exist_ok=True)
+
+    scenarios = {
+        "baseline_reset_log": ["--sw-mode", "log", "--ekf-reset-on-switch", "1", "--ekf-axis-gate", "0"],
+        "noreset_log": ["--sw-mode", "log", "--ekf-reset-on-switch", "0", "--ekf-axis-gate", "0"],
+        "noreset_always_on": ["--sw-mode", "always-on", "--ekf-reset-on-switch", "0", "--ekf-axis-gate", "0"],
+    }
+
+    traces: Dict[str, ReplaySeries] = {}
+    scenario_summary: Dict[str, Dict[str, float]] = {}
+    gate_scan: List[Dict[str, object]] = []
+    summary: Dict[str, object] = {
+        "target_hz": target_hz,
+        "scenarios": scenario_summary,
+        "gate_scan": gate_scan,
+    }
+
+    for name, args in scenarios.items():
+        result_csv = run_replay(binary, input_bin_444, outdir / name, name, extra_args=args)
+        series = read_result_csv(result_csv, name)
+        traces[name] = series
+        scenario_summary[name] = summarize_target_tracking(series, target_hz)
+
+    gate_candidates = [
+        {"amp_min": 0.08, "amp_max": 1.20, "innov_max": 0.80, "nis_max": 6.0},
+        {"amp_min": 0.10, "amp_max": 1.00, "innov_max": 0.70, "nis_max": 4.0},
+        {"amp_min": 0.12, "amp_max": 0.90, "innov_max": 0.60, "nis_max": 3.5},
+        {"amp_min": 0.15, "amp_max": 0.90, "innov_max": 0.60, "nis_max": 3.0},
+        {"amp_min": 0.18, "amp_max": 0.80, "innov_max": 0.50, "nis_max": 2.5},
+    ]
+
+    best_candidate: Dict[str, object] | None = None
+    best_series: ReplaySeries | None = None
+    best_mae = float("inf")
+
+    for idx, cand in enumerate(gate_candidates):
+        tag = f"gate_scan_{idx:02d}"
+        args = [
+            "--sw-mode",
+            "always-on",
+            "--ekf-reset-on-switch",
+            "0",
+            "--ekf-axis-gate",
+            "1",
+            "--ekf-amp-min",
+            f"{cand['amp_min']}",
+            "--ekf-amp-max",
+            f"{cand['amp_max']}",
+            "--ekf-innov-max",
+            f"{cand['innov_max']}",
+            "--ekf-nis-max",
+            f"{cand['nis_max']}",
+        ]
+        result_csv = run_replay(binary, input_bin_444, outdir / tag, tag, extra_args=args)
+        series = read_result_csv(result_csv, tag)
+        metric = summarize_target_tracking(series, target_hz)
+        entry = {
+            "tag": tag,
+            "params": cand,
+            "metric": metric,
+        }
+        gate_scan.append(entry)
+        if metric["mae_vs_target_hz"] < best_mae:
+            best_mae = metric["mae_vs_target_hz"]
+            best_candidate = entry
+            best_series = series
+
+    if best_candidate is not None and best_series is not None:
+        summary["best_gate_always_on"] = best_candidate
+        traces["best_gate_always_on"] = best_series
+
+    plot_reset_gate_scenarios(traces, outdir / "reset_gate_compare_00000444.png", target_hz)
+    return summary
 
 
 def synthetic_hold_test(binary: Path, outdir: Path) -> Dict[str, object]:
@@ -568,6 +700,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Diagnose EKF replay frequency jump")
     parser.add_argument("--result-443", default="analysis/replay/results/runs/00000443/00000443_bin_result.csv")
     parser.add_argument("--result-444", default="analysis/replay/results/runs/00000444/00000444_bin_result.csv")
+    parser.add_argument("--input-bin-444", default="analysis/replay/data/00000444.BIN")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics")
     parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
     args = parser.parse_args()
@@ -597,6 +730,12 @@ def main() -> int:
 
     replay_bin = Path(args.replay_bin)
     synthetic_summary = synthetic_hold_test(replay_bin, outdir / "synthetic")
+    noreset_gate_summary = noreset_gate_validation(
+        replay_bin,
+        outdir / "switch_gate_validation",
+        Path(args.input_bin_444),
+        target_hz=0.45,
+    )
 
     summary = {
         "run_00000443": summary_443,
@@ -604,6 +743,7 @@ def main() -> int:
         "axis_ekf_00000443": axis_ekf_443.summary,
         "axis_ekf_00000444": axis_ekf_444.summary,
         "synthetic_hold_test": synthetic_summary,
+        "switch_gate_validation_00000444": noreset_gate_summary,
     }
     with (outdir / "diagnostic_summary.json").open("w") as f:
         json.dump(summary, f, indent=2)
