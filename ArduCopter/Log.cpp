@@ -587,24 +587,28 @@ const struct LogStructure Copter::log_structure[] = {
       "RTDT", "Qffff", "TimeUS,dt,dtAvg,dtMax,dtMin", "sssss", "F----" , true },
 
 // @LoggerMessage: OBSV
-// @Description: Observer RLS parameters and predictions
+// @Description: Observer EKF state and predictions
 // @Field: TimeUS: Time since system startup
 // @Field: PLX: Payload force X-axis
 // @Field: PLY: Payload force Y-axis
 // @Field: PLZ: Payload force Z-axis
-// @Field: AX: RLS sin coefficient X-axis
-// @Field: AY: RLS sin coefficient Y-axis
-// @Field: BX: RLS cos coefficient X-axis
-// @Field: BY: RLS cos coefficient Y-axis
-// @Field: CX: RLS bias X-axis
-// @Field: CY: RLS bias Y-axis
+// @Field: DX: EKF disturbance state X-axis
+// @Field: DY: EKF disturbance state Y-axis
+// @Field: DZ: EKF disturbance state Z-axis
+// @Field: VX: EKF disturbance velocity X-axis
+// @Field: VY: EKF disturbance velocity Y-axis
+// @Field: VZ: EKF disturbance velocity Z-axis
+// @Field: CX: EKF DC offset X-axis
+// @Field: CY: EKF DC offset Y-axis
+// @Field: CZ: EKF DC offset Z-axis
 // @Field: PRX: Predicted force X-axis
 // @Field: PRY: Predicted force Y-axis
 // @Field: PRZ: Predicted force Z-axis
-// @Field: PhC: Phase correction
+// @Field: F: Estimated frequency
+// @Field: SW: Frequency estimation switch
 
-    { LOG_OBSERVER_MSG, sizeof(log_Observer),
-      "OBSV", "Qffffffffffff", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,PRX,PRY,PRZ", "s------------", "F------------" , true },
+        { LOG_OBSERVER_MSG, sizeof(log_Observer),
+            "OBSV", "QffffffffffffffffB", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,PRX,PRY,PRZ,F,SW", "s----------------", "F----------------" , true },
 
 };
 

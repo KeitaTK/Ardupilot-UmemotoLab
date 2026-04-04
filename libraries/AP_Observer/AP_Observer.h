@@ -38,12 +38,12 @@ public:
     // RCチャンネル読み取り（旧方式・互換性のため）
     bool read_freq_estimation_switch();
 
-    // RLS関連のゲッター関数
-    Vector3f get_rls_sin_coeff() const;      // A (sin係数)
-    Vector3f get_rls_cos_coeff() const;      // B (cos係数)
-    Vector3f get_rls_bias() const;           // C (定常偏差)
+    // 互換ゲッター関数
+    Vector3f get_rls_sin_coeff() const;
+    Vector3f get_rls_cos_coeff() const;
+    Vector3f get_rls_bias() const;
     Vector3f get_predicted_force() const;    // Δt秒後の予測外力
-    bool is_rls_initialized() const { return rls_initialized; }
+    bool is_rls_initialized() const { return ekf_initialized; }
     
     // ログ記録関数
     void Write_Observer_Log();
@@ -59,7 +59,7 @@ public:
     void set_params_for_replay(float freq, float bw, float gain);
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
-    // Add logic to get internal RLS state if needed
+    // Add logic to get internal EKF state if needed
 // #endif
 
     // パラメータ定義テーブル
@@ -87,26 +87,44 @@ private:
     Vector3f _payload_filtered = Vector3f();
     bool filter_initialized = false;
 
-    // RLS (Recursive Least Squares) 関連
-    static constexpr uint8_t RLS_PARAM_SIZE = 3;  // [A:sin係数, B:cos係数, C:定常偏差]
-    static constexpr uint8_t RLS_NUM_AXES = 3;    // x, y, z軸
-    
-    // 各軸のRLSパラメータ [軸][パラメータ番号]
-    // パラメータ: [0]=A(sin), [1]=B(cos), [2]=C(定常偏差)
-    float rls_theta[RLS_NUM_AXES][RLS_PARAM_SIZE];
-    
-    // 各軸の共分散行列 [軸][行][列]
-    float rls_P[RLS_NUM_AXES][RLS_PARAM_SIZE][RLS_PARAM_SIZE];
-    
-    bool rls_initialized = false;
-    uint32_t rls_sample_count = 0;
-    uint32_t rls_start_time_ms = 0;  // RLS開始時刻
+    // EKF (harmonic disturbance observer) state
+    static constexpr uint8_t EKF_STATE_SIZE = 4;  // [d, d_dot, c, omega]
+    static constexpr uint8_t EKF_NUM_AXES = 3;     // x, y, z
+    static constexpr uint8_t RLS_PARAM_SIZE = EKF_STATE_SIZE;
+    static constexpr uint8_t RLS_NUM_AXES = EKF_NUM_AXES;
 
-    // RLS用のパラメータ
-    AP_Float _rls_forgetting_factor;   // λ (忘却係数)
-    AP_Float _rls_initial_covariance;  // 初期共分散値
-    AP_Float _disturbance_freq;        // ω: 外乱周波数 [Hz]
-    AP_Float _prediction_time;         // Δt: 予測時間 [秒]
+    // 各軸のEKF状態 [軸][状態番号]
+    // 状態: [0]=d, [1]=d_dot, [2]=c, [3]=omega
+    float ekf_state[EKF_NUM_AXES][EKF_STATE_SIZE];
+
+    // 各軸の共分散行列 [軸][行][列]
+    float ekf_P[EKF_NUM_AXES][EKF_STATE_SIZE][EKF_STATE_SIZE];
+
+    bool ekf_initialized = false;
+    uint32_t ekf_sample_count = 0;
+    uint32_t ekf_start_time_ms = 0;
+
+    // Legacy phase tracking retained during migration
+    float ab_phase_unwrapped[RLS_NUM_AXES];
+    float ab_phase_prev_wrapped[RLS_NUM_AXES];
+    bool  ab_phase_initialized[RLS_NUM_AXES];
+    float ab_amp[RLS_NUM_AXES];
+
+    // EKF tuning parameters
+    AP_Float _ekf_q_d;
+    AP_Float _ekf_q_d_dot;
+    AP_Float _ekf_q_c;
+    AP_Float _ekf_q_omega;
+    AP_Float _ekf_r_meas;
+    AP_Float _ekf_omega_init;
+    AP_Float _ekf_omega_min;
+    AP_Float _ekf_omega_max;
+
+    // Legacy parameters retained for compatibility during migration
+    AP_Float _rls_forgetting_factor;
+    AP_Float _rls_initial_covariance;
+    AP_Float _disturbance_freq;
+    AP_Float _prediction_time;
     
     // テスト用パラメータ（外力注入）
     AP_Int8  _test_force_inject_enable;  // テスト用外力注入の有効/無効
@@ -129,16 +147,11 @@ private:
     float phase_correction;                            // 累積位相補正量 [rad]
     float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
-    // A,B係数から推定した観測位相（MATLAB相当）
-    // phi_obs_axis = atan2(-B, A) をアンラップして連続化したもの
-    float ab_phase_unwrapped[RLS_NUM_AXES];
-    float ab_phase_prev_wrapped[RLS_NUM_AXES];
-    bool  ab_phase_initialized[RLS_NUM_AXES];
-    float ab_amp[RLS_NUM_AXES];
-    
-    // RLS関数
-    void rls_init();
-    void rls_update(const Vector3f& x_input, const Vector3f& y_output);
+    // EKF関数
+    void ekf_init();
+    void ekf_update(const Vector3f& y_output, float dt);
+    void ekf_update_axis(uint8_t axis, float measurement, float dt);
+    Vector3f predict_force_from_state(const float state[EKF_STATE_SIZE], float dt) const;
     void update_prediction_cache();  // 予測用キャッシュ更新
     
     // 位相補正関数
@@ -168,7 +181,7 @@ private:
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
     
-    // RLS関連定数
+    // RLS関連定数（互換保持）
     static constexpr float    RLS_MIN_LAMBDA        = 0.9f;
     static constexpr float    RLS_MAX_LAMBDA        = 0.9999f;
     static constexpr float    RLS_MIN_COVARIANCE    = 0.001f;
@@ -192,7 +205,7 @@ private:
     // 周波数推定制御用の変数
     bool _freq_estimation_active = false;    // 現在推定中かどうか
     bool _freq_estimation_prev_switch = false; // 前回のスイッチ状態
-    float _freq_estimation_result = 0.0f;    // 推定終了時の周波数結果 [Hz]
+    float _freq_estimation_result = 0.0f;    // 推定周波数結果 [Hz]
 
     // ゼロクロス推定の状態
     bool _zc_window_active = false;

@@ -1,22 +1,30 @@
-# ArduPilot Custom Autotest Specification
+# ArduPilot Custom Autotest Specification (Observer RLS->EKF Migration)
 
 ## Mandatory Tests
 
-All code changes affecting AP_Observer must pass these tests:
+All code changes affecting AP_Observer must pass these tests.
+
+During EKF migration, the following tests are kept as regression guards for current behavior.
 
 | Test | Purpose | Timeout | Freq |
 |------|---------|---------|------|
 | `test.Copter.ArmFeatures` | Core ArduPilot arming | 300s | Every change |
-| `test.Copter.TestRLSBasicEstimation` | RLS estimation with known frequency | 600s | Every AP_Observer change |
+| `test.Copter.TestRLSBasicEstimation` | Baseline harmonic estimation regression | 600s | Every AP_Observer change |
 | `test.Copter.TestRLSRC8SwitchControl` | RC Aux Function (RC8_OPTION=316) control | 600s | After RC/integration changes |
-| `test.Copter.TestRLSWindowedEstimation` | Zero-cross window estimation | 600s | After frequency estimation changes |
+| `test.Copter.TestRLSWindowedEstimation` | RC-gated frequency estimation regression | 600s | After frequency estimation changes |
 | `RLS_CSV_Replay (Simulation)` | Offline replay of flight data | ~30s | After frequency estimation code changes |
 
 ---
 
 ## Log Simulation & Offline Analysis
 
-When modifying frequency estimation logic, you **MUST** run the offline simulation to verify convergence and stability using real flight data.
+When modifying observer estimation logic (RLS or EKF path), you **MUST** run the offline simulation to verify convergence and stability using real flight data.
+
+During EKF migration, replay analysis must additionally evaluate:
+
+- frequency trajectory (`f_est`) against baseline replay results
+- disturbance reconstruction quality (NRMSE)
+- innovation trend (mean and lag-1 correlation)
 
 ### 1. Build & Run Replay
 ```bash
@@ -42,7 +50,7 @@ python3 analysis/scripts/analyze_log.py path/to/log.csv
 
 ---
 
-## Mandatory Tests
+## Extended / Long Tests
 
 These tests are experimental or require long execution time:
 
@@ -111,6 +119,12 @@ timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestR
 4. If tests fail → Debug and repeat
 5. **Do NOT proceed to Phase 2 until all tests pass**
 
+### EKF Migration Validation (Required when EKF logic changes)
+1. Run all mandatory regression tests above
+2. Run replay simulation and graph generation
+3. Compare EKF-side estimates to RLS baseline and MATLAB reference behavior
+4. Record convergence/stability observations in `.github/CHANGELOG_DEVELOPMENT.md`
+
 ### Phase 2: Hardware Build (Pixhawk6C)
 - Only after Phase 1 tests PASS
 - Clean build: `rm -rf build/ && ./waf configure --board Pixhawk6C && ./waf copter`
@@ -126,5 +140,5 @@ timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestR
 ---
 
 ## Last Updated
-- **Date**: 2026-02-08
+- **Date**: 2026-04-04
 - **Author**: Development team
