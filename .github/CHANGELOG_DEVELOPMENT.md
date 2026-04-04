@@ -26,6 +26,20 @@
 
 ---
 
+### 2026-04-04 00:00: [AP_Observer/EKF] RLS->EKF移行準備（ドキュメント・環境整備）
+- 問題: `RLS_only` ベースの現行実装を、MATLAB参照EKFへ段階移行するための比較資料と運用ドキュメントが不足していた。
+- 調査:
+  1. 現行 `AP_Observer` 実装（`AP_Observer.h/.cpp`）はRLS + ゼロクロス周波数推定構成であることを確認。
+  2. MATLAB参照（`C:\Users\Umemoto\Documents\Taki_Local\Matlab\EKF`）は正弦波モデルEKF（状態 `[d, d_dot, c, omega]`）であることを確認。
+  3. `.github` 配下の指示・テスト仕様がRLS前提の記述に偏っている箇所を確認。
+- 試行:
+  1. `RLS_only` から作業ブランチ `feature/ekf-migration-from-rls-only` をローカル/リモートに作成。
+  2. `libraries/AP_Observer/EKF_MIGRATION_PLAN.md` を新規作成し、ファイル単位の変更想定とリスク対策を整理。
+  3. `libraries/AP_Observer/README.md` をEKF移行方針に更新（数式方針・移行注記追加）。
+  4. `.github/AUTOTEST_SPECIFICATION.md` にEKF移行時の検証要件（リプレイ比較指標）を追記。
+  5. `.github/copilot-instructions.md` と `.github/skills/replay-and-analyze.yaml` をEKF移行運用に合わせて更新。
+- 結果: コード変更前段として、EKF移行の比較根拠・運用手順・検証観点をドキュメント化完了。
+
 ### 2026-02-12 19:50: [GCS_MAVLink] AUTOPILOT_VERSIONメッセージの完全なデフォルト復帰
 - 問題: MAVLinkメッセージ定義(XML)および`GCS_Common.cpp`の変更により、`AUTOPILOT_VERSION`メッセージが標準仕様から逸脱し、オートテストでの通信不全を引き起こしていた。また、これを回避するためにオートテストスクリプト側でバージョンチェックをスキップする一時的な修正（ハック）が行われていた。
 - 調査:

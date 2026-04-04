@@ -7629,7 +7629,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         import numpy
         mlog = self.dfreader_for_current_onboard_log()
         frequencies = []
-        rls_coefs = []  # デバッグ用：RLS係数を収集
         while True:
             m = mlog.recv_match(
                 type='OBSV',
@@ -7639,21 +7638,35 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 break
             if hasattr(m, 'F'):
                 frequencies.append(m.F)
-            if hasattr(m, 'AX') and hasattr(m, 'BX'):
-                rls_coefs.append((m.AX, m.BX))  # X軸のsin/cos係数
         
         if len(frequencies) == 0:
             self.progress("WARNING: No OBSV.F data found in log")
             return 0.0
         
-        # デバッグ：RLS係数の状態を表示
-        if len(rls_coefs) > 0:
-            non_zero_coefs = sum(1 for a, b in rls_coefs if abs(a) > 1e-6 or abs(b) > 1e-6)
-            self.progress(f"RLS coefficients: {non_zero_coefs}/{len(rls_coefs)} non-zero samples")
-        
         median_freq = numpy.median(numpy.asarray(frequencies))
         self.progress(f"Extracted {len(frequencies)} frequency samples, median: {median_freq:.3f}Hz")
         return median_freq
+
+    def extract_ekf_amplitude_from_log(self, tstart, tend):
+        '''Estimate harmonic amplitude from OBSV EKF state fields.'''
+        import numpy
+        mlog = self.dfreader_for_current_onboard_log()
+        amplitudes = []
+        while True:
+            m = mlog.recv_match(
+                type='OBSV',
+                blocking=False,
+                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6))
+            if m is None:
+                break
+            if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
+                omega = max(m.F, 1e-3) * 2.0 * numpy.pi
+                amplitudes.append((m.DX ** 2 + (m.VX / omega) ** 2) ** 0.5)
+
+        if len(amplitudes) == 0:
+            return 0.0
+
+        return float(numpy.median(numpy.asarray(amplitudes)))
 
     def extract_phase_corrections_from_log(self, tstart, tend):
         '''Extract phase correction values from OBSV log'''
@@ -7681,8 +7694,9 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                                           phase_thresh_rad=5.0):
         '''Run a single (config, injected) zero-cross estimation scenario and assert convergence.'''
         try:
+            import math
             self.progress(
-                f"RLS freq case: config={config_freq:.3f}Hz injected={actual_freq:.3f}Hz amp={test_amplitude:.1f}N"
+                f"EKF freq case: config={config_freq:.3f}Hz injected={actual_freq:.3f}Hz amp={test_amplitude:.1f}N"
             )
 
             self.set_parameters({
@@ -7693,6 +7707,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_TEST_FREQ': float(actual_freq),
                 'OBS_TEST_AMP': float(test_amplitude),
                 'OBS_FREQ_WIN': 10.0,
+                'OBS_EKF_Q_D': 0.02,
+                'OBS_EKF_Q_DD': 0.05,
+                'OBS_EKF_Q_C': 0.001,
+                'OBS_EKF_Q_W': 0.0005,
+                'OBS_EKF_R_MEAS': 0.08,
                 'RC8_OPTION': 316,
                 'LOG_DISARMED': 0,
             })
@@ -7708,6 +7727,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_TEST_FREQ': float(actual_freq),
                 'OBS_TEST_AMP': float(test_amplitude),
                 'OBS_FREQ_WIN': 10.0,
+                'OBS_EKF_Q_D': 0.02,
+                'OBS_EKF_Q_DD': 0.05,
+                'OBS_EKF_Q_C': 0.001,
+                'OBS_EKF_Q_W': 0.0005,
+                'OBS_EKF_R_MEAS': 0.08,
                 'RC8_OPTION': 316,
             })
             self.delay_sim_time(1)
@@ -7753,28 +7777,30 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             # 振幅チェック（収束窓のみ）
             import numpy
             mlog = self.dfreader_for_current_onboard_log()
-            rls_amplitudes = []
+            ekf_amplitudes = []
+            analysis_start = t_on + 5.0
             while True:
                 m = mlog.recv_match(
                     type='OBSV',
                     blocking=False,
-                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (analysis_start * 1.0e6, tend * 1.0e6))
+                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (analysis_start * 1.0e6, t_off * 1.0e6))
                 if m is None:
                     break
-                if hasattr(m, 'AX') and hasattr(m, 'BX'):
-                    amp = (m.AX**2 + m.BX**2)**0.5
-                    rls_amplitudes.append(amp)
+                if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
+                    omega = max(m.F, 1e-3) * 2.0 * math.pi
+                    amp = (m.DX**2 + (m.VX / omega)**2)**0.5
+                    ekf_amplitudes.append(amp)
 
-            if len(rls_amplitudes) == 0:
-                raise NotAchievedException("No RLS coefficient data found in log")
+            if len(ekf_amplitudes) == 0:
+                raise NotAchievedException("No EKF state data found in log")
 
-            median_amp = float(numpy.median(numpy.asarray(rls_amplitudes)))
-            self.progress(f"RLS amplitude: {median_amp:.3f}N (injected: {test_amplitude}N)")
+            median_amp = float(numpy.median(numpy.asarray(ekf_amplitudes)))
+            self.progress(f"EKF amplitude: {median_amp:.3f}N (injected: {test_amplitude}N)")
             if median_amp < test_amplitude * 0.6:
                 raise NotAchievedException(
-                    f"RLS amplitude too low: got {median_amp:.3f}N, expected ~{test_amplitude}N"
+                    f"EKF amplitude too low: got {median_amp:.3f}N, expected ~{test_amplitude}N"
                 )
-            self.progress("PASS: RLS amplitude check PASSED")
+            self.progress("PASS: EKF amplitude check PASSED")
         finally:
             # ケース毎に必ず安全に着陸・disarm
             try:
@@ -7799,6 +7825,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_INJECT': 1,  # テスト外力注入を有効化
             'OBS_TEST_FREQ': test_freq,  # テスト周波数
             'OBS_TEST_AMP': test_amplitude,  # テスト振幅
+            'OBS_EKF_Q_D': 0.02,
+            'OBS_EKF_Q_DD': 0.05,
+            'OBS_EKF_Q_C': 0.001,
+            'OBS_EKF_Q_W': 0.0005,
+            'OBS_EKF_R_MEAS': 0.08,
             'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
             'LOG_DISARMED': 0,
         })
@@ -7815,6 +7846,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_INJECT': 1,  # テスト外力注入を有効化
             'OBS_TEST_FREQ': test_freq,  # テスト周波数
             'OBS_TEST_AMP': test_amplitude,  # テスト振幅（10N）
+            'OBS_EKF_Q_D': 0.02,
+            'OBS_EKF_Q_DD': 0.05,
+            'OBS_EKF_Q_C': 0.001,
+            'OBS_EKF_Q_W': 0.0005,
+            'OBS_EKF_R_MEAS': 0.08,
         })
         
         # 周波数推定スイッチをOFFにする（設定値を維持するため）
@@ -7870,26 +7906,26 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (analysis_start * 1.0e6, tend * 1.0e6))
             if m is None:
                 break
-            if hasattr(m, 'AX') and hasattr(m, 'BX'):
-                # X軸のRLS振幅を計算: sqrt(A^2 + B^2)
-                amp = (m.AX**2 + m.BX**2)**0.5
+            if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
+                omega = max(m.F, 1e-3) * 2.0 * math.pi
+                amp = (m.DX**2 + (m.VX / omega)**2)**0.5
                 rls_amplitudes.append(amp)
         
         if len(rls_amplitudes) > 0:
             median_amp = numpy.median(numpy.asarray(rls_amplitudes))
-            self.progress(f"RLS amplitude: {median_amp:.3f}N (injected: {test_amplitude}N)")
+            self.progress(f"EKF amplitude: {median_amp:.3f}N (injected: {test_amplitude}N)")
             
             # 振幅が注入値の70%以上あればRLSが正しく動作していると判断
             if median_amp < test_amplitude * 0.7:
                 raise NotAchievedException(
-                    f"RLS amplitude too low: got {median_amp:.3f}N, expected ~{test_amplitude}N"
+                    f"EKF amplitude too low: got {median_amp:.3f}N, expected ~{test_amplitude}N"
                 )
             
-            self.progress(f"RLS amplitude check PASSED")
+            self.progress(f"EKF amplitude check PASSED")
         else:
-            raise NotAchievedException("No RLS coefficient data found in log")
+            raise NotAchievedException("No EKF state data found in log")
         
-        self.progress(f"ALL RLS TESTS PASSED")
+        self.progress(f"ALL EKF TESTS PASSED")
         
         self.do_RTL()
         self.context_pop()
@@ -8374,10 +8410,10 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             )
         self.progress("PASS: OBS_FREQ_WIN change successful")
 
-        # Test 3: 実際にRLSを動かして動作確認
+        # Test 3: 実際にEKFを動かして動作確認
         # Note: SITL ではリブート時にデフォルトパラメータファイルがリロードされるため、
         # パラメータの永続性テストは省略し、実行時の動作確認のみを行う
-        self.progress("Test 3: Running RLS with modified parameters")
+        self.progress("Test 3: Running EKF with modified parameters")
         self.set_parameters({
             'OBS_DIST_FREQ': test_freq,
             'OBS_PHASE_CORR': 1,
@@ -8387,12 +8423,12 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'LOG_DISARMED': 0,
         })
         
-        # 離陸してRLSが正常に動作するか確認
-        self.progress("Taking off to verify RLS operation with new parameters")
+        # 離陸してEKFが正常に動作するか確認
+        self.progress("Taking off to verify EKF operation with new parameters")
         self.takeoff(10, mode='ALT_HOLD')
         self.delay_sim_time(20)
         
-        # ログからRLS係数を確認
+        # ログからEKF状態を確認
         tstart = self.get_sim_time() - 10
         tend = self.get_sim_time()
         
@@ -8407,21 +8443,22 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (tstart * 1.0e6, tend * 1.0e6))
             if m is None:
                 break
-            if hasattr(m, 'AX') and hasattr(m, 'BX'):
-                amp = (m.AX**2 + m.BX**2)**0.5
+            if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
+                omega = max(m.F, 1e-3) * 2.0 * math.pi
+                amp = (m.DX**2 + (m.VX / omega)**2)**0.5
                 rls_amplitudes.append(amp)
         
         if len(rls_amplitudes) > 0:
             median_amp = numpy.median(numpy.asarray(rls_amplitudes))
-            self.progress(f"RLS amplitude with new parameters: {median_amp:.3f}N")
+            self.progress(f"EKF amplitude with new parameters: {median_amp:.3f}N")
             
             if median_amp < test_amplitude * 0.5:
                 raise NotAchievedException(
-                    f"RLS amplitude too low with new parameters: got {median_amp:.3f}N, expected ~{test_amplitude}N"
+                    f"EKF amplitude too low with new parameters: got {median_amp:.3f}N, expected ~{test_amplitude}N"
                 )
-            self.progress("PASS: RLS operating correctly with new parameters")
+            self.progress("PASS: EKF operating correctly with new parameters")
         else:
-            raise NotAchievedException("No RLS data found in log")
+            raise NotAchievedException("No EKF data found in log")
         
         # デフォルト値に戻す
         self.progress("Restoring default parameter values")
@@ -8550,8 +8587,9 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 if hasattr(m, 'F'):
                     est_freq.append(m.F)
                     est_time.append(m.TimeUS * 1.0e-6)
-                if hasattr(m, 'AX') and hasattr(m, 'BX'):
-                    amp = (m.AX**2 + m.BX**2)**0.5
+                if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
+                    omega = max(m.F, 1e-3) * 2.0 * math.pi
+                    amp = (m.DX**2 + (m.VX / omega)**2)**0.5
                     est_amp.append(amp)
                 if hasattr(m, 'PLX'):
                     est_plx.append(m.PLX)
@@ -8611,10 +8649,10 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                     freq_late = est_freq[-1]
                 self.progress(f"Estimation: Late freq={freq_late:.3f}Hz")
 
-            # 検証4: RLS振幅が適切
+            # 検証4: EKF振幅が適切
             if len(est_amp) > 5:
                 amp_median = numpy.median(numpy.asarray(est_amp))
-                self.progress(f"RLS amplitude: {amp_median:.3f}N (injected {test_amplitude}N)")
+                self.progress(f"EKF amplitude: {amp_median:.3f}N (injected {test_amplitude}N)")
                 if amp_median < test_amplitude * 0.5:
                     self.progress(f"Warning: Low amplitude {amp_median:.3f}N")
 

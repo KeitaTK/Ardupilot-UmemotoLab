@@ -41,69 +41,125 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.001 1000.0
     // @User: Advanced
     AP_GROUPINFO("RLS_COV_INIT", 3, AP_Observer, _rls_initial_covariance, 100.0f),
+
+    // @Param: EKF_Q_D
+    // @DisplayName: EKF Process Noise D
+    // @Description: Process noise variance for disturbance state d
+    // @Range: 0.0 100.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_Q_D", 4, AP_Observer, _ekf_q_d, 0.02f),
+
+    // @Param: EKF_Q_DD
+    // @DisplayName: EKF Process Noise DDot
+    // @Description: Process noise variance for disturbance velocity state d_dot
+    // @Range: 0.0 100.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_Q_DD", 5, AP_Observer, _ekf_q_d_dot, 0.05f),
+
+    // @Param: EKF_Q_C
+    // @DisplayName: EKF Process Noise Offset
+    // @Description: Process noise variance for DC offset state c
+    // @Range: 0.0 100.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_Q_C", 6, AP_Observer, _ekf_q_c, 0.001f),
+
+    // @Param: EKF_Q_W
+    // @DisplayName: EKF Process Noise Omega
+    // @Description: Process noise variance for frequency state omega
+    // @Range: 0.0 100.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_Q_W", 7, AP_Observer, _ekf_q_omega, 0.0005f),
+
+    // @Param: EKF_R_MEAS
+    // @DisplayName: EKF Measurement Noise
+    // @Description: Measurement noise variance for payload force observations
+    // @Range: 0.0001 1000.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_R_MEAS", 8, AP_Observer, _ekf_r_meas, 0.08f),
+
+    // @Param: EKF_W_INIT
+    // @DisplayName: EKF Initial Omega
+    // @Description: Initial angular frequency [rad/s]
+    // @Range: 1.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_W_INIT", 9, AP_Observer, _ekf_omega_init, 3.7699f),
+
+    // @Param: EKF_W_MIN
+    // @DisplayName: EKF Minimum Omega
+    // @Description: Minimum angular frequency [rad/s]
+    // @Range: 1.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_W_MIN", 10, AP_Observer, _ekf_omega_min, 2.1991f),
+
+    // @Param: EKF_W_MAX
+    // @DisplayName: EKF Maximum Omega
+    // @Description: Maximum angular frequency [rad/s]
+    // @Range: 1.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_W_MAX", 11, AP_Observer, _ekf_omega_max, 5.7180f),
     
     // @Param: DIST_FREQ
     // @DisplayName: Disturbance Frequency
     // @Description: Frequency of periodic disturbance for RLS estimation [Hz]. Constrained to 0.35-0.91Hz (pendulum length 0.3-2.0m)
     // @Range: 0.35 0.91
     // @User: Advanced
-    AP_GROUPINFO("DIST_FREQ", 4, AP_Observer, _disturbance_freq, 0.6f),
+    AP_GROUPINFO("DIST_FREQ", 12, AP_Observer, _disturbance_freq, 0.6f),
     
     // @Param: PRED_TIME
     // @DisplayName: Prediction Time
     // @Description: Time ahead for force prediction [seconds]
     // @Range: 0.0 0.5
     // @User: Advanced
-    AP_GROUPINFO("PRED_TIME", 5, AP_Observer, _prediction_time, 0.01f),
+    AP_GROUPINFO("PRED_TIME", 13, AP_Observer, _prediction_time, 0.01f),
     
     // @Param: PHASE_CORR
     // @DisplayName: Phase Correction Enable
     // @Description: Enable or disable phase correction for disturbance frequency
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("PHASE_CORR", 6, AP_Observer, _phase_correction_enabled, 1),
+    AP_GROUPINFO("PHASE_CORR", 14, AP_Observer, _phase_correction_enabled, 1),
     
     // @Param: PHASE_THRESH
     // @DisplayName: Phase Correction Threshold
     // @Description: Threshold for applying phase correction [rad]. Correction is only applied if error exceeds this value.
     // @Range: 0.0 5.0
     // @User: Advanced
-    AP_GROUPINFO("PHASE_THRESH", 7, AP_Observer, _phase_correction_threshold, 0.0f),
+    AP_GROUPINFO("PHASE_THRESH", 15, AP_Observer, _phase_correction_threshold, 0.0f),
     
     // @Param: TEST_INJECT
     // @DisplayName: Test Force Injection Enable
     // @Description: Enable test mode to inject known sinusoidal force for RLS validation
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("TEST_INJECT", 8, AP_Observer, _test_force_inject_enable, 0),
+    AP_GROUPINFO("TEST_INJECT", 16, AP_Observer, _test_force_inject_enable, 0),
     
     // @Param: TEST_FREQ
     // @DisplayName: Test Force Frequency
     // @Description: Frequency of injected test force [Hz]
     // @Range: 0.35 0.91
     // @User: Advanced
-    AP_GROUPINFO("TEST_FREQ", 9, AP_Observer, _test_force_freq, 0.7f),
+    AP_GROUPINFO("TEST_FREQ", 17, AP_Observer, _test_force_freq, 0.7f),
     
     // @Param: TEST_AMP
     // @DisplayName: Test Force Amplitude
     // @Description: Amplitude of injected test force [N]
     // @Range: 0.0 10.0
     // @User: Advanced
-    AP_GROUPINFO("TEST_AMP", 10, AP_Observer, _test_force_amp, 1.0f),
+    AP_GROUPINFO("TEST_AMP", 18, AP_Observer, _test_force_amp, 1.0f),
     
     // @Param: MAX_CORR_ANG
     // @DisplayName: Maximum Correction Angle
     // @Description: Maximum attitude correction angle for roll and pitch [rad]
     // @Range: 0.0 1.0
     // @User: Advanced
-    AP_GROUPINFO("MAX_CORR_ANG", 11, AP_Observer, _max_correction_angle, 0.5f),
+    AP_GROUPINFO("MAX_CORR_ANG", 19, AP_Observer, _max_correction_angle, 0.5f),
 
     // @Param: FREQ_WIN
     // @DisplayName: Zero-Cross Window Length
     // @Description: Window length for zero-cross frequency estimation [s]
     // @Range: 1.0 30.0
     // @User: Advanced
-    AP_GROUPINFO("FREQ_WIN", 12, AP_Observer, _freq_est_window_sec, 10.0f),
+    AP_GROUPINFO("FREQ_WIN", 20, AP_Observer, _freq_est_window_sec, 10.0f),
 
     AP_GROUPEND
 };
@@ -123,8 +179,8 @@ void AP_Observer::init() {
     _payload_filtered = Vector3f();
     filter_initialized = true;
 
-    // RLS初期化
-    rls_init();
+    // EKF初期化
+    ekf_init();
     
     // 予測用キャッシュ初期化
     update_prediction_cache();
@@ -132,14 +188,6 @@ void AP_Observer::init() {
     // 位相補正初期化
     phase_correction_init();
 
-    // A,B由来位相（観測位相）初期化
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        ab_phase_unwrapped[axis] = 0.0f;
-        ab_phase_prev_wrapped[axis] = 0.0f;
-        ab_phase_initialized[axis] = false;
-        ab_amp[axis] = 0.0f;
-    }
-    
     // 離陸検知フラグ初期化
     _has_taken_off = false;
     
@@ -154,220 +202,202 @@ void AP_Observer::init() {
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
 
-void AP_Observer::rls_init() {
-    // パラメータの範囲チェックと制限
-    float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
-    
-    // 全軸のパラメータベクトル初期化
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            rls_theta[axis][i] = 0.0f;
-        }
-    }
-    
-    // 全軸の共分散行列初期化（対角行列）
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
-                if (i == j) {
-                    rls_P[axis][i][j] = init_cov;  // 対角成分
-                } else {
-                    rls_P[axis][i][j] = 0.0f;      // 非対角成分
-                }
+void AP_Observer::ekf_init() {
+    const float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
+    const float init_omega = constrain_value(_ekf_omega_init.get(), _ekf_omega_min.get(), _ekf_omega_max.get());
+
+    for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        ekf_state[axis][0] = 0.0f;
+        ekf_state[axis][1] = 0.0f;
+        ekf_state[axis][2] = 0.0f;
+        ekf_state[axis][3] = init_omega;
+
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                ekf_P[axis][i][j] = (i == j) ? init_cov : 0.0f;
             }
         }
     }
-    
-    rls_sample_count = 0;
-    rls_start_time_ms = get_current_time_ms();  // 開始時刻を記録
-    
-    // 位相補正・周波数推定用の変数を初期化
+
+    ekf_sample_count = 0;
+    ekf_start_time_ms = get_current_time_ms();
     phase_correction = 0.0f;
-    
-    rls_initialized = true;
+    estimated_frequency = init_omega / (2.0f * M_PI);
+    ekf_initialized = true;
 }
 
 void AP_Observer::reset_frequency_estimation() {
-    // 周波数推定のみをリセット（RLSと位相補正は継続）
+    // 周波数推定のみをリセット（EKF本体は再初期化）
 #if HAL_GCS_ENABLED
     gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Resetting frequency estimation only");
 #endif
-    
-    // 推定周波数を初期値にリセット（スイッチON時に初期化）
-    // RLSパラメータや位相補正バッファは保持される -> 修正：位相バッファもリセットすべき
-    estimated_frequency = _disturbance_freq.get();
-    
-    // 位相補正バッファのリセット
-    phase_correction = 0.0f;
 
-    // ゼロクロス推定状態のリセット
-    zero_cross_reset_state();
+    ekf_init();
+    phase_correction = 0.0f;
+    estimated_frequency = _ekf_omega_init.get() / (2.0f * M_PI);
+    _freq_estimation_result = estimated_frequency;
     
 #if HAL_GCS_ENABLED
-    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Frequency reset to %.3fHz (RLS/Phase continue)", (double)estimated_frequency);
+    gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Frequency reset to %.3fHz (EKF)", (double)estimated_frequency);
 #endif
 }
 
-void AP_Observer::rls_update(const Vector3f& x_input, const Vector3f& y_output) {
-    if (!rls_initialized) {
+void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
+    if (!ekf_initialized) {
 #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_WARNING, "RLS: not initialized!");
+        gcs().send_text(MAV_SEVERITY_WARNING, "EKF: not initialized!");
 #endif
         return;
     }
-    
-    float lambda = constrain_value(_rls_forgetting_factor.get(), RLS_MIN_LAMBDA, RLS_MAX_LAMBDA);
-    
-    // 経過時間計算 [秒]
-    float t = (get_current_time_ms() - rls_start_time_ms) / 1000.0f;
-    
-    // 角周波数 ω = 2πf [rad/s]
-    // 位相補正が有効な場合は推定された周波数を使用
-    float freq_to_use = (_phase_correction_enabled.get() == 1) ? estimated_frequency : _disturbance_freq.get();
-    float omega = freq_to_use * 2.0f * M_PI;
-    
-    // 時間ベース位相計算（RLS入力用、補正を適用）
-    float phase = omega * t - phase_correction;
-    
-    // 入力ベクトル x[n] = [sin(phase), cos(phase), 1]
-    float x_extended[RLS_PARAM_SIZE];
-    x_extended[0] = sinf(phase);  // sin項（補正済み位相）
-    x_extended[1] = cosf(phase);  // cos項（補正済み位相）
-    x_extended[2] = 1.0f;         // 定常偏差項
-    
-    // デバッグ用
-    static uint32_t debug_counter = 0;
-    bool do_debug = (++debug_counter % 100) == 0;  // 100回に1回に変更
-    
-    // 各軸に対して独立にRLS実行
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        // 出力値 y[n]
-        float y_n = 0.0f;
+
+    dt = constrain_value(dt, 0.001f, 0.05f);
+
+    for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        float measurement = 0.0f;
         switch (axis) {
-            case 0: y_n = y_output.x; break;
-            case 1: y_n = y_output.y; break;
-            case 2: y_n = y_output.z; break;
+            case 0: measurement = y_output.x; break;
+            case 1: measurement = y_output.y; break;
+            case 2: measurement = y_output.z; break;
         }
-        
-        // 予測値計算: y_pred = x^T * θ
-        float y_pred = 0.0f;
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            y_pred += x_extended[i] * rls_theta[axis][i];
-        }
-        
-        // 予測誤差: e[n] = y[n] - y_pred
-        float prediction_error = y_n - y_pred;
-        
-        // P * x を計算
-        float P_x[RLS_PARAM_SIZE];
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            P_x[i] = 0.0f;
-            for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
-                P_x[i] += rls_P[axis][i][j] * x_extended[j];
-            }
-        }
-        
-        // 分母計算: λ + x^T * P * x
-        float denominator = lambda;
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            denominator += x_extended[i] * P_x[i];
-        }
-        
-        // 数値安定性チェック
-        if (fabsf(denominator) < 1e-12f) {
-#if HAL_GCS_ENABLED
-            if (do_debug && axis == 0) {
-                gcs().send_text(MAV_SEVERITY_WARNING, "RLS[%d]: denom=%.9f too small", axis, denominator);
-            }
-#endif
-            continue;
-        }
-        
-        // ゲインベクトル: K = P * x / denom
-        float K[RLS_PARAM_SIZE];
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            K[i] = P_x[i] / denominator;
-        }
-        
-        // パラメータ更新: θ[n] = θ[n-1] + K * e
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            rls_theta[axis][i] += K[i] * prediction_error;
-        }
-        
-        // 共分散行列更新: P[n] = (P[n-1] - K * x^T * P[n-1]) / λ
-        for (uint8_t i = 0; i < RLS_PARAM_SIZE; i++) {
-            for (uint8_t j = 0; j < RLS_PARAM_SIZE; j++) {
-                rls_P[axis][i][j] = (rls_P[axis][i][j] - K[i] * P_x[j]) / lambda;
-                // 数値安定性確保
-                rls_P[axis][i][j] = constrain_value(rls_P[axis][i][j], 
-                                                      RLS_MIN_COVARIANCE, 
-                                                      RLS_MAX_COVARIANCE);
-            }
-        }
-        
-        // デバッグ出力（X軸のみ）
-#if HAL_GCS_ENABLED
-        if (do_debug && axis == 0) {
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: t=%.2fs ω=%.3f sin=%.3f cos=%.3f",
-                axis, t, omega, x_extended[0], x_extended[1]
-            );
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: y=%.3f y_pred=%.3f err=%.3f",
-                axis, y_n, y_pred, prediction_error
-            );
-            gcs().send_text(MAV_SEVERITY_INFO,
-                "RLS[%d]: A=%.3f B=%.3f C=%.3f",
-                axis, rls_theta[axis][0], rls_theta[axis][1], rls_theta[axis][2]
-            );
-        }
-#endif
+        ekf_update_axis(axis, measurement, dt);
     }
 
-    // --- A,B係数から観測位相を推定 ---
-    // y = A*sin(phase) + B*cos(phase) = R*sin(phase + phi)
-    // したがって phi = atan2(B, A)
-    // 注意: 振幅が小さい場合は位相が不安定になるため、最小振幅でガードする。
-    // 位相推定（unwrap）の初期化は緩めで良いが、周波数推定に使う位相バッファへ入れる値は
-    // できるだけSNRの高い（振幅が十分大きい）サンプルに限定して外れ値を抑える。
-    static constexpr float AB_PHASE_MIN_AMP_INIT = 1.0e-4f;  // unwrap初期化用 [N]
+    const float omega_x = constrain_value(ekf_state[0][3], _ekf_omega_min.get(), _ekf_omega_max.get());
+    const float omega_y = constrain_value(ekf_state[1][3], _ekf_omega_min.get(), _ekf_omega_max.get());
+    const float omega_z = constrain_value(ekf_state[2][3], _ekf_omega_min.get(), _ekf_omega_max.get());
+    estimated_frequency = ((omega_x + omega_y + omega_z) / 3.0f) / (2.0f * M_PI);
+    _freq_estimation_result = estimated_frequency;
+    update_prediction_cache();
+    ekf_sample_count++;
+}
 
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        const float A = rls_theta[axis][0];
-        const float B = rls_theta[axis][1];
-        const float amp = sqrtf(A * A + B * B);
-        ab_amp[axis] = amp;
+void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
+    float* x = ekf_state[axis];
+    float (*P)[EKF_STATE_SIZE] = ekf_P[axis];
 
-        if (amp < AB_PHASE_MIN_AMP_INIT) {
-            continue;
-        }
+    const float omega = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
+    const float d = x[0];
+    const float d_dot = x[1];
+    const float c = x[2];
 
-        const float phi_wrapped = atan2f(B, A);
-        if (!ab_phase_initialized[axis]) {
-            ab_phase_prev_wrapped[axis] = phi_wrapped;
-            ab_phase_unwrapped[axis] = phi_wrapped;
-            ab_phase_initialized[axis] = true;
-        } else {
-            // ラップ角の差分を[-pi,pi]に収めてから連続位相へ積分
-            float dphi = phi_wrapped - ab_phase_prev_wrapped[axis];
-            if (dphi > M_PI) {
-                dphi -= 2.0f * M_PI;
-            } else if (dphi < -M_PI) {
-                dphi += 2.0f * M_PI;
+    float x_pred[EKF_STATE_SIZE];
+    x_pred[0] = d + dt * d_dot;
+    x_pred[1] = d_dot + dt * (-(omega * omega) * d);
+    x_pred[2] = c;
+    x_pred[3] = omega;
+
+    x_pred[3] = constrain_value(x_pred[3], _ekf_omega_min.get(), _ekf_omega_max.get());
+
+    float F[EKF_STATE_SIZE][EKF_STATE_SIZE] = {
+        {1.0f, dt, 0.0f, 0.0f},
+        {-dt * omega * omega, 1.0f, 0.0f, -2.0f * dt * omega * d},
+        {0.0f, 0.0f, 1.0f, 0.0f},
+        {0.0f, 0.0f, 0.0f, 1.0f}
+    };
+
+    float FP[EKF_STATE_SIZE][EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            float sum = 0.0f;
+            for (uint8_t k = 0; k < EKF_STATE_SIZE; k++) {
+                sum += F[i][k] * P[k][j];
             }
-            ab_phase_unwrapped[axis] += dphi;
-            ab_phase_prev_wrapped[axis] = phi_wrapped;
+            FP[i][j] = sum;
         }
     }
-    
-    rls_sample_count++;
+
+    float P_pred[EKF_STATE_SIZE][EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            float sum = 0.0f;
+            for (uint8_t k = 0; k < EKF_STATE_SIZE; k++) {
+                sum += FP[i][k] * F[j][k];
+            }
+            P_pred[i][j] = sum;
+        }
+    }
+
+    const float q_d = _ekf_q_d.get();
+    const float q_ddot = _ekf_q_d_dot.get();
+    const float q_c = _ekf_q_c.get();
+    const float q_omega = _freq_estimation_active ? _ekf_q_omega.get() : 0.0f;
+    P_pred[0][0] += q_d;
+    P_pred[1][1] += q_ddot;
+    P_pred[2][2] += q_c;
+    P_pred[3][3] += q_omega;
+
+    const float y_pred = x_pred[0] + x_pred[2];
+    const float innov = measurement - y_pred;
+    float R = _ekf_r_meas.get();
+    if (R < 1.0e-6f) {
+        R = 1.0e-6f;
+    }
+
+    float PHt[EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        PHt[i] = P_pred[i][0] + P_pred[i][2];
+    }
+
+    const float S = PHt[0] + PHt[2] + R;
+    if (fabsf(S) < 1.0e-9f) {
+        return;
+    }
+
+    float K[EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        K[i] = PHt[i] / S;
+    }
+
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        x[i] = x_pred[i] + K[i] * innov;
+    }
+
+    float KH[EKF_STATE_SIZE][EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            const float H_j = (j == 0 || j == 2) ? 1.0f : 0.0f;
+            KH[i][j] = K[i] * H_j;
+        }
+    }
+
+    float I_KH[EKF_STATE_SIZE][EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            I_KH[i][j] = (i == j ? 1.0f : 0.0f) - KH[i][j];
+        }
+    }
+
+    float P_new[EKF_STATE_SIZE][EKF_STATE_SIZE];
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            float sum = 0.0f;
+            for (uint8_t k = 0; k < EKF_STATE_SIZE; k++) {
+                sum += I_KH[i][k] * P_pred[k][j];
+            }
+            P_new[i][j] = sum;
+        }
+    }
+
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            P[i][j] = 0.5f * (P_new[i][j] + P_new[j][i]);
+        }
+    }
+
+    x[3] = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
+
+#if HAL_GCS_ENABLED
+    if ((ekf_sample_count % 100U) == 0U && axis == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "EKF[%d]: y=%.3f pred=%.3f err=%.3f f=%.3f",
+            axis, measurement, y_pred, innov, (double)(x[3] / (2.0f * M_PI)));
+    }
+#endif
 }
 
 void AP_Observer::update_prediction_cache() {
-    // ω = 2πf [rad/s]
-    // 位相補正が有効な場合は推定された周波数を使用
-    float freq_to_use = (_phase_correction_enabled.get() == 1) ? estimated_frequency : _disturbance_freq.get();
-    _omega_rad = freq_to_use * 2.0f * M_PI;
+    const float omega = constrain_value(estimated_frequency * 2.0f * M_PI, _ekf_omega_min.get(), _ekf_omega_max.get());
+    _omega_rad = omega;
 }
 
 void AP_Observer::update() {
@@ -433,65 +463,35 @@ void AP_Observer::update() {
 #endif
     }
     
-        // 周波数推定制御（RC Aux Function方式）
-        // RC8_OPTION=316 などでスイッチを割り当て
-        // RC Aux Functionが既にデバウンス処理を行っているため、ここでは単純なエッジ検出のみ
         const bool current_switch = _freq_estimation_switch_state;
 
-        // スイッチの立ち上がりエッジ検出（オフ→オン）
         if (current_switch && !_freq_estimation_prev_switch) {
-        // 推定開始：推定周波数を初期値に戻してゼロクロス推定を開始
-        _freq_estimation_active = true;
-        reset_frequency_estimation();
-        zero_cross_start();
-        _freq_estimation_result = _disturbance_freq.get();
+            _freq_estimation_active = true;
+            reset_frequency_estimation();
     #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
+            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
+    #endif
+        } else if (!current_switch && _freq_estimation_prev_switch) {
+            _freq_estimation_active = false;
+    #if HAL_GCS_ENABLED
+            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
     #endif
         }
-        // スイッチの立ち下がりエッジ検出（オン→オフ）
-        else if (!current_switch && _freq_estimation_prev_switch) {
-        // 推定終了：最後の推定値を保持して引き続き使用
-        _freq_estimation_active = false;
-        zero_cross_stop();
-        _freq_estimation_result = estimated_frequency;
-    #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "RLS Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
-    #endif
-        }
-
         _freq_estimation_prev_switch = current_switch;
-    
-    // RLS更新条件：
-    // 1. RLSが初期化済み
-    // 2. 離陸後である
-    // 注意：テスト注入モード（OBS_TEST_INJECT）や周波数推定スイッチに関わらず、
-    // 離陸後は常にRLS推定を実行する。これにより、実際の外乱を常時観測できる。
-    bool should_update_rls = rls_initialized && _has_taken_off;
-    
-    if (should_update_rls) {
-        Vector3f dummy_input;  // 使用しないダミー
-        rls_update(dummy_input, _payload_filtered);
-    }
 
-    if (_freq_estimation_active && _zc_window_active) {
-        zero_cross_update(_payload_filtered.x);
-    }
+        const uint32_t now_ms = get_current_time_ms();
+        float dt = 0.01f;
+        if (last_update_ms != 0) {
+            dt = 0.001f * (float)(now_ms - last_update_ms);
+        }
+
+        if (_has_taken_off && ekf_initialized) {
+            ekf_update(_payload_filtered, dt);
+        }
     
-    // パラメータ変更を検出してキャッシュ更新
-    static float last_freq = 0.0f;
-    static float last_pred_time = 0.0f;
-    
-    if (fabsf(_disturbance_freq.get() - last_freq) > 0.001f || 
-        fabsf(_prediction_time.get() - last_pred_time) > 0.0001f) {
-        update_prediction_cache();
-        last_freq = _disturbance_freq.get();
-        last_pred_time = _prediction_time.get();
-        // パラメータ変更時はestimated_frequencyも更新
-        estimated_frequency = _disturbance_freq.get();
-    }
-    
-    // 既存の処理：RLS予測外力を使用
+    update_prediction_cache();
+
+    // EKF予測外力を使用
     current_filtered_force = get_predicted_force();  // Δt秒後の予測外力
     current_correction_quat = calculate_correction_from_force(current_filtered_force);
     current_correction_euler = calculate_correction_euler_from_force(current_filtered_force);
@@ -595,60 +595,42 @@ Vector3f AP_Observer::calculate_correction_euler_from_force(const Vector3f& forc
     return Vector3f(roll, pitch, 0.0f);
 }
 
-// RLSパラメータのゲッター関数
+// EKFパラメータの互換ゲッター関数
 Vector3f AP_Observer::get_rls_sin_coeff() const {
-    return Vector3f(rls_theta[0][0], rls_theta[1][0], rls_theta[2][0]);
+    return Vector3f(ekf_state[0][0], ekf_state[1][0], ekf_state[2][0]);
 }
 
 Vector3f AP_Observer::get_rls_cos_coeff() const {
-    return Vector3f(rls_theta[0][1], rls_theta[1][1], rls_theta[2][1]);
+    return Vector3f(ekf_state[0][1], ekf_state[1][1], ekf_state[2][1]);
 }
 
 Vector3f AP_Observer::get_rls_bias() const {
-    return Vector3f(rls_theta[0][2], rls_theta[1][2], rls_theta[2][2]);
+    return Vector3f(ekf_state[0][2], ekf_state[1][2], ekf_state[2][2]);
 }
 
 Vector3f AP_Observer::get_predicted_force() const {
-    if (!rls_initialized) {
+    if (!ekf_initialized) {
         return _payload_filtered;  // 初期化前は通常の外力を返す
     }
-    
-    // 現在時刻 [秒]
-    float t = (get_current_time_ms() - rls_start_time_ms) / 1000.0f;
-
-    // Δt秒後の位相をA,B由来の観測位相から生成
-    // モデル: F = A*sin(omega*t) + B*cos(omega*t) + C = R*sin(omega*t + phi) + C
-    // ここで phi = atan2(B, A)。MATLABで扱っているのは phi_obs = atan2(-B, A) なので
-    // phase_for_prediction = omega*(t+dt) - phi_obs とすると R*sin(phase_for_prediction) + C と等価。
-    // （符号規約はこの等価性に基づき採用）
-    // 注：X軸の観測位相（ab_phase_unwrapped[0]）を全軸の周波数推定に使用
-    float sin_omega_t_dt = 0.0f;
-    float cos_omega_t_dt = 0.0f;
-    bool have_ab_phase = ab_phase_initialized[0];
-    if (have_ab_phase) {
-        const float phase_pred = _omega_rad * (t + _prediction_time.get()) - ab_phase_unwrapped[0];
-        sin_omega_t_dt = sinf(phase_pred);
-        cos_omega_t_dt = cosf(phase_pred);
-    } else {
-        // 初期化前は従来の時間位相にフォールバック
-        const float omega_t_dt = _omega_rad * (t + _prediction_time.get()) - phase_correction;
-        sin_omega_t_dt = sinf(omega_t_dt);
-        cos_omega_t_dt = cosf(omega_t_dt);
-    }
-    
-    // 各軸の予測外力計算: F_pred = A·sin(ω(t+Δt)) + B·cos(ω(t+Δt)) + C
+    const float pred_dt = _prediction_time.get();
     Vector3f predicted;
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
-        float A = rls_theta[axis][0];  // sin係数
-        float B = rls_theta[axis][1];  // cos係数
-        float C = rls_theta[axis][2];  // 定常偏差
-        
-        float force = A * sin_omega_t_dt + B * cos_omega_t_dt + C;
-        
-        switch (axis) {
-            case 0: predicted.x = force; break;
-            case 1: predicted.y = force; break;
-            case 2: predicted.z = force; break;
+    for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        const float* state = ekf_state[axis];
+        const float omega = constrain_value(state[3], _ekf_omega_min.get(), _ekf_omega_max.get());
+        const float d = state[0];
+        const float d_dot = state[1];
+        const float c = state[2];
+        const float d_pred = d + pred_dt * d_dot;
+        const float d_dot_pred = d_dot + pred_dt * (-(omega * omega) * d);
+        const float force = d_pred + c;
+        (void)d_dot_pred;
+
+        if (axis == 0) {
+            predicted.x = force;
+        } else if (axis == 1) {
+            predicted.y = force;
+        } else {
+            predicted.z = force;
         }
     }
     
@@ -658,11 +640,11 @@ Vector3f AP_Observer::get_predicted_force() const {
 // 位相補正初期化
 void AP_Observer::phase_correction_init() {
     phase_correction = 0.0f;
-    estimated_frequency = _disturbance_freq.get();
+    estimated_frequency = _ekf_omega_init.get() / (2.0f * M_PI);
     // 注：_freq_estimation_switch_stateはRC Aux Functionが管理するため、ここでは変更しない
 
-    // A,B由来位相もリセット
-    for (uint8_t axis = 0; axis < RLS_NUM_AXES; axis++) {
+    // EKF state helper variablesもリセット
+    for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
         ab_phase_unwrapped[axis] = 0.0f;
         ab_phase_prev_wrapped[axis] = 0.0f;
         ab_phase_initialized[axis] = false;
@@ -840,32 +822,28 @@ void AP_Observer::Write_Observer_Log() {
         return;
     }
 
-    // A,B由来位相（MATLAB相当）をログへ追加（X,Y両軸）
-    float phi_obs_x = ab_phase_unwrapped[0];
-    float phi_obs_y = ab_phase_unwrapped[1];
-    
-    // 周波数フィールド：位相補正ONなら推定値、OFFならパラメータ値
-    float log_frequency = (_phase_correction_enabled == 1) ? estimated_frequency : _disturbance_freq.get();
-
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, AX, AY, BX, BY, CX, CY, F, P, X, Y, SW
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,AX,AY,BX,BY,CX,CY,F,P,X,Y,SW",
-                  "s--------------", "F--------------",
-                  "QfffffffffffffB",
+    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, PRX, PRY, PRZ, F, SW
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,PRX,PRY,PRZ,F,SW",
+                  "s----------------", "F----------------",
+                  "QffffffffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
                   _payload_filtered.z,
-                  rls_theta[0][0],      // sin係数 X軸
-                  rls_theta[1][0],      // sin係数 Y軸
-                  rls_theta[0][1],      // cos係数 X軸
-                  rls_theta[1][1],      // cos係数 Y軸
-                  rls_theta[0][2],      // 定常偏差 X軸
-                  rls_theta[1][2],      // 定常偏差 Y軸
-                  log_frequency,        // F: 周波数（位相補正ON=推定値、OFF=パラメータ値）
-                  phase_correction,     // P: 位相補正
-                  phi_obs_x,            // X: 観測位相X
-                  phi_obs_y,            // Y: 観測位相Y
+                  ekf_state[0][0],      // d X軸
+                  ekf_state[1][0],      // d Y軸
+                  ekf_state[2][0],      // d Z軸
+                  ekf_state[0][1],      // d_dot X軸
+                  ekf_state[1][1],      // d_dot Y軸
+                  ekf_state[2][1],      // d_dot Z軸
+                  ekf_state[0][2],      // c X軸
+                  ekf_state[1][2],      // c Y軸
+                  ekf_state[2][2],      // c Z軸
+                  get_predicted_force().x,
+                  get_predicted_force().y,
+                  get_predicted_force().z,
+                  estimated_frequency,
                   (uint8_t)(_freq_estimation_switch_state ? 1 : 0));  // SW: スイッチ状態
 #endif
 }
@@ -879,10 +857,7 @@ void AP_Observer::set_freq_estimation_switch(bool enabled) {
 void AP_Observer::set_freq_estimation_active(bool active) {
     if (active && !_freq_estimation_prev_switch) {
         reset_frequency_estimation();
-        zero_cross_start();
-        _freq_estimation_result = _disturbance_freq.get();
     } else if (!active && _freq_estimation_prev_switch) {
-        zero_cross_stop();
         _freq_estimation_result = estimated_frequency;
     }
 
@@ -896,13 +871,8 @@ void AP_Observer::set_freq_estimation_active(bool active) {
 void AP_Observer::force_rls_update(const Vector3f& payload) {
     _payload_filtered = payload;
     
-    if (rls_initialized) {
-        Vector3f dummy_input;
-        rls_update(dummy_input, _payload_filtered);
-    }
-
-    if (_freq_estimation_active && _zc_window_active) {
-        zero_cross_update(_payload_filtered.x);
+    if (ekf_initialized) {
+        ekf_update(_payload_filtered, 0.01f);
     }
 
 }
@@ -912,7 +882,7 @@ void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
     _filter_cutoff_freq.set(bw);
     _correction_gain.set(gain);
 
-    // Force RLS params (workaround for AP_Param failure in replay)
+    // Force EKF params (workaround for AP_Param failure in replay)
     _rls_forgetting_factor.set(0.99f);
     _rls_initial_covariance.set(100.0f);
     _phase_correction_enabled.set(1);
@@ -920,8 +890,8 @@ void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
     // ここで推定周波数も初期化
     estimated_frequency = freq;
 
-    // Ensure RLS re-init usage of new params
+    // Ensure EKF re-init usage of new params
     update_prediction_cache();
-    rls_init();
+    ekf_init();
 }
 #endif

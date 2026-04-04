@@ -73,19 +73,20 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     observer.set_replay_time_ms(0); // Ensure time starts at 0 for init
     observer.init();
     // 初期化後にパラメータを上書き
-    // Ensure start frequency matches 0.74m equivalent (0.5794Hz)
-    // Code should converge to 1.04m equivalent (0.488Hz) if data supports it
     observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
     
-    if (AP_Param::set_by_name("OBS_RLS_LAMBDA", 0.99f)) {} 
-    if (AP_Param::set_by_name("OBS_RLS_COV_INIT", 100.0f)) {} 
+    if (AP_Param::set_by_name("OBS_EKF_Q_D", 0.02f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_Q_DD", 0.05f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_Q_C", 0.001f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_Q_W", 0.0005f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_R_MEAS", 0.08f)) {}
     if (AP_Param::set_by_name("OBS_PHASE_CORR", 1.0f)) {}
     if (AP_Param::set_by_name("OBS_CORR_GAIN", 0.0f)) {}
     if (AP_Param::set_by_name("OBS_FREQ_WIN", 10.0f)) {}
     
     std::ofstream outfile(out_filename);
     // Write header
-    outfile << "Time_s,PLX,PLY,EstFreq_Hz,PhaseCorr,SW,RealSW,RLS_A_X,RLS_B_X,RealFreq_Hz,RealPhase\n";
+    outfile << "Time_s,PLX,PLY,PLZ,EstFreq_Hz,SW,RealSW,DX,VX,CX,PRX,RealFreq_Hz,RealPhase\n";
 
     uint32_t start_time_us = data[0].time_us;
     uint32_t prev_time_ms = 0;
@@ -124,17 +125,18 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         Vector3f payload(d.plx, d.ply, d.plz);
         observer.force_rls_update(payload);
         
-        Vector3f A = observer.get_rls_sin_coeff();
-        Vector3f B = observer.get_rls_cos_coeff();
+        Vector3f D = observer.get_rls_sin_coeff();
+        Vector3f V = observer.get_rls_cos_coeff();
+        Vector3f C = observer.get_rls_bias();
+        Vector3f P = observer.get_predicted_force();
         
          const int sw_out = current_sw ? 1 : 0;
          char buf[256];
-         snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f", 
-             rel_time_s, d.plx, d.ply, 
-             observer.get_estimated_frequency(), 
-             observer.get_phase_correction(),
+         snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
+             rel_time_s, d.plx, d.ply, d.plz,
+             observer.get_estimated_frequency(),
              sw_out, sw_out,
-             A.x, B.x,
+             D.x, V.x, C.x, P.x,
              d.real_freq, d.real_phase);
         outfile << buf << "\n";
     }
