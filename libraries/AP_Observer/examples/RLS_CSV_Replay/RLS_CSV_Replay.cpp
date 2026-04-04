@@ -131,12 +131,25 @@ struct ReplayRunConfig {
     std::string input_path;
     std::string output_dir;
     std::string tag;
+    std::string sw_mode = "log";
     bool has_ekf_w_init_hz = false;
     float ekf_w_init_hz = 0.0f;
     bool has_ekf_q_w = false;
     float ekf_q_w = 0.0f;
     bool has_ekf_r_meas = false;
     float ekf_r_meas = 0.0f;
+    bool has_ekf_axis_gate = false;
+    int ekf_axis_gate = 1;
+    bool has_ekf_amp_min = false;
+    float ekf_amp_min = 0.08f;
+    bool has_ekf_amp_max = false;
+    float ekf_amp_max = 1.2f;
+    bool has_ekf_innov_max = false;
+    float ekf_innov_max = 0.7f;
+    bool has_ekf_nis_max = false;
+    float ekf_nis_max = 4.0f;
+    bool has_ekf_reset_on_switch = false;
+    int ekf_reset_on_switch = 0;
 };
 
 static bool parse_replay_args(ReplayRunConfig& cfg) {
@@ -155,6 +168,8 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("  ./build/sitl/examples/RLS_CSV_Replay\n");
             printf("  ./build/sitl/examples/RLS_CSV_Replay --input <path_to_csv_or_bin> [--outdir <dir>] [--tag <name>] [--plot] [--force-window]\n");
             printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-r-meas <var>]\n");
+            printf("      [--sw-mode log|always-on|always-off] [--ekf-reset-on-switch 0|1]\n");
+            printf("      [--ekf-axis-gate 0|1] [--ekf-amp-min <v>] [--ekf-amp-max <v>] [--ekf-innov-max <v>] [--ekf-nis-max <v>]\n");
             printf("\n");
             printf("Default mode runs the built-in regression file list.\n");
             exit(0);
@@ -207,6 +222,88 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             continue;
         }
 
+        if ((strcmp(arg, "--sw-mode") == 0) && next != nullptr) {
+            cfg.sw_mode = next;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--sw-mode=", 10) == 0) {
+            cfg.sw_mode = std::string(arg + 10);
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-reset-on-switch") == 0) && next != nullptr) {
+            cfg.ekf_reset_on_switch = (int)strtol(next, nullptr, 10);
+            cfg.has_ekf_reset_on_switch = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-reset-on-switch=", 22) == 0) {
+            cfg.ekf_reset_on_switch = (int)strtol(arg + 22, nullptr, 10);
+            cfg.has_ekf_reset_on_switch = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-axis-gate") == 0) && next != nullptr) {
+            cfg.ekf_axis_gate = (int)strtol(next, nullptr, 10);
+            cfg.has_ekf_axis_gate = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-axis-gate=", 16) == 0) {
+            cfg.ekf_axis_gate = (int)strtol(arg + 16, nullptr, 10);
+            cfg.has_ekf_axis_gate = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-amp-min") == 0) && next != nullptr) {
+            cfg.ekf_amp_min = strtof(next, nullptr);
+            cfg.has_ekf_amp_min = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-amp-min=", 14) == 0) {
+            cfg.ekf_amp_min = strtof(arg + 14, nullptr);
+            cfg.has_ekf_amp_min = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-amp-max") == 0) && next != nullptr) {
+            cfg.ekf_amp_max = strtof(next, nullptr);
+            cfg.has_ekf_amp_max = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-amp-max=", 14) == 0) {
+            cfg.ekf_amp_max = strtof(arg + 14, nullptr);
+            cfg.has_ekf_amp_max = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-innov-max") == 0) && next != nullptr) {
+            cfg.ekf_innov_max = strtof(next, nullptr);
+            cfg.has_ekf_innov_max = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-innov-max=", 16) == 0) {
+            cfg.ekf_innov_max = strtof(arg + 16, nullptr);
+            cfg.has_ekf_innov_max = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-nis-max") == 0) && next != nullptr) {
+            cfg.ekf_nis_max = strtof(next, nullptr);
+            cfg.has_ekf_nis_max = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-nis-max=", 14) == 0) {
+            cfg.ekf_nis_max = strtof(arg + 14, nullptr);
+            cfg.has_ekf_nis_max = true;
+            continue;
+        }
+
         if ((strcmp(arg, "--ekf-w-init-hz") == 0) && next != nullptr) {
             cfg.ekf_w_init_hz = strtof(next, nullptr);
             cfg.has_ekf_w_init_hz = true;
@@ -249,6 +346,11 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
 
     if (cfg.single_mode && cfg.input_path.empty()) {
         printf("--input is required for single-input mode.\n");
+        return false;
+    }
+
+    if (cfg.sw_mode != "log" && cfg.sw_mode != "always-on" && cfg.sw_mode != "always-off") {
+        printf("--sw-mode must be one of: log, always-on, always-off\n");
         return false;
     }
 
@@ -365,6 +467,20 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     if (cfg.has_ekf_r_meas) {
         observer.set_ekf_r_meas_for_replay(cfg.ekf_r_meas);
     }
+    if (cfg.has_ekf_reset_on_switch) {
+        observer.set_ekf_reset_on_switch_for_replay(cfg.ekf_reset_on_switch != 0);
+    }
+    if (cfg.has_ekf_axis_gate || cfg.has_ekf_amp_min || cfg.has_ekf_amp_max ||
+        cfg.has_ekf_innov_max || cfg.has_ekf_nis_max) {
+        const bool gate_enabled = cfg.has_ekf_axis_gate ? (cfg.ekf_axis_gate != 0) : true;
+        observer.set_ekf_axis_gate_for_replay(
+            gate_enabled,
+            cfg.ekf_amp_min,
+            cfg.ekf_amp_max,
+            cfg.ekf_innov_max,
+            cfg.ekf_nis_max
+        );
+    }
     if (AP_Param::set_by_name("OBS_PHASE_CORR", 1.0f)) {}
     if (AP_Param::set_by_name("OBS_CORR_GAIN", 0.0f)) {}
     if (AP_Param::set_by_name("OBS_FREQ_WIN", 10.0f)) {}
@@ -394,21 +510,29 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         
         observer.set_replay_time_ms(rel_time_ms);
         
-            bool current_sw = (d.sw != 0);
-            bool estimation_sw = current_sw;
-            if (force_window) {
-                const float switch_on_s = 20.0f;
-                const float settle_delay_s = 10.0f;
-                const float window_s = 10.0f;
-                const float sample_catchup_s = 0.5f;
-                const float window_start_s = switch_on_s + settle_delay_s;
-                const float window_end_s = window_start_s + window_s + sample_catchup_s;
+        const bool real_sw = (d.sw != 0);
+        bool current_sw = real_sw;
+        bool estimation_sw = real_sw;
+        if (cfg.sw_mode == "always-on") {
+            current_sw = true;
+            estimation_sw = true;
+        } else if (cfg.sw_mode == "always-off") {
+            current_sw = false;
+            estimation_sw = false;
+        }
+        if (force_window) {
+            const float switch_on_s = 20.0f;
+            const float settle_delay_s = 10.0f;
+            const float window_s = 10.0f;
+            const float sample_catchup_s = 0.5f;
+            const float window_start_s = switch_on_s + settle_delay_s;
+            const float window_end_s = window_start_s + window_s + sample_catchup_s;
 
-                current_sw = (rel_time_s >= switch_on_s) && (rel_time_s < window_end_s);
-                estimation_sw = (rel_time_s >= window_start_s) && (rel_time_s < window_end_s);
-            }
+            current_sw = (rel_time_s >= switch_on_s) && (rel_time_s < window_end_s);
+            estimation_sw = (rel_time_s >= window_start_s) && (rel_time_s < window_end_s);
+        }
 
-            observer.set_freq_estimation_active(estimation_sw);
+        observer.set_freq_estimation_active(estimation_sw);
         
         Vector3f payload(d.plx, d.ply, d.plz);
         observer.force_rls_update(payload);
@@ -418,14 +542,15 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         Vector3f C = observer.get_rls_bias();
         Vector3f P = observer.get_predicted_force();
         
-         const int sw_out = current_sw ? 1 : 0;
-         char buf[256];
-         snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
-             rel_time_s, d.plx, d.ply, d.plz,
-             observer.get_estimated_frequency(),
-             sw_out, sw_out,
-             D.x, V.x, C.x, P.x,
-             d.real_freq, d.real_phase);
+        const int sw_out = current_sw ? 1 : 0;
+        const int real_sw_out = real_sw ? 1 : 0;
+        char buf[256];
+        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
+            rel_time_s, d.plx, d.ply, d.plz,
+            observer.get_estimated_frequency(),
+            sw_out, real_sw_out,
+            D.x, V.x, C.x, P.x,
+            d.real_freq, d.real_phase);
         outfile << buf << "\n";
     }
     printf("Finished: %s\n", out_filename);

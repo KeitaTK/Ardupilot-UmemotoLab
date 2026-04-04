@@ -189,25 +189,176 @@
   },
   "synthetic_hold_test": {
     "off_all": {
-      "est_freq_min_hz": 0.5688,
-      "est_freq_max_hz": 0.629,
-      "est_freq_mean_hz": 0.60022245,
-      "off_span_hz": 0.06020000000000003,
+      "est_freq_min_hz": 0.5063,
+      "est_freq_max_hz": 0.6871,
+      "est_freq_mean_hz": 0.6006619062499999,
+      "off_span_hz": 0.18080000000000007,
       "on_span_hz": 0.0
     },
     "on_all": {
-      "est_freq_min_hz": 0.5687,
-      "est_freq_max_hz": 0.6291,
-      "est_freq_mean_hz": 0.60197410625,
+      "est_freq_min_hz": 0.5062,
+      "est_freq_max_hz": 0.6872,
+      "est_freq_mean_hz": 0.6058648875,
       "off_span_hz": 0.0,
-      "on_span_hz": 0.06040000000000001
+      "on_span_hz": 0.18100000000000005
     },
     "on_then_off": {
-      "est_freq_min_hz": 0.5687,
-      "est_freq_max_hz": 0.6291,
-      "est_freq_mean_hz": 0.60007473125,
-      "off_span_hz": 0.06020000000000003,
-      "on_span_hz": 0.06040000000000001
+      "est_freq_min_hz": 0.5063,
+      "est_freq_max_hz": 0.6871,
+      "est_freq_mean_hz": 0.600449925,
+      "off_span_hz": 0.18080000000000007,
+      "on_span_hz": 0.005499999999999949
+    }
+  },
+  "switch_gate_validation_00000444": {
+    "target_hz": 0.45,
+    "scenarios": {
+      "baseline_reset_log": {
+        "samples": 5449,
+        "mean_hz": 0.6330379335657919,
+        "std_hz": 0.01775782432256102,
+        "min_hz": 0.4156,
+        "max_hz": 0.7434,
+        "mae_vs_target_hz": 0.18306465406496603,
+        "rmse_vs_target_hz": 0.18389732311457438,
+        "jump_at_first_on_hz": 0.13399999999999995
+      },
+      "noreset_log": {
+        "samples": 5449,
+        "mean_hz": 0.4835278032666544,
+        "std_hz": 0.023026926389023556,
+        "min_hz": 0.4653,
+        "max_hz": 0.6544,
+        "mae_vs_target_hz": 0.033527803266654416,
+        "rmse_vs_target_hz": 0.04067373760564662,
+        "jump_at_first_on_hz": 0.0
+      },
+      "noreset_always_on": {
+        "samples": 15332,
+        "mean_hz": 0.5716729519958257,
+        "std_hz": 0.07524405824480393,
+        "min_hz": 0.4248,
+        "max_hz": 0.8795,
+        "mae_vs_target_hz": 0.12292755674406468,
+        "rmse_vs_target_hz": 0.14305934275162163,
+        "jump_at_first_on_hz": NaN
+      }
+    },
+    "gate_scan": [
+      {
+        "tag": "gate_scan_00",
+        "params": {
+          "amp_min": 0.08,
+          "amp_max": 1.2,
+          "innov_max": 0.8,
+          "nis_max": 6.0
+        },
+        "metric": {
+          "samples": 15332,
+          "mean_hz": 0.5800362770675711,
+          "std_hz": 0.1285440414960621,
+          "min_hz": 0.35,
+          "max_hz": 0.91,
+          "mae_vs_target_hz": 0.1539615314375163,
+          "rmse_vs_target_hz": 0.18284694134093535,
+          "jump_at_first_on_hz": NaN
+        }
+      },
+      {
+        "tag": "gate_scan_01",
+        "params": {
+          "amp_min": 0.1,
+          "amp_max": 1.0,
+          "innov_max": 0.7,
+          "nis_max": 4.0
+        },
+        "metric": {
+          "samples": 15332,
+          "mean_hz": 0.582752224106444,
+          "std_hz": 0.13394127142465456,
+          "min_hz": 0.35,
+          "max_hz": 0.91,
+          "mae_vs_target_hz": 0.1582210866162275,
+          "rmse_vs_target_hz": 0.18858265348663572,
+          "jump_at_first_on_hz": NaN
+        }
+      },
+      {
+        "tag": "gate_scan_02",
+        "params": {
+          "amp_min": 0.12,
+          "amp_max": 0.9,
+          "innov_max": 0.6,
+          "nis_max": 3.5
+        },
+        "metric": {
+          "samples": 15332,
+          "mean_hz": 0.5835252739368642,
+          "std_hz": 0.1386049329113661,
+          "min_hz": 0.35,
+          "max_hz": 0.91,
+          "mae_vs_target_hz": 0.1609814049047743,
+          "rmse_vs_target_hz": 0.19245863505511748,
+          "jump_at_first_on_hz": NaN
+        }
+      },
+      {
+        "tag": "gate_scan_03",
+        "params": {
+          "amp_min": 0.15,
+          "amp_max": 0.9,
+          "innov_max": 0.6,
+          "nis_max": 3.0
+        },
+        "metric": {
+          "samples": 15332,
+          "mean_hz": 0.5840403404643881,
+          "std_hz": 0.14434504329409134,
+          "min_hz": 0.35,
+          "max_hz": 0.91,
+          "mae_vs_target_hz": 0.16368745760500913,
+          "rmse_vs_target_hz": 0.19698300534660904,
+          "jump_at_first_on_hz": NaN
+        }
+      },
+      {
+        "tag": "gate_scan_04",
+        "params": {
+          "amp_min": 0.18,
+          "amp_max": 0.8,
+          "innov_max": 0.5,
+          "nis_max": 2.5
+        },
+        "metric": {
+          "samples": 15332,
+          "mean_hz": 0.5903849530393948,
+          "std_hz": 0.15640235257874002,
+          "min_hz": 0.35,
+          "max_hz": 0.91,
+          "mae_vs_target_hz": 0.17193312679363423,
+          "rmse_vs_target_hz": 0.2101657225430388,
+          "jump_at_first_on_hz": NaN
+        }
+      }
+    ],
+    "best_gate_always_on": {
+      "tag": "gate_scan_00",
+      "params": {
+        "amp_min": 0.08,
+        "amp_max": 1.2,
+        "innov_max": 0.8,
+        "nis_max": 6.0
+      },
+      "metric": {
+        "samples": 15332,
+        "mean_hz": 0.5800362770675711,
+        "std_hz": 0.1285440414960621,
+        "min_hz": 0.35,
+        "max_hz": 0.91,
+        "mae_vs_target_hz": 0.1539615314375163,
+        "rmse_vs_target_hz": 0.18284694134093535,
+        "jump_at_first_on_hz": NaN
+      }
     }
   }
 }

@@ -161,6 +161,48 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FREQ_WIN", 20, AP_Observer, _freq_est_window_sec, 10.0f),
 
+    // @Param: EKF_AX_GAT
+    // @DisplayName: EKF Axis Gate Enable
+    // @Description: Enable axis selection gate for frequency fusion using |d|, innovation and NIS thresholds
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    AP_GROUPINFO("EKF_AX_GAT", 21, AP_Observer, _ekf_axis_gate_enable, 1),
+
+    // @Param: EKF_AMP_MIN
+    // @DisplayName: EKF Axis Amplitude Minimum
+    // @Description: Minimum |d| threshold for including axis in fused frequency update
+    // @Range: 0.0 5.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_AMP_MIN", 22, AP_Observer, _ekf_amp_min, 0.08f),
+
+    // @Param: EKF_AMP_MAX
+    // @DisplayName: EKF Axis Amplitude Maximum
+    // @Description: Maximum |d| threshold for including axis in fused frequency update
+    // @Range: 0.1 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_AMP_MAX", 23, AP_Observer, _ekf_amp_max, 1.20f),
+
+    // @Param: EKF_INN_MAX
+    // @DisplayName: EKF Innovation Maximum
+    // @Description: Maximum absolute innovation for including axis in fused frequency update [N]
+    // @Range: 0.01 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_INN_MAX", 24, AP_Observer, _ekf_innov_max, 0.70f),
+
+    // @Param: EKF_NIS_MAX
+    // @DisplayName: EKF NIS Maximum
+    // @Description: Maximum normalized innovation squared for including axis in fused frequency update
+    // @Range: 0.1 100.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_NIS_MAX", 25, AP_Observer, _ekf_nis_max, 4.0f),
+
+    // @Param: EKF_SW_RST
+    // @DisplayName: EKF Reset On Switch Edge
+    // @Description: Reset frequency estimator when switch toggles OFF->ON
+    // @Values: 0:NoReset,1:Reset
+    // @User: Advanced
+    AP_GROUPINFO("EKF_SW_RST", 26, AP_Observer, _ekf_reset_on_switch, 0),
+
     AP_GROUPEND
 };
 
@@ -211,6 +253,10 @@ void AP_Observer::ekf_init() {
         ekf_state[axis][1] = 0.0f;
         ekf_state[axis][2] = 0.0f;
         ekf_state[axis][3] = init_omega;
+        ekf_axis_innovation[axis] = 0.0f;
+        ekf_axis_nis[axis] = 0.0f;
+        ekf_axis_amp[axis] = 0.0f;
+        ekf_axis_trusted[axis] = 1U;
 
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
             for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
@@ -242,6 +288,29 @@ void AP_Observer::reset_frequency_estimation() {
 #endif
 }
 
+bool AP_Observer::is_axis_frequency_trusted(uint8_t axis) const {
+    if (axis >= EKF_NUM_AXES) {
+        return false;
+    }
+
+    if (_ekf_axis_gate_enable.get() == 0) {
+        return true;
+    }
+
+    const float amp = ekf_axis_amp[axis];
+    const float amp_min = MAX(0.0f, _ekf_amp_min.get());
+    const float amp_max = MAX(amp_min + 1.0e-3f, _ekf_amp_max.get());
+    const float innov_abs = fabsf(ekf_axis_innovation[axis]);
+    const float innov_max = MAX(1.0e-3f, _ekf_innov_max.get());
+    const float nis = ekf_axis_nis[axis];
+    const float nis_max = MAX(1.0e-3f, _ekf_nis_max.get());
+
+    return (amp >= amp_min) &&
+           (amp <= amp_max) &&
+           (innov_abs <= innov_max) &&
+           (nis <= nis_max);
+}
+
 void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
     if (!ekf_initialized) {
 #if HAL_GCS_ENABLED
@@ -262,10 +331,24 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
         ekf_update_axis(axis, measurement, dt);
     }
 
-    const float omega_x = constrain_value(ekf_state[0][3], _ekf_omega_min.get(), _ekf_omega_max.get());
-    const float omega_y = constrain_value(ekf_state[1][3], _ekf_omega_min.get(), _ekf_omega_max.get());
-    const float omega_z = constrain_value(ekf_state[2][3], _ekf_omega_min.get(), _ekf_omega_max.get());
-    estimated_frequency = ((omega_x + omega_y + omega_z) / 3.0f) / (2.0f * M_PI);
+    float omega_sum = 0.0f;
+    uint8_t trusted_count = 0;
+    for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        const float omega_axis = constrain_value(ekf_state[axis][3], _ekf_omega_min.get(), _ekf_omega_max.get());
+        ekf_axis_amp[axis] = fabsf(ekf_state[axis][0]);
+        const bool trusted = is_axis_frequency_trusted(axis);
+        ekf_axis_trusted[axis] = trusted ? 1U : 0U;
+        if (trusted) {
+            omega_sum += omega_axis;
+            trusted_count++;
+        }
+    }
+
+    if (trusted_count > 0U) {
+        estimated_frequency = (omega_sum / trusted_count) / (2.0f * M_PI);
+    } else {
+        estimated_frequency = _freq_estimation_result;
+    }
     _freq_estimation_result = estimated_frequency;
     update_prediction_cache();
     ekf_sample_count++;
@@ -340,8 +423,13 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
 
     const float S = PHt[0] + PHt[2] + R;
     if (fabsf(S) < 1.0e-9f) {
+        ekf_axis_innovation[axis] = innov;
+        ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_trusted[axis] = 0U;
         return;
     }
+    const float nis = (S > 1.0e-6f) ? ((innov * innov) / S) : (_ekf_nis_max.get() + 1.0f);
 
     float K[EKF_STATE_SIZE];
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
@@ -385,6 +473,9 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     }
 
     x[3] = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
+    ekf_axis_innovation[axis] = innov;
+    ekf_axis_nis[axis] = nis;
+    ekf_axis_amp[axis] = fabsf(x[0]);
 
 #if HAL_GCS_ENABLED
     if ((ekf_sample_count % 100U) == 0U && axis == 0) {
@@ -463,31 +554,38 @@ void AP_Observer::update() {
 #endif
     }
     
-        const bool current_switch = _freq_estimation_switch_state;
+    const bool current_switch = _freq_estimation_switch_state;
 
-        if (current_switch && !_freq_estimation_prev_switch) {
-            _freq_estimation_active = true;
+    if (current_switch && !_freq_estimation_prev_switch) {
+        _freq_estimation_active = true;
+        if (_ekf_reset_on_switch.get() == 1) {
             reset_frequency_estimation();
-    #if HAL_GCS_ENABLED
+#if HAL_GCS_ENABLED
             gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
-    #endif
-        } else if (!current_switch && _freq_estimation_prev_switch) {
-            _freq_estimation_active = false;
-    #if HAL_GCS_ENABLED
-            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
-    #endif
+#endif
+        } else {
+            _freq_estimation_result = estimated_frequency;
+#if HAL_GCS_ENABLED
+            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (No reset, %.3fHz)", (double)estimated_frequency);
+#endif
         }
-        _freq_estimation_prev_switch = current_switch;
+    } else if (!current_switch && _freq_estimation_prev_switch) {
+        _freq_estimation_active = false;
+#if HAL_GCS_ENABLED
+        gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
+#endif
+    }
+    _freq_estimation_prev_switch = current_switch;
 
-        const uint32_t now_ms = get_current_time_ms();
-        float dt = 0.01f;
-        if (last_update_ms != 0) {
-            dt = 0.001f * (float)(now_ms - last_update_ms);
-        }
+    const uint32_t now_ms = get_current_time_ms();
+    float dt = 0.01f;
+    if (last_update_ms != 0) {
+        dt = 0.001f * (float)(now_ms - last_update_ms);
+    }
 
-        if (_has_taken_off && ekf_initialized) {
-            ekf_update(_payload_filtered, dt);
-        }
+    if (_has_taken_off && ekf_initialized) {
+        ekf_update(_payload_filtered, dt);
+    }
     
     update_prediction_cache();
 
@@ -853,7 +951,11 @@ void AP_Observer::set_freq_estimation_switch(bool enabled) {
 
 void AP_Observer::set_freq_estimation_active(bool active) {
     if (active && !_freq_estimation_prev_switch) {
-        reset_frequency_estimation();
+        if (_ekf_reset_on_switch.get() == 1) {
+            reset_frequency_estimation();
+        } else {
+            _freq_estimation_result = estimated_frequency;
+        }
     } else if (!active && _freq_estimation_prev_switch) {
         _freq_estimation_result = estimated_frequency;
     }
@@ -906,5 +1008,21 @@ void AP_Observer::set_ekf_q_w_for_replay(float q_w) {
 
 void AP_Observer::set_ekf_r_meas_for_replay(float r_meas) {
     _ekf_r_meas.set(r_meas);
+}
+
+void AP_Observer::set_ekf_axis_gate_for_replay(bool enabled,
+                                               float amp_min,
+                                               float amp_max,
+                                               float innov_max,
+                                               float nis_max) {
+    _ekf_axis_gate_enable.set(enabled ? 1 : 0);
+    _ekf_amp_min.set(MAX(0.0f, amp_min));
+    _ekf_amp_max.set(MAX(_ekf_amp_min.get() + 1.0e-3f, amp_max));
+    _ekf_innov_max.set(MAX(1.0e-3f, innov_max));
+    _ekf_nis_max.set(MAX(1.0e-3f, nis_max));
+}
+
+void AP_Observer::set_ekf_reset_on_switch_for_replay(bool enabled) {
+    _ekf_reset_on_switch.set(enabled ? 1 : 0);
 }
 #endif

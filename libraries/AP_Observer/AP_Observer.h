@@ -60,6 +60,12 @@ public:
     void set_ekf_w_init_hz_for_replay(float freq_hz);
     void set_ekf_q_w_for_replay(float q_w);
     void set_ekf_r_meas_for_replay(float r_meas);
+    void set_ekf_axis_gate_for_replay(bool enabled,
+                                      float amp_min,
+                                      float amp_max,
+                                      float innov_max,
+                                      float nis_max);
+    void set_ekf_reset_on_switch_for_replay(bool enabled);
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal EKF state if needed
@@ -112,6 +118,10 @@ private:
     float ab_phase_prev_wrapped[RLS_NUM_AXES];
     bool  ab_phase_initialized[RLS_NUM_AXES];
     float ab_amp[RLS_NUM_AXES];
+    float ekf_axis_innovation[RLS_NUM_AXES];
+    float ekf_axis_nis[RLS_NUM_AXES];
+    float ekf_axis_amp[RLS_NUM_AXES];
+    uint8_t ekf_axis_trusted[RLS_NUM_AXES];
 
     // EKF tuning parameters
     AP_Float _ekf_q_d;
@@ -122,6 +132,12 @@ private:
     AP_Float _ekf_omega_init;
     AP_Float _ekf_omega_min;
     AP_Float _ekf_omega_max;
+    AP_Int8  _ekf_axis_gate_enable;
+    AP_Float _ekf_amp_min;
+    AP_Float _ekf_amp_max;
+    AP_Float _ekf_innov_max;
+    AP_Float _ekf_nis_max;
+    AP_Int8  _ekf_reset_on_switch;
 
     // Legacy parameters retained for compatibility during migration
     AP_Float _rls_forgetting_factor;
@@ -154,6 +170,7 @@ private:
     void ekf_init();
     void ekf_update(const Vector3f& y_output, float dt);
     void ekf_update_axis(uint8_t axis, float measurement, float dt);
+    bool is_axis_frequency_trusted(uint8_t axis) const;
     Vector3f predict_force_from_state(const float state[EKF_STATE_SIZE], float dt) const;
     void update_prediction_cache();  // 予測用キャッシュ更新
     
