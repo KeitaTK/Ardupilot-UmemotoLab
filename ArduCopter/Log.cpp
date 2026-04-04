@@ -360,15 +360,17 @@ struct PACKED log_Observer {
     float payload_x;
     float payload_y;
     float payload_z;
-    float A_x;
-    float A_y;
-    float B_x;
-    float B_y;
-    float C_x;
-    float C_y;
-    float pred_x;
-    float pred_y;
-    float pred_z;
+    float d_x;
+    float d_y;
+    float d_z;
+    float v_x;
+    float v_y;
+    float v_z;
+    float c_x;
+    float c_y;
+    float c_z;
+    float est_freq;
+    uint8_t sw;
 };
 
 // Write a Guided mode position target
@@ -601,14 +603,11 @@ const struct LogStructure Copter::log_structure[] = {
 // @Field: CX: EKF DC offset X-axis
 // @Field: CY: EKF DC offset Y-axis
 // @Field: CZ: EKF DC offset Z-axis
-// @Field: PRX: Predicted force X-axis
-// @Field: PRY: Predicted force Y-axis
-// @Field: PRZ: Predicted force Z-axis
 // @Field: F: Estimated frequency
 // @Field: SW: Frequency estimation switch
 
         { LOG_OBSERVER_MSG, sizeof(log_Observer),
-            "OBSV", "QffffffffffffffffB", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,PRX,PRY,PRZ,F,SW", "s----------------", "F----------------" , true },
+            "OBSV", "QfffffffffffffB", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,F,SW", "s--------------", "F--------------" , true },
 
 };
 
