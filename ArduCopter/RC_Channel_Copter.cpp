@@ -141,17 +141,16 @@ void RC_Channel_Copter::init_aux_function(const AUX_FUNC ch_option, const AuxSwi
     case AUX_FUNC::AIRMODE:
     case AUX_FUNC::FORCEFLYING:
     case AUX_FUNC::CUSTOM_CONTROLLER:
-    case AUX_FUNC::WEATHER_VANE_ENABLE:
-    case AUX_FUNC::TRANSMITTER_TUNING:
-        run_aux_function(ch_option, ch_flag, AuxFuncTrigger::Source::INIT, ch_in);
-        break;
-    default:
-        RC_Channel::init_aux_function(ch_option, ch_flag);
-        break;
+        case AUX_FUNC::WEATHER_VANE_ENABLE:
+        case AUX_FUNC::TRANSMITTER_TUNING:
+        case AUX_FUNC::RLS_FREQ_EST:
+            run_aux_function(ch_option, ch_flag, AuxFuncTrigger::Source::INIT, ch_in);
+            break;
+        default:
+            RC_Channel::init_aux_function(ch_option, ch_flag);
+            break;
     }
-}
-
-// do_aux_function_change_mode - change mode based on an aux switch
+}// do_aux_function_change_mode - change mode based on an aux switch
 // being moved
 void RC_Channel_Copter::do_aux_function_change_mode(const Mode::Number mode,
                                                     const AuxSwitchPos ch_flag)
@@ -677,6 +676,12 @@ bool RC_Channel_Copter::do_aux_function(const AuxFuncTrigger &trigger)
 #endif
     case AUX_FUNC::TRANSMITTER_TUNING:
         // do nothing, used in tuning.cpp for transmitter based tuning
+        break;
+
+    case AUX_FUNC::RLS_FREQ_EST:
+        // RC Aux Function for RLS frequency estimation control
+        // メッセージはAP_Observer::update()内で出力される
+        copter.observer.set_freq_estimation_switch(ch_flag == AuxSwitchPos::HIGH);
         break;
 
     default:

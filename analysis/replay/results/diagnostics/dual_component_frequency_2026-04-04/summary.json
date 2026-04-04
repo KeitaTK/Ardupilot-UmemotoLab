@@ -1,0 +1,58 @@
+{
+  "thresholds": {
+    "hold_max_n": 1.5,
+    "reject_min_n": 5.0
+  },
+  "best_per_log": {
+    "00000443": "dual_long_ewma",
+    "00000444": "dual_long_ewma"
+  },
+  "global_best_method": "dual_long_ewma",
+  "global_method_ranking": [
+    {
+      "method": "dual_long_ewma",
+      "score": 0.017835630906979125,
+      "mae_hz": 0.03998162659223263,
+      "p95_step_hz": 0.0010634777964455323,
+      "std_hz": 0.047776651328638016
+    },
+    {
+      "method": "dual_long_reliability_hold",
+      "score": 0.017855058473580574,
+      "mae_hz": 0.040031094937716324,
+      "p95_step_hz": 0.0010579404660394705,
+      "std_hz": 0.04787789526226208
+    },
+    {
+      "method": "dual_long_raw",
+      "score": 0.01800960216838104,
+      "mae_hz": 0.04008409318178632,
+      "p95_step_hz": 0.0011848996620011727,
+      "std_hz": 0.04799474551843974
+    },
+    {
+      "method": "single_peak_fused",
+      "score": 0.033957616212750716,
+      "mae_hz": 0.08239561266392495,
+      "p95_step_hz": 0.0009725838866467079,
+      "std_hz": 0.08266348526926524
+    },
+    {
+      "method": "ekf_single",
+      "score": 0.04755533474601645,
+      "mae_hz": 0.1455180679205572,
+      "p95_step_hz": 0.0010649999999999768,
+      "std_hz": 0.028349143698493205
+    }
+  ],
+  "replay_runs": {
+    "00000443": {
+      "input": "analysis/replay/data/00000443.BIN",
+      "result_csv": "analysis/replay/results/diagnostics/dual_component_frequency_2026-04-04/runs/00000443/00000443_dual_eval_result.csv"
+    },
+    "00000444": {
+      "input": "analysis/replay/data/00000444.BIN",
+      "result_csv": "analysis/replay/results/diagnostics/dual_component_frequency_2026-04-04/runs/00000444/00000444_dual_eval_result.csv"
+    }
+  }
+}

@@ -1,0 +1,32 @@
+name: "Clean Build for Pixhawk6C Hardware"
+description: "ONLY after all SITL tests pass: Remove build cache → Configure for Pixhawk6C → Clean firmware build"
+prerequisites:
+  - "ArmFeatures test PASSED"
+  - "TestRLSBasicEstimation test PASSED"
+  - "CSV Replay converged successfully"
+steps:
+  - name: "Activate virtual environment"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+
+  - name: "Remove build cache (clean build)"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      rm -rf build/
+
+  - name: "Configure for Pixhawk6C"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      ./waf configure --board Pixhawk6C
+
+  - name: "Build copter firmware for Pixhawk6C"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      ./waf -j$(nproc) copter
+
+success_message: "✅ Hardware firmware built successfully! Ready for Pixhawk6C deployment."
+failure_message: "❌ Hardware build failed. Check compiler errors above."
+warning: "⚠️  This skill should ONLY be run after Phase 1 (SITL) tests are passing!"

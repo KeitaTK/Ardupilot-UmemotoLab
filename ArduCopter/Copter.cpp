@@ -974,8 +974,9 @@ void Copter::observer_update() {
     uint32_t obs_ms = observer.get_last_update_ms();
     if (obs_ms != _last_obs_update_ms && observer.is_correction_valid()) {
         _last_obs_update_ms = obs_ms;
-        _current_correction = observer.get_correction_quaternion();
-        attitude_control->set_correction_quaternion(_current_correction);
+        // オイラー角形式の補正を使用（累積しない方式）
+        Vector3f correction_euler = observer.get_correction_euler();
+        attitude_control->set_correction_euler(correction_euler);
     }
 }
 

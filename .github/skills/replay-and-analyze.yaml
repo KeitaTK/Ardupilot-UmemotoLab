@@ -1,0 +1,22 @@
+name: "RLS CSV/BIN Replay & Analysis"
+description: "Build RLS_CSV_Replay -> Run BIN/CSV replay -> Generate frequency and waveform comparison graphs"
+steps:
+  - name: "Activate virtual environment"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+
+  - name: "Build RLS_CSV_Replay example"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      ./waf build --target examples/RLS_CSV_Replay
+
+  - name: "Run BIN replay simulation"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      ./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --plot
+
+success_message: "✅ Replay completed! See analysis/replay/results/runs/<tag>/plots for frequency transition and waveform comparison graphs."
+failure_message: "❌ Replay failed. Verify observer estimation logic and replay inputs."

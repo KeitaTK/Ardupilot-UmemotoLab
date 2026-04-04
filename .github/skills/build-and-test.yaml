@@ -1,0 +1,35 @@
+name: "Build & Mandatory Tests (SITL)"
+description: "Activate venv → Build copter → Run all mandatory tests"
+steps:
+  - name: "Activate virtual environment"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+
+  - name: "Build copter firmware"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      ./waf -j$(nproc) copter
+
+  - name: "Run ArmFeatures test"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures || exit 1
+
+  - name: "Run TestRLSBasicEstimation test"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation || exit 1
+
+  - name: "Run TestRLSRC8SwitchControl test (optional)"
+    run: |
+      cd /home/memoto/Ardupilot-UmemotoLab
+      source venv/bin/activate
+      timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSRC8SwitchControl || exit 0
+    optional: true
+
+success_message: "✅ All mandatory tests passed! Ready for replay & hardware build."
+failure_message: "❌ Tests failed. Check the logs above and fix the code."

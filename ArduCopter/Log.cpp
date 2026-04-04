@@ -354,6 +354,25 @@ struct PACKED log_Rate_Thread_Dt {
     float dtMin;
 };
 
+struct PACKED log_Observer {
+    LOG_PACKET_HEADER;
+    uint64_t time_us;
+    float payload_x;
+    float payload_y;
+    float payload_z;
+    float d_x;
+    float d_y;
+    float d_z;
+    float v_x;
+    float v_y;
+    float v_z;
+    float c_x;
+    float c_y;
+    float c_z;
+    float est_freq;
+    uint8_t sw;
+};
+
 // Write a Guided mode position target
 // pos_target is lat, lon, alt OR offset from ekf origin in cm
 // terrain should be 0 if pos_target.z is alt-above-ekf-origin, 1 if alt-above-terrain
@@ -568,6 +587,27 @@ const struct LogStructure Copter::log_structure[] = {
 
     { LOG_RATE_THREAD_DT_MSG, sizeof(log_Rate_Thread_Dt),
       "RTDT", "Qffff", "TimeUS,dt,dtAvg,dtMax,dtMin", "sssss", "F----" , true },
+
+// @LoggerMessage: OBSV
+// @Description: Observer EKF state and predictions
+// @Field: TimeUS: Time since system startup
+// @Field: PLX: Payload force X-axis
+// @Field: PLY: Payload force Y-axis
+// @Field: PLZ: Payload force Z-axis
+// @Field: DX: EKF disturbance state X-axis
+// @Field: DY: EKF disturbance state Y-axis
+// @Field: DZ: EKF disturbance state Z-axis
+// @Field: VX: EKF disturbance velocity X-axis
+// @Field: VY: EKF disturbance velocity Y-axis
+// @Field: VZ: EKF disturbance velocity Z-axis
+// @Field: CX: EKF DC offset X-axis
+// @Field: CY: EKF DC offset Y-axis
+// @Field: CZ: EKF DC offset Z-axis
+// @Field: F: Estimated frequency
+// @Field: SW: Frequency estimation switch
+
+        { LOG_OBSERVER_MSG, sizeof(log_Observer),
+            "OBSV", "QfffffffffffffB", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,F,SW", "s--------------", "F--------------" , true },
 
 };
 
