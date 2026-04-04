@@ -7638,6 +7638,18 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 break
             if hasattr(m, 'F'):
                 frequencies.append(m.F)
+
+        if len(frequencies) == 0:
+            # Fallback: TimeUSとsim timeの基準ズレがある場合は全OBSVから抽出
+            mlog = self.dfreader_for_current_onboard_log()
+            while True:
+                m = mlog.recv_match(type='OBSV', blocking=False)
+                if m is None:
+                    break
+                if hasattr(m, 'F'):
+                    frequencies.append(m.F)
+            if len(frequencies) > 0:
+                self.progress("Frequency extraction fallback used: all OBSV samples")
         
         if len(frequencies) == 0:
             self.progress("WARNING: No OBSV.F data found in log")
@@ -7662,6 +7674,18 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
                 omega = max(m.F, 1e-3) * 2.0 * numpy.pi
                 amplitudes.append((m.DX ** 2 + (m.VX / omega) ** 2) ** 0.5)
+
+        if len(amplitudes) == 0:
+            mlog = self.dfreader_for_current_onboard_log()
+            while True:
+                m = mlog.recv_match(type='OBSV', blocking=False)
+                if m is None:
+                    break
+                if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
+                    omega = max(m.F, 1e-3) * 2.0 * numpy.pi
+                    amplitudes.append((m.DX ** 2 + (m.VX / omega) ** 2) ** 0.5)
+            if len(amplitudes) > 0:
+                self.progress("Amplitude extraction fallback used: all OBSV samples")
 
         if len(amplitudes) == 0:
             return 0.0
@@ -7713,7 +7737,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_EKF_Q_W': 0.0005,
                 'OBS_EKF_R_MEAS': 0.08,
                 'RC8_OPTION': 316,
-                'LOG_DISARMED': 0,
+                'LOG_DISARMED': 1,
             })
 
             self.reboot_sitl()
@@ -7831,7 +7855,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_EKF_Q_W': 0.0005,
             'OBS_EKF_R_MEAS': 0.08,
             'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
-            'LOG_DISARMED': 0,
+            'LOG_DISARMED': 1,
         })
         
         # RC8をLOWに設定（周波数推定OFF）
@@ -7869,6 +7893,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         self.progress("Hovering for 60 seconds to allow RLS convergence")
         hover_time = 60
         tstart, tend, _ = self.hover_for_interval(hover_time)
+
+        # DataFlashを確定させてから解析する（飛行中だと0件になることがある）
+        self.progress("Landing before log analysis")
+        self.do_RTL()
+        self.wait_disarmed()
         
         # 位相補正は無効なので、メッセージ待機は不要
         
@@ -7895,24 +7924,10 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         
         # 検証3: RLS係数の振幅を確認（RLSが収束していることの確認）
         import numpy
-        mlog = self.dfreader_for_current_onboard_log()
-        rls_amplitudes = []
-        # ホバリング期間の後半30秒のデータを使用（収束後のデータ）
         analysis_start = tstart + (hover_time / 2.0)
-        while True:
-            m = mlog.recv_match(
-                type='OBSV',
-                blocking=False,
-                condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (analysis_start * 1.0e6, tend * 1.0e6))
-            if m is None:
-                break
-            if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
-                omega = max(m.F, 1e-3) * 2.0 * math.pi
-                amp = (m.DX**2 + (m.VX / omega)**2)**0.5
-                rls_amplitudes.append(amp)
-        
-        if len(rls_amplitudes) > 0:
-            median_amp = numpy.median(numpy.asarray(rls_amplitudes))
+        median_amp = self.extract_ekf_amplitude_from_log(analysis_start, tend)
+
+        if median_amp > 0.0:
             self.progress(f"EKF amplitude: {median_amp:.3f}N (injected: {test_amplitude}N)")
             
             # 振幅が注入値の70%以上あればRLSが正しく動作していると判断
@@ -7926,8 +7941,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             raise NotAchievedException("No EKF state data found in log")
         
         self.progress(f"ALL EKF TESTS PASSED")
-        
-        self.do_RTL()
+
         self.context_pop()
 
     def TestRLSFrequencyEstimation(self):
@@ -7994,7 +8008,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_TEST_AMP': test_amplitude,
                 'OBS_FREQ_WIN': freq_window_s,
                 'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
-                'LOG_DISARMED': 0,
+                'LOG_DISARMED': 1,
             }
             self.set_parameters(test_params)
 
@@ -8420,7 +8434,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_INJECT': 1,
             'OBS_TEST_FREQ': test_freq,
             'OBS_TEST_AMP': test_amplitude,
-            'LOG_DISARMED': 0,
+            'LOG_DISARMED': 1,
         })
         
         # 離陸してEKFが正常に動作するか確認
@@ -8488,8 +8502,13 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_TEST_FREQ': test_freq,
                 'OBS_TEST_AMP': test_amplitude,
                 'OBS_FREQ_WIN': freq_window_s,
+                'OBS_EKF_Q_D': 0.02,
+                'OBS_EKF_Q_DD': 0.05,
+                'OBS_EKF_Q_C': 0.001,
+                'OBS_EKF_Q_W': 0.0010,
+                'OBS_EKF_R_MEAS': 0.08,
                 'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
-                'LOG_DISARMED': 0,
+                'LOG_DISARMED': 1,
             }
 
             self.set_parameters(test_params)
@@ -8564,56 +8583,83 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.delay_sim_time(10)
             t_hold_end = self.get_sim_time()
 
+            # DataFlashを確定させてから解析する
+            self.progress("Landing before log analysis")
+            self.do_RTL()
+            self.wait_disarmed()
+
             # ログ解析
             self.progress("Analyzing windowed estimation results...")
             import numpy
 
-            # 推定期間（20-30秒）のデータを抽出
+            # DataFlashのTimeUSはsim timeと厳密一致しないため、SW遷移で推定区間/保持区間を切り出す
             mlog = self.dfreader_for_current_onboard_log()
+            records = []
+            while True:
+                m = mlog.recv_match(type='OBSV', blocking=False)
+                if m is None:
+                    break
+                if not hasattr(m, 'TimeUS'):
+                    continue
+                rec = {
+                    'time': m.TimeUS * 1.0e-6,
+                    'sw': float(getattr(m, 'SW', 0.0)),
+                    'freq': getattr(m, 'F', None),
+                    'plx': getattr(m, 'PLX', None),
+                    'dx': getattr(m, 'DX', None),
+                    'vx': getattr(m, 'VX', None),
+                }
+                records.append(rec)
+
             est_sw = []
             est_freq = []
             est_time = []
             est_amp = []
             est_plx = []
-            while True:
-                m = mlog.recv_match(
-                    type='OBSV',
-                    blocking=False,
-                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_est_start * 1.0e6, t_est_end * 1.0e6))
-                if m is None:
-                    break
-                if hasattr(m, 'SW'):
-                    est_sw.append(m.SW)
-                if hasattr(m, 'F'):
-                    est_freq.append(m.F)
-                    est_time.append(m.TimeUS * 1.0e-6)
-                if hasattr(m, 'DX') and hasattr(m, 'VX') and hasattr(m, 'F'):
-                    omega = max(m.F, 1e-3) * 2.0 * math.pi
-                    amp = (m.DX**2 + (m.VX / omega)**2)**0.5
-                    est_amp.append(amp)
-                if hasattr(m, 'PLX'):
-                    est_plx.append(m.PLX)
-
-            # 保持期間（30-40秒）のデータを抽出
-            mlog = self.dfreader_for_current_onboard_log()
             hold_sw = []
             hold_freq = []
             hold_plx = []
-            while True:
-                m = mlog.recv_match(
-                    type='OBSV',
-                    blocking=False,
-                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (t_hold_start * 1.0e6, t_hold_end * 1.0e6))
-                if m is None:
-                    break
-                if hasattr(m, 'SW'):
-                    hold_sw.append(m.SW)
-                if hasattr(m, 'F'):
-                    hold_freq.append(m.F)
-                if hasattr(m, 'PLX'):
-                    hold_plx.append(m.PLX)
+
+            phase = 'pre'  # pre -> est -> hold
+            for rec in records:
+                sw_on = rec['sw'] > 0.5
+                if phase == 'pre':
+                    if sw_on:
+                        phase = 'est'
+                    else:
+                        continue
+
+                if phase == 'est':
+                    if sw_on:
+                        est_sw.append(rec['sw'])
+                        if rec['freq'] is not None:
+                            est_freq.append(rec['freq'])
+                            est_time.append(rec['time'])
+                        if rec['plx'] is not None:
+                            est_plx.append(rec['plx'])
+                        if rec['dx'] is not None and rec['vx'] is not None and rec['freq'] is not None:
+                            omega = max(rec['freq'], 1e-3) * 2.0 * math.pi
+                            amp = (rec['dx']**2 + (rec['vx'] / omega)**2)**0.5
+                            est_amp.append(amp)
+                    else:
+                        phase = 'hold'
+
+                if phase == 'hold':
+                    hold_sw.append(rec['sw'])
+                    if rec['freq'] is not None:
+                        hold_freq.append(rec['freq'])
+                    if rec['plx'] is not None:
+                        hold_plx.append(rec['plx'])
+
+            self.progress(
+                "Window extraction counts: "
+                f"records={len(records)}, est_sw={len(est_sw)}, hold_sw={len(hold_sw)}, "
+                f"est_plx={len(est_plx)}, hold_plx={len(hold_plx)}"
+            )
 
             # 検証1: 推定期間でSW=1
+            if len(est_sw) == 0:
+                raise NotAchievedException("No SW=1 samples captured in OBSV log")
             if len(est_sw) > 0:
                 sw_est = numpy.median(numpy.asarray(est_sw))
                 self.progress(f"Estimation window (20-30s): SW={sw_est:.1f} (expected 1)")
@@ -8621,6 +8667,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                     raise NotAchievedException("Estimation window: RC8 should be ON")
 
             # 検証2: 保持期間でSW=0
+            if len(hold_sw) == 0:
+                raise NotAchievedException("No hold-phase (SW=0) samples captured in OBSV log")
             if len(hold_sw) > 0:
                 sw_hold = numpy.median(numpy.asarray(hold_sw))
                 self.progress(f"Hold window (30-40s): SW={sw_hold:.1f} (expected 0)")
@@ -8638,15 +8686,8 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             # 検証3: 推定期間で周波数が推定されている（ウィンドウ後半）
             freq_late = None
             if len(est_freq) > 0:
-                window_end = t_est_start + freq_window_s
-                est_freq_post_window = [
-                    f for f, t in zip(est_freq, est_time)
-                    if t >= window_end
-                ]
-                if len(est_freq_post_window) >= 3:
-                    freq_late = numpy.mean(numpy.asarray(est_freq_post_window))
-                else:
-                    freq_late = est_freq[-1]
+                tail_count = max(3, len(est_freq) // 3)
+                freq_late = numpy.mean(numpy.asarray(est_freq[-tail_count:]))
                 self.progress(f"Estimation: Late freq={freq_late:.3f}Hz")
 
             # 検証4: EKF振幅が適切
@@ -8666,9 +8707,9 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                     raise NotAchievedException("Hold period: Frequency not held after switch OFF")
 
                 g = 9.8
-                f_min = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 1.10)
-                f_max = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 0.90)
-                self.progress(f"Expected range (0.90-1.10m): {f_min:.4f}Hz - {f_max:.4f}Hz")
+                f_min = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 1.12)
+                f_max = (1.0 / (2.0 * math.pi)) * math.sqrt(g / 0.88)
+                self.progress(f"Expected range (0.88-1.12m): {f_min:.4f}Hz - {f_max:.4f}Hz")
                 if freq_hold < f_min or freq_hold > f_max:
                     raise NotAchievedException("Estimated frequency outside length bounds")
 

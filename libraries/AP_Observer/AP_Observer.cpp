@@ -823,10 +823,10 @@ void AP_Observer::Write_Observer_Log() {
     }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, PRX, PRY, PRZ, F, SW
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,PRX,PRY,PRZ,F,SW",
-                  "s----------------", "F----------------",
-                  "QffffffffffffffffB",
+    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, F, SW
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,F,SW",
+                  "s--------------", "F--------------",
+                  "QfffffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -840,9 +840,6 @@ void AP_Observer::Write_Observer_Log() {
                   ekf_state[0][2],      // c X軸
                   ekf_state[1][2],      // c Y軸
                   ekf_state[2][2],      // c Z軸
-                  get_predicted_force().x,
-                  get_predicted_force().y,
-                  get_predicted_force().z,
                   estimated_frequency,
                   (uint8_t)(_freq_estimation_switch_state ? 1 : 0));  // SW: スイッチ状態
 #endif

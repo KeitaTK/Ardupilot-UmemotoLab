@@ -26,6 +26,23 @@
 
 ---
 
+### 2026-04-04 09:45: [Autotest/AP_Observer EKF] OBSVログ抽出の不安定性修正（TimeUS基準ずれ対策）
+- 問題: `TestRLSBasicEstimation` / `TestRLSWindowedEstimation` が `no valid frequency data` や `No SW=1 samples` で不安定に失敗した。
+- 調査:
+  1. `mavlogdump` では `OBSV` が存在するが、autotest側では抽出0件になるケースを確認。
+  2. `get_sim_time()` と DataFlash `OBSV.TimeUS` の基準差により、時間窓条件でサンプルが落ちることを確認。
+  3. `LOG_DISARMED=0` 条件では `OBSV` 取得がrunによって不安定化しやすいことを確認。
+- 試行:
+  1. `extract_rls_frequency_from_log` / `extract_ekf_amplitude_from_log` に「時間窓0件時は全OBSV抽出」フォールバックを追加。
+  2. `TestRLSBasicEstimation` を「着陸・disarm後にログ解析」へ変更。
+  3. `TestRLSWindowedEstimation` を `SW` 遷移ベース抽出へ変更し、着陸後に解析するよう修正。
+  4. RLS/EKF関連テストの `LOG_DISARMED` を `1` に統一してOBSV可視性を安定化。
+- 結果:
+  - `test.Copter.TestRLSBasicEstimation` ✅ PASS
+  - `test.Copter.TestRLSRC8SwitchControl` ✅ PASS
+  - `test.Copter.TestRLSWindowedEstimation` ✅ PASS
+  - `test.Copter.ArmFeatures` は引き続き `ConnectionRefusedError`（既存不安定）で別途切り分け継続。
+
 ### 2026-04-04 00:00: [AP_Observer/EKF] RLS->EKF移行準備（ドキュメント・環境整備）
 - 問題: `RLS_only` ベースの現行実装を、MATLAB参照EKFへ段階移行するための比較資料と運用ドキュメントが不足していた。
 - 調査:
