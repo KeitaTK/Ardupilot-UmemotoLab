@@ -2,6 +2,7 @@
 
 目的
 - 事前に推定した振幅閾値を使い、EKF の周波数推定で「閾値を超えた軸だけを使う」挙動を実装・検証する。
+- 前回の `00000443` の解釈は誤りだったため、今回は `00000443` / `00000444` をどちらも「X は強いが Y は閾値未満になりやすい」ケースとして再評価した。
 - 具体的には、
   - X が閾値超え、Y が閾値未満なら X のみを採用
   - X/Y の両方が閾値超えなら XY を採用
@@ -21,42 +22,58 @@
   - [libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp](../../../libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp)
 
 検証した入力データ
-- `00000443` は「X/Y の両方が比較的強い」ケース
+- `00000443` は「X は強いが Y は閾値未満になりやすい」ケース
 - `00000444` は「X は強いが Y は閾値未満になりやすい」ケース
 
 参考の閾値推定
 - 既存の FFT / band-power ベースの解析から、実運用の閾値として `0.20` を採用。
 - 詳細: [EKF_RMS_THRESHOLD_ESTIMATION_2026-04-06.md](EKF_RMS_THRESHOLD_ESTIMATION_2026-04-06.md)
 
-## 1. 00000443 の結果
+## 1. 再評価条件
 
-このログでは X と Y がともに閾値を超える区間が多く、XY は X/Y の中間に入る。
+今回の再評価では、初期周波数を `0.60 Hz` に固定し、エネルギーゲートの閾値を再確認した。
 
-代表メトリクス（`analysis/replay/results/diagnostics/xy_axis_comparison_qw_2026-04-06/windowed_metrics.csv`）:
+採用条件:
+- `EKF_EN_ON=0.20`
+- `EKF_EN_OFF=0.16`
+- `EKF_EN_TAU=2.0`
+- `ekf_w_init_hz=0.60`
+- `q_w=1e-9`
+
+選定結果の出力:
+- metrics CSV: [selected_metrics.csv](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/selected_metrics.csv)
+- threshold sweep: [threshold_sweep_metrics.csv](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/threshold_sweep_metrics.csv)
+- sweep figure: [threshold_sweep_summary.png](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/figures/threshold_sweep_summary.png)
+
+## 2. 00000443 の再評価結果
+
+このログでは、X-only と XY が一致し、Y-only は初期値 `0.60 Hz` のまま保持された。つまり、Y はゲートで除外されている。
+
+代表メトリクス（`analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/selected_metrics.csv`）:
 
 | window | axis | mean_hz |
 |---|---|---:|
-| 00000443_w35_100 | X | 0.4612 |
-| 00000443_w35_100 | Y | 0.6196 |
-| 00000443_w35_100 | XY | 0.5404 |
-| 00000443_w40_110 | X | 0.4894 |
-| 00000443_w40_110 | Y | 0.6086 |
-| 00000443_w40_110 | XY | 0.5490 |
+| 00000443_w35_100 | X | 0.4551 |
+| 00000443_w35_100 | Y | 0.6000 |
+| 00000443_w35_100 | XY | 0.4551 |
+| 00000443_w40_110 | X | 0.4538 |
+| 00000443_w40_110 | Y | 0.6000 |
+| 00000443_w40_110 | XY | 0.4538 |
 
 解釈:
-- X と Y の両方が使われており、XY は両者の合成結果になっている。
-- これは「両方が閾値超えなら XY を使用する」という条件に一致する。
+- X と XY が一致しており、Y は閾値未満として保持されている。
+- これにより、このログも X 優勢ケースとして扱うのが妥当だと分かる。
 
 図:
 
-![00000443 w35-100 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_comparison_qw_2026-04-06/figures/00000443_w35_100_q1e-9_x_y_xy.png)
-![00000443 w40-110 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_comparison_qw_2026-04-06/figures/00000443_w40_110_q1e-9_x_y_xy.png)
+![00000443 w35-100 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/figures/00000443_w35_100_selected_x_y_xy.png)
+![00000443 w40-110 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/figures/00000443_w40_110_selected_x_y_xy.png)
 
-## 2. 00000444 の結果
+## 3. 00000444 の再評価結果
 
-このログでは X は閾値超えだが、Y は閾値未満になりやすい。結果として Y-only は初期値付近に保持され、XY は X-only と一致した。
+このログでも X-only と XY が一致し、Y-only は初期値 `0.60 Hz` のまま保持された。
 
-代表メトリクス（`analysis/replay/results/diagnostics/xy_axis_comparison_00000444_energy_gate_2026-04-07/windowed_metrics.csv`）:
+代表メトリクス（同上 CSV）:
 
 | window | axis | mean_hz |
 |---|---|---:|
@@ -70,18 +87,27 @@
 解釈:
 - X-only と XY が一致しているため、Y が閾値未満のときに Y が fusion に使われていないことが分かる。
 - Y-only が 0.6000 Hz のままなのは、閾値未満で更新を止め、初期値を保持しているため。
-- これは要件どおりの挙動である。
+- これは要件どおりの挙動であり、初期値 `0.60 Hz` から X 側が約 `0.45 Hz` に収束することを確認できた。
 
 図:
 
-![00000444 w35-100 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_comparison_00000444_energy_gate_2026-04-07/figures/00000444_w35_100_q1e-9_x_y_xy.png)
-![00000444 w40-110 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_comparison_00000444_energy_gate_2026-04-07/figures/00000444_w40_110_q1e-9_x_y_xy.png)
+![00000444 w35-100 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/figures/00000444_w35_100_selected_x_y_xy.png)
+![00000444 w40-110 x/y/xy](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/figures/00000444_w40_110_selected_x_y_xy.png)
 
-## 3. 結論
+## 4. 閾値再調整の結果
 
-- 閾値 `0.20` を使うことで、X が強く Y が弱い 00000444 では X のみが採用され、XY も X-only と同じになる。
-- 一方、00000443 では X/Y 両方が有効で、XY は両者の合成結果になる。
-- したがって、「閾値超えの軸だけを使い、両方超えなら合成、どちらも超えないなら直前の有効値を保持」という設計が、実データで期待どおりに動作することを確認できた。
+- 00000443 と 00000444 はどちらも X 優勢ケースとして扱うのが正しく、Y は閾値未満になりやすい。
+- `EKF_EN_ON=0.20` のとき、両ログとも X-only / XY が約 `0.45 Hz` に収束し、Y-only は初期値 `0.60 Hz` の保持となった。
+- 閾値を `0.25` 以上に上げると、一部ウィンドウで `0.45 Hz` から外れやすくなり、`0.20` が最も安定だった。
+
+閾値スイープの詳細:
+
+| log | window | ON | mean_hz |
+|---|---|---:|---:|
+| 00000443 | 00000443_w35_100 | 0.20 | 0.4551 |
+| 00000443 | 00000443_w40_110 | 0.20 | 0.4538 |
+| 00000444 | 00000444_w35_100 | 0.20 | 0.4574 |
+| 00000444 | 00000444_w40_110 | 0.20 | 0.4575 |
 
 補足
 - 旧来の振幅ゲートは `EKF_AX_GAT=0` で無効化済み。
