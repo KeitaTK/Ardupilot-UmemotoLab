@@ -26,6 +26,57 @@
 
 ---
 
+### 2026-04-06 18:40: [Replay/AP_Observer EKF] 複数EKF実装の統合比較レポート作成（生データ揺れ+SW上段付き）
+- 問題: 方針選定のため、複数EKF実装（3軸/XY/SW-hold/固定周波数）を同一時間軸で比較し、周波数推定の差分を一目で判断できる資料が必要だった。
+- 調査:
+  1. 既存成果物を確認し、`dual_component_frequency_2026-04-04`、`xy_ekf_2026-04-05`、`single_freq_2026-04-05` に比較用CSVが揃っていることを確認。
+  2. 生データ可視化要件（上段で揺れ+SW）を満たすには、既存レポートを横断した統合スクリプトが必要と判断。
+- 試行:
+  1. `analysis/replay/generate_ekf_algorithm_comparison_report.py` を新規追加。
+  2. 6方式（baseline 3軸, xy_always_on, xy_sw_hold, xy_sw_amp_gate, fixed 0.45Hz, fixed 0.60Hz）を2ログで同時比較する処理を実装。
+  3. 各ログで「上段: PLX/PLY/PLZ(DC除去)+SW」「下段: 推定周波数群」の比較図を生成。
+  4. 指標CSV（MAE/std/p95_step/hf_ratio/final error）と総合ランキングCSV、Markdownレポートを生成。
+  5. 意思決定用の詳細版を `docs/ekf_external_force_estimation/reports/EKF_ALGORITHM_COMPARISON_2026-04-06.md` に反映。
+- 結果:
+  - 生成物: `analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/` 以下に図2枚・CSV3種・レポートを出力。
+  - 総合では `Fixed init 0.45Hz (q_w=1e-9)` が最良、次点は `XY EKF always-on`。
+  - `Fixed init 0.60Hz` は初期値依存バイアスが残り、固定周波数運用の初期値設計が重要であることを再確認。
+- 備考: 実運用の第一候補は「XYベース+低q_w」、運用要件に応じてSW-holdを選択可能にする方針が妥当。
+
+### 2026-04-05 13:30: [AP_Observer EKF] 0.60Hz初期値のq_w収束スイープ結果整理
+- 問題: 0.60Hzを初期値にした場合に、0.45Hzへ正確に収束できるかを確認したい。
+- 調査:
+  1. `analysis/replay/fixed_frequency_qw_sweep_060.py` で q_w を `1e-9` から `1e-2` まで振り、00000443/00000444 の replay 結果を比較した。
+  2. 判定条件を ±0.01Hz で 5.0s 継続に設定し、settle_time と final error を確認した。
+- 試行:
+  1. 0.60Hz 初期のまま replay を回し、q_w による忘却速度の差を評価した。
+  2. `fixed_init_060_qw_sweep_metrics.csv` と `FIXED_INIT_060_QW_SWEEP_REPORT_2026-04-05.md` を生成した。
+- 結果:
+  - どの q_w でも settle band には入らず、0.60Hz 初期のバイアスは完全には消えなかった。
+  - 00000443 は `q_w=1e-4` で最良 (final 0.4243Hz, target差 0.0257Hz) だった。
+  - 00000444 は `q_w=1e-2` で最良 (final 0.5063Hz, target差 0.0563Hz) だった。
+- 備考: 0.60Hz初期からの正確収束には、q_wだけでなく初期値・ゲート・モデル再初期化の追加検討が必要。
+
+### 2026-04-05 12:00: [AP_Observer EKF] xy統合とomega遅延更新の比較レポート作成
+- 問題: z軸は共振特性が異なるため、xy統合だけで周波数推定を安定させたい。また、周波数だけを遅く更新できるか確認したい。
+- 調査:
+  1. `AP_Observer.cpp` の EKF 融合部を確認し、3軸平均を `axis_mask` で切り替えられるようにするのが最小変更だと判断。
+  2. SW OFF 中でも omega が更新されるため、SW OFF 時に omega を保持するフラグが必要と確認。
+  3. `OBS_EKF_Q_W` は omega 状態のみのプロセスノイズなので、周波数だけを遅く更新する設定として使えると確認。
+- 試行:
+  1. `OBS_EKF_AX_MASK` を追加し、fusion 対象を xy に限定できるようにした。
+  2. `OBS_EKF_SW_HOLD` を追加し、SW OFF 時に omega を保持する挙動を選べるようにした。
+  3. `RLS_CSV_Replay` に `--ekf-axis-mask` と `--ekf-hold-omega-off` を追加した。
+  4. `analysis/replay/ekf_xy_strategy_analysis.py` を追加し、3戦略（SW保持 / 振幅ゲート / always-on）と q_w スイープを replay で自動比較した。
+  5. `analysis/replay/results/diagnostics/xy_ekf_2026-04-05/XY_EKF_STRATEGY_REPORT_2026-04-05.md` を生成した。
+- 結果:
+  - 00000443/00000444 の両方で xy-only 統合を replay できた。
+  - 3戦略比較では今回のデータでは `xy_always_on` が最良だったが、`xy_sw_hold` は SW OFF 中の drift 抑制に有効だった。
+  - q_w スイープでは `1e-05` 前後が最良で、omega だけを遅く更新する設定として有効だった。
+- 備考: 生成レポートは analysis 側に保存済み。必要なら docs 側へも同内容を追記する。
+
+---
+
 ### 2026-04-04 23:55: [Replay/AP_Observer EKF] 二成分振幅モデル試作と長周期成分採用アルゴリズム比較
 - 問題: 推定値が上下に往復する現象の原因を、単一成分モデルの限界も含めて特定し、より滑らかで正弦波らしい推定系列を得たい。
 - 調査:

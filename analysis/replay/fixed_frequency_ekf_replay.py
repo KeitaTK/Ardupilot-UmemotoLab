@@ -25,6 +25,7 @@ OUTBASE.mkdir(parents=True, exist_ok=True)
 RUNS = OUTBASE / "runs"
 RUNS.mkdir(parents=True, exist_ok=True)
 TARGET_HZ = 0.45
+INIT_HZ_CASES = [0.45, 0.60]
 
 
 def metrics(freq: np.ndarray, t: np.ndarray, sw: np.ndarray, target: float = TARGET_HZ) -> dict:
@@ -55,9 +56,9 @@ def metrics(freq: np.ndarray, t: np.ndarray, sw: np.ndarray, target: float = TAR
     }
 
 
-def run_fixed_replay(tag: str, input_path: Path, outdir: Path, freq_hz: float = TARGET_HZ) -> Path:
+def run_fixed_replay(tag: str, input_path: Path, outdir: Path, freq_hz: float) -> Path:
     outdir.mkdir(parents=True, exist_ok=True)
-    tagname = f"{tag}_fixedHz"
+    tagname = f"{tag}_fixed_{freq_hz:.2f}Hz".replace(".", "p")
     cmd = [
         str(REPLAY_BIN),
         "--input",
@@ -90,6 +91,7 @@ def run_fixed_replay(tag: str, input_path: Path, outdir: Path, freq_hz: float = 
 
 def main():
     metrics_rows = []
+    per_log_summary = {}
 
     # existing original runs (from previous dual-component analysis)
     orig_base = Path("analysis/replay/results/diagnostics/dual_component_frequency_2026-04-04/runs")
@@ -97,11 +99,6 @@ def main():
     for tag, inp in INPUTS.items():
         run_outdir = RUNS / tag
         run_outdir.mkdir(parents=True, exist_ok=True)
-        # run fixed-frequency replay
-        result_fixed = run_fixed_replay(tag, inp, run_outdir)
-        if not result_fixed.exists():
-            print("Fixed replay result not found:", result_fixed)
-            continue
         # original result path
         orig_result = orig_base / tag / f"{tag}_dual_eval_result.csv"
         if not orig_result.exists():
@@ -110,22 +107,32 @@ def main():
 
         # read both
         df_orig = pd.read_csv(orig_result)
-        df_fixed = pd.read_csv(result_fixed)
         t = df_orig["Time_s"].to_numpy(dtype=float)
         sw = df_orig["SW"].to_numpy(dtype=int)
 
         m_orig = metrics(df_orig["EstFreq_Hz"].to_numpy(dtype=float), t, sw)
-        m_fixed = metrics(df_fixed["EstFreq_Hz"].to_numpy(dtype=float), t, sw)
 
         row_orig = {"log": tag, "method": "original_ekf", **m_orig}
-        row_fixed = {"log": tag, "method": "fixed_ekf_0.45Hz", **m_fixed}
         metrics_rows.append(row_orig)
-        metrics_rows.append(row_fixed)
+
+        fixed_metrics = {}
+        for init_hz in INIT_HZ_CASES:
+            result_fixed = run_fixed_replay(tag, inp, run_outdir, init_hz)
+            if not result_fixed.exists():
+                print("Fixed replay result not found:", result_fixed)
+                continue
+
+            df_fixed = pd.read_csv(result_fixed)
+            m_fixed = metrics(df_fixed["EstFreq_Hz"].to_numpy(dtype=float), t, sw)
+            row_fixed = {"log": tag, "method": f"fixed_ekf_{init_hz:.2f}Hz", **m_fixed}
+            metrics_rows.append(row_fixed)
+            fixed_metrics[f"fixed_ekf_{init_hz:.2f}Hz"] = m_fixed
 
         # Save per-run comparison csv
         out_compare = run_outdir / f"{tag}_fixed_vs_orig_summary.json"
         with out_compare.open("w") as f:
-            json.dump({"original_metrics": m_orig, "fixed_metrics": m_fixed}, f, indent=2)
+            json.dump({"original_metrics": m_orig, "fixed_metrics": fixed_metrics}, f, indent=2)
+        per_log_summary[tag] = {"original": m_orig, **fixed_metrics}
 
     metrics_df = pd.DataFrame(metrics_rows)
     metrics_csv = OUTBASE / "single_freq_ekf_metrics.csv"
@@ -135,11 +142,17 @@ def main():
     md = OUTBASE / "SINGLE_FREQ_EKF_REPORT_2026-04-05.md"
     with md.open("w") as f:
         f.write("# Single-frequency EKF Replay Comparison\n\n")
-        f.write("Compared original EKF vs fixed-frequency EKF (init=0.45Hz, q_w=1e-9)\n\n")
+        f.write("Compared original EKF vs fixed-frequency EKF (init=0.45Hz / 0.60Hz, q_w=1e-9)\n\n")
         # Use CSV/text fallback to avoid optional dependencies (tabulate)
         f.write("```")
         f.write(metrics_df.to_string(index=False))
         f.write("```\n\n")
+        f.write("## Per-log summary\n\n")
+        for tag, summary in per_log_summary.items():
+            f.write(f"### {tag}\n")
+            f.write("```json\n")
+            f.write(json.dumps(summary, indent=2))
+            f.write("\n```\n\n")
         f.write("---\nRecommendation: If fixed EKF improves stability (lower p95_step_hz and mae), consider integrating fixed-frequency option into runtime EKF or using very low process noise for frequency during steady flight.\n")
 
     print("Wrote:", metrics_csv)

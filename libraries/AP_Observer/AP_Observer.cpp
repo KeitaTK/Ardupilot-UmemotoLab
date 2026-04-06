@@ -217,6 +217,20 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_SW_RST", 28, AP_Observer, _ekf_reset_on_switch, 0),
 
+    // @Param: EKF_AX_MASK
+    // @DisplayName: EKF Axis Fusion Mask
+    // @Description: Bitmask for axes included in fused frequency estimate (bit0=X, bit1=Y, bit2=Z)
+    // @Range: 0 7
+    // @User: Advanced
+    AP_GROUPINFO("EKF_AX_MASK", 29, AP_Observer, _ekf_axis_mask, 3),
+
+    // @Param: EKF_SW_HOLD
+    // @DisplayName: EKF Hold Omega When Switch Off
+    // @Description: Hold omega state when frequency estimation switch is OFF
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    AP_GROUPINFO("EKF_SW_HOLD", 30, AP_Observer, _ekf_hold_omega_when_off, 0),
+
     AP_GROUPEND
 };
 
@@ -354,6 +368,10 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
     float omega_sum = 0.0f;
     uint8_t trusted_count = 0;
     for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        if (!is_axis_enabled_in_fusion(axis)) {
+            ekf_axis_trusted[axis] = 0U;
+            continue;
+        }
         const float omega_axis = constrain_value(ekf_state[axis][3], _ekf_omega_min.get(), _ekf_omega_max.get());
         ekf_axis_amp[axis] = fabsf(ekf_state[axis][0]);
         const bool trusted = is_axis_frequency_trusted(axis);
@@ -385,6 +403,8 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float force_reject_min = MAX(force_hold_max + 1.0e-3f, _ekf_force_reject_min.get());
     const bool force_hold_omega = force_abs <= force_hold_max;
     const bool force_reject = force_abs >= force_reject_min;
+    const bool switch_hold_omega = (!_freq_estimation_active && _ekf_hold_omega_when_off.get() != 0);
+    const bool hold_omega = force_hold_omega || switch_hold_omega;
 
     const float omega = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
     const float d = x[0];
@@ -432,15 +452,15 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float q_ddot = _ekf_q_d_dot.get();
     const float q_c = _ekf_q_c.get();
     const float q_omega_base = _freq_estimation_active ? _ekf_q_omega.get() : 0.0f;
-    const float q_omega = (_freq_estimation_active && !force_hold_omega && !force_reject)
+    const float q_omega = (_freq_estimation_active && !hold_omega && !force_reject)
         ? q_omega_base
-        : ((_freq_estimation_active && (force_hold_omega || force_reject)) ? MAX(q_omega_base, 1.0e-6f) : 0.0f);
+        : ((_freq_estimation_active && (hold_omega || force_reject)) ? MAX(q_omega_base, 1.0e-6f) : 0.0f);
     P_pred[0][0] += q_d;
     P_pred[1][1] += q_ddot;
     P_pred[2][2] += q_c;
     P_pred[3][3] += q_omega;
 
-    if (force_hold_omega) {
+    if (hold_omega) {
         const float y_pred_hold = x_pred[0] + x_pred[2];
         const float innov_hold = measurement - y_pred_hold;
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
@@ -497,14 +517,14 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         K[i] = PHt[i] / S;
     }
 
-    if (force_hold_omega) {
+    if (hold_omega) {
         K[3] = 0.0f;
     }
 
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         x[i] = x_pred[i] + K[i] * innov;
     }
-    if (force_hold_omega) {
+    if (hold_omega) {
         x[3] = omega_prev;
     }
 
@@ -540,7 +560,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         }
     }
 
-    if (force_hold_omega) {
+    if (hold_omega) {
         x[3] = omega_prev;
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
             P[3][i] = P_pred[3][i];
@@ -1107,4 +1127,21 @@ void AP_Observer::set_ekf_force_thresholds_for_replay(float hold_max,
 void AP_Observer::set_ekf_reset_on_switch_for_replay(bool enabled) {
     _ekf_reset_on_switch.set(enabled ? 1 : 0);
 }
+
+void AP_Observer::set_ekf_axis_mask_for_replay(uint8_t mask) {
+    _ekf_axis_mask.set((int8_t)mask);
+}
+
+void AP_Observer::set_ekf_hold_omega_when_off_for_replay(bool enabled) {
+    _ekf_hold_omega_when_off.set(enabled ? 1 : 0);
+}
 #endif
+
+bool AP_Observer::is_axis_enabled_in_fusion(uint8_t axis) const {
+    if (axis >= EKF_NUM_AXES) {
+        return false;
+    }
+
+    const uint8_t mask = (uint8_t)MAX(0, _ekf_axis_mask.get());
+    return (mask & (1U << axis)) != 0U;
+}

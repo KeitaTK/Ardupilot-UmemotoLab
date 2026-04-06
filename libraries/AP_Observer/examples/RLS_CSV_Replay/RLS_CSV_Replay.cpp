@@ -154,6 +154,10 @@ struct ReplayRunConfig {
     float ekf_force_reject_min = 5.0f;
     bool has_ekf_reset_on_switch = false;
     int ekf_reset_on_switch = 0;
+    bool has_ekf_axis_mask = false;
+    int ekf_axis_mask = 3;
+    bool has_ekf_hold_omega_when_off = false;
+    int ekf_hold_omega_when_off = 0;
 };
 
 static bool parse_replay_args(ReplayRunConfig& cfg) {
@@ -174,7 +178,7 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-r-meas <var>]\n");
             printf("      [--sw-mode log|always-on|always-off] [--ekf-reset-on-switch 0|1]\n");
             printf("      [--ekf-axis-gate 0|1] [--ekf-amp-min <v>] [--ekf-amp-max <v>] [--ekf-innov-max <v>] [--ekf-nis-max <v>]\n");
-            printf("      [--ekf-force-hold-max <n>] [--ekf-force-reject-min <n>]\n");
+            printf("      [--ekf-force-hold-max <n>] [--ekf-force-reject-min <n>] [--ekf-axis-mask <mask>] [--ekf-hold-omega-off 0|1]\n");
             printf("\n");
             printf("Default mode runs the built-in regression file list.\n");
             exit(0);
@@ -246,6 +250,30 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-reset-on-switch=", 22) == 0) {
             cfg.ekf_reset_on_switch = (int)strtol(arg + 22, nullptr, 10);
             cfg.has_ekf_reset_on_switch = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-axis-mask") == 0) && next != nullptr) {
+            cfg.ekf_axis_mask = (int)strtol(next, nullptr, 10);
+            cfg.has_ekf_axis_mask = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-axis-mask=", 16) == 0) {
+            cfg.ekf_axis_mask = (int)strtol(arg + 16, nullptr, 10);
+            cfg.has_ekf_axis_mask = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-hold-omega-off") == 0) && next != nullptr) {
+            cfg.ekf_hold_omega_when_off = (int)strtol(next, nullptr, 10);
+            cfg.has_ekf_hold_omega_when_off = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-hold-omega-off=", 21) == 0) {
+            cfg.ekf_hold_omega_when_off = (int)strtol(arg + 21, nullptr, 10);
+            cfg.has_ekf_hold_omega_when_off = true;
             continue;
         }
 
@@ -498,6 +526,12 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     }
     if (cfg.has_ekf_reset_on_switch) {
         observer.set_ekf_reset_on_switch_for_replay(cfg.ekf_reset_on_switch != 0);
+    }
+    if (cfg.has_ekf_axis_mask) {
+        observer.set_ekf_axis_mask_for_replay((uint8_t)MAX(0, cfg.ekf_axis_mask));
+    }
+    if (cfg.has_ekf_hold_omega_when_off) {
+        observer.set_ekf_hold_omega_when_off_for_replay(cfg.ekf_hold_omega_when_off != 0);
     }
     if (cfg.has_ekf_axis_gate || cfg.has_ekf_amp_min || cfg.has_ekf_amp_max ||
         cfg.has_ekf_innov_max || cfg.has_ekf_nis_max) {

@@ -1,0 +1,44 @@
+{
+  "target_hz": 0.45,
+  "init_hz": 0.6,
+  "settle_tol_hz": 0.01,
+  "settle_hold_s": 5.0,
+  "result_csv": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/fixed_init_060_qw_sweep_metrics.csv",
+  "report": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/FIXED_INIT_060_QW_SWEEP_REPORT_2026-04-05.md",
+  "per_log_best": {
+    "00000443": {
+      "best_q_w": 0.0001,
+      "best_settle_time_s": NaN,
+      "best_mae_hz": 0.08896302083333335,
+      "best_final_err_hz": 0.0257
+    },
+    "00000444": {
+      "best_q_w": 0.01,
+      "best_settle_time_s": NaN,
+      "best_mae_hz": 0.05701659020003667,
+      "best_final_err_hz": 0.05629999999999996
+    }
+  },
+  "run_map": {
+    "00000443": {
+      "q_w=1e-09": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-09/00000443_init_0p60Hz_qw_1e-09_result.csv",
+      "q_w=1e-08": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-08/00000443_init_0p60Hz_qw_1e-08_result.csv",
+      "q_w=1e-07": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-07/00000443_init_0p60Hz_qw_1e-07_result.csv",
+      "q_w=1e-06": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-06/00000443_init_0p60Hz_qw_1e-06_result.csv",
+      "q_w=1e-05": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-05/00000443_init_0p60Hz_qw_1e-05_result.csv",
+      "q_w=1e-04": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-04/00000443_init_0p60Hz_qw_1e-04_result.csv",
+      "q_w=1e-03": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-03/00000443_init_0p60Hz_qw_1e-03_result.csv",
+      "q_w=1e-02": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000443/qw_1e-02/00000443_init_0p60Hz_qw_1e-02_result.csv"
+    },
+    "00000444": {
+      "q_w=1e-09": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-09/00000444_init_0p60Hz_qw_1e-09_result.csv",
+      "q_w=1e-08": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-08/00000444_init_0p60Hz_qw_1e-08_result.csv",
+      "q_w=1e-07": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-07/00000444_init_0p60Hz_qw_1e-07_result.csv",
+      "q_w=1e-06": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-06/00000444_init_0p60Hz_qw_1e-06_result.csv",
+      "q_w=1e-05": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-05/00000444_init_0p60Hz_qw_1e-05_result.csv",
+      "q_w=1e-04": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-04/00000444_init_0p60Hz_qw_1e-04_result.csv",
+      "q_w=1e-03": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-03/00000444_init_0p60Hz_qw_1e-03_result.csv",
+      "q_w=1e-02": "analysis/replay/results/diagnostics/fixed_init_060_qw_sweep_2026-04-05/runs/00000444/qw_1e-02/00000444_init_0p60Hz_qw_1e-02_result.csv"
+    }
+  }
+}
