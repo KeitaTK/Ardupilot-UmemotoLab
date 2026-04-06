@@ -18,7 +18,7 @@ import pandas as pd
 
 
 TARGET_HZ = 0.45
-FORCE_HOLD_MAX = 1.5
+FORCE_HOLD_MAX = 0.0
 FORCE_REJECT_MIN = 5.0
 
 

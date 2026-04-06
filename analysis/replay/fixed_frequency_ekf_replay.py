@@ -72,7 +72,7 @@ def run_fixed_replay(tag: str, input_path: Path, outdir: Path, freq_hz: float) -
         "--ekf-reset-on-switch",
         "0",
         "--ekf-force-hold-max",
-        "1.5",
+        "0.0",
         "--ekf-force-reject-min",
         "5.0",
         "--ekf-axis-gate",

@@ -30,6 +30,7 @@ def extract_obsv_with_window(input_path, output_path, start_time_sec=None, end_t
     end_time_us = end_time_sec * 1e6 if end_time_sec is not None else float('inf')
 
     count = 0
+    start_time_origin_us = None
     with open(output_path, "w", newline="") as csvfile:
         writer = csv.writer(csvfile)
         writer.writerow(fields)
@@ -40,7 +41,12 @@ def extract_obsv_with_window(input_path, output_path, start_time_sec=None, end_t
                 break
 
             time_us = to_int(getattr(msg, "TimeUS", None))
-            if not (start_time_us <= time_us <= end_time_us):
+            if start_time_origin_us is None:
+                # Treat the first OBSV sample as t=0 for window filtering.
+                start_time_origin_us = time_us
+
+            rel_time_us = time_us - start_time_origin_us
+            if not (start_time_us <= rel_time_us <= end_time_us):
                 continue
 
             row = [

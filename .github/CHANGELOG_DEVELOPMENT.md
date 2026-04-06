@@ -26,6 +26,50 @@
 
 ---
 
+### 2026-04-06 17:35: [Replay/AP_Observer EKF] 0.60Hz固定初期値追加と40-110秒窓への再構成
+- 問題: 比較レポートに 0.60Hz 固定初期値の条件を追加したい。また、後半窓を 40-130 秒から 40-110 秒へ変更して比較範囲を揃えたい。
+- 調査:
+  1. `generate_ekf_algorithm_comparison_windowed.py` の `METHODS` と `WindowConfig` を確認し、追加条件と窓変更を一箇所で管理できる構造であることを確認。
+  2. 再生成後の `windowed_metrics.csv` で各方法の MAE を確認し、0.60Hz 初期値が 0.45Hz 初期値より残差が大きいことを確認。
+- 試行:
+  1. `Fixed init 0.60Hz (q_w=1e-9)` を比較条件に追加。
+  2. 2つ目の窓を `40-110s` に変更して replay を再実行。
+  3. レポート本文に各方式の違いの短い解説を追加し、表と結論を最新値へ更新。
+- 結果:
+  - 35-100秒: Fixed 0.45Hz の MAE=0.0189、Fixed 0.60Hz の MAE=0.1085。
+  - 40-110秒: Fixed 0.45Hz の MAE=0.0074、Fixed 0.60Hz の MAE=0.1033。
+  - 初期値 0.45Hz の方が目標周波数への追従が明確に良好。
+- 備考: 生成物は `analysis/replay/results/diagnostics/ekf_windowed_comparison_2026-04-06/` を更新済み。
+
+### 2026-04-06 17:05: [Replay/AP_Observer EKF] 時間窓抽出の基準時刻バグ修正と再生成
+- 問題: `35-100s` と `40-130s` の窓抽出結果が同一系列になり、元データ開始=0秒基準の指定になっていなかった。
+- 調査:
+  1. `generate_ekf_algorithm_comparison_windowed.py` の窓設定値自体は正しい一方、`bin_to_replay_csv.py` が絶対 `TimeUS` を直接窓判定していた。
+  2. 抽出CSVの先頭 `TimeUS` が2窓で同一であることを確認し、基準時刻の扱いが原因と特定。
+- 試行:
+  1. `bin_to_replay_csv.py` を修正し、最初の `OBSV` サンプル時刻を原点（0秒）として相対時刻で窓判定。
+  2. `analysis/replay/generate_ekf_algorithm_comparison_windowed.py` を再実行し、CSV・図・metricsを再生成。
+  3. レポート `docs/ekf_external_force_estimation/reports/EKF_ALGORITHM_COMPARISON_2026-04-06.md` の指標表と結論を更新。
+- 結果:
+  - 先頭相対時刻は `w35=35.0s`, `w40=40.00003s`、終端は `99.990309s`, `129.990065s` を確認。
+  - 再生成後も最良は `Fixed init 0.45Hz (q_w=1e-9)`（MAE: 35-100で0.0189, 40-130で0.0093）。
+- 備考: 生成物は `analysis/replay/results/diagnostics/ekf_windowed_comparison_2026-04-06/` 配下を更新済み。
+
+### 2026-04-06 20:45: [Replay/AP_Observer EKF] 00000443の2時間窓（35-100, 40-130）で再解析し比較レポート差し替え
+- 問題: 時間窓を切った結果で、既存の比較レポート形式（図埋め込み）に合わせて再評価したい。
+- 調査:
+  1. 指定テキストに合わせ、対象ログを 00000443 の2区間として扱う方針を採用。
+  2. `generate_ekf_algorithm_comparison_windowed.py` の窓設定を `00000443_w35_100` と `00000443_w40_130` に更新。
+- 試行:
+  1. 時間窓付き抽出と replay を再実行。
+  2. 2枚の比較図（上段: 揺れ+SW、下段: 推定周波数）を生成。
+  3. `docs/ekf_external_force_estimation/reports/EKF_ALGORITHM_COMPARISON_2026-04-06.md` を時間窓版に差し替え更新。
+- 結果:
+  - 35-100秒: Fixed 0.45Hz の MAE=0.0220 で最良。
+  - 40-130秒: Fixed 0.45Hz の MAE=0.0186 で最良。
+  - XY hold-omega-off は改善するが、0.45Hz基準では Fixed 0.45Hz に劣後。
+- 備考: 生成物は `analysis/replay/results/diagnostics/ekf_windowed_comparison_2026-04-06/` 配下。
+
 ### 2026-04-06 20:15: [Replay/AP_Observer EKF] 時間窓付きEKF比較分析（35-100秒抽出）
 - 問題: 全ログレプレイの結果を参考に、実際の観測データが有効な時間帯（35-100秒）に限定した場合のEKF性能を再評価したい。
 - 調査:

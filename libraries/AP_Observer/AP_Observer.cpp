@@ -201,7 +201,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Hold the previous omega estimate when |force| is at or below this threshold [N]
     // @Range: 0.0 20.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_FHOLD", 26, AP_Observer, _ekf_force_hold_max, 1.5f),
+    AP_GROUPINFO("EKF_FHOLD", 26, AP_Observer, _ekf_force_hold_max, 0.0f),
 
     // @Param: EKF_FREJ
     // @DisplayName: EKF Force Reject Threshold

@@ -90,7 +90,7 @@ def run_replay(binary: Path, input_path: Path, outdir: Path, tag: str, q_w: floa
         "--ekf-hold-omega-off",
         "1",
         "--ekf-force-hold-max",
-        "1.5",
+        "0.0",
         "--ekf-force-reject-min",
         "5.0",
         "--ekf-axis-gate",

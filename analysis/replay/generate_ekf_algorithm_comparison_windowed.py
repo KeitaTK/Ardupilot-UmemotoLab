@@ -62,6 +62,12 @@ METHODS: list = [
         color="tab:red",
         args=["--ekf-w-init-hz", "0.45", "--ekf-q-w", "1e-9"],
     ),
+    MethodSpec(
+        name="fixed_060",
+        label="Fixed init 0.60Hz (q_w=1e-9)",
+        color="tab:orange",
+        args=["--ekf-w-init-hz", "0.60", "--ekf-q-w", "1e-9"],
+    ),
 ]
 
 
@@ -89,7 +95,7 @@ def run_replay(replay_bin: Path, csv_input: Path, outdir: Path, tag: str, method
         "--tag", tag,
         "--sw-mode", "log",
         "--ekf-reset-on-switch", "0",
-        "--ekf-force-hold-max", "1.5",
+        "--ekf-force-hold-max", "0.0",
         "--ekf-force-reject-min", "5.0",
         "--ekf-axis-gate", "0",
         *method_args,
@@ -181,18 +187,17 @@ def main() -> int:
 
     windows = [
         WindowConfig(
-            tag="00000443_windowed",
+            tag="00000443_w35_100",
             input_bin=Path("analysis/replay/data/00000443.BIN"),
             start_sec=35,
             end_sec=100,
         ),
-        # Note: 00000444.BIN has no OBSV records, only 00000443 has valid observer data
-        # WindowConfig(
-        #     tag="00000444_windowed",
-        #     input_bin=Path("analysis/replay/data/00000444.BIN"),
-        #     start_sec=40,
-        #     end_sec=130,
-        # ),
+        WindowConfig(
+            tag="00000443_w40_110",
+            input_bin=Path("analysis/replay/data/00000443.BIN"),
+            start_sec=40,
+            end_sec=110,
+        ),
     ]
 
     outdir = Path(args.outdir)
