@@ -1,0 +1,5 @@
+log,method,method_label,mean_hz,std_hz,mae_hz,p95_step_hz
+00000443_windowed,baseline_3axis_logsw,"Baseline EKF (3-axis, log SW)",0.6137886434627399,0.0389883543407168,0.1637886434627398,0.0
+00000443_windowed,xy_always_on,XY EKF always-on,0.6137886434627399,0.0389883543407168,0.1637886434627398,0.0
+00000443_windowed,xy_hold_omega_off,XY EKF hold-omega-off,0.6,0.0,0.14999999999999994,0.0
+00000443_windowed,fixed_045,Fixed init 0.45Hz (q_w=1e-9),0.4717784024988844,0.06127466671639465,0.022049040606871934,0.0

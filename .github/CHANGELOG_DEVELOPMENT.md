@@ -26,6 +26,42 @@
 
 ---
 
+### 2026-04-06 20:15: [Replay/AP_Observer EKF] 時間窓付きEKF比較分析（35-100秒抽出）
+- 問題: 全ログレプレイの結果を参考に、実際の観測データが有効な時間帯（35-100秒）に限定した場合のEKF性能を再評価したい。
+- 調査:
+  1. `bin_to_replay_csv.py` に時間窓抽出機能（`--start-time-sec`, `--end-time-sec`）を追加した。
+  2. 00000443.BIN は有効なOBSVレコードを保有（4482レコード、35-100秒抽出で65秒間）。
+  3. 00000444.BIN はOBSVレコードが存在しないため、分析対象外とした。
+  4. RLS_CSV_Replay の利用可能な引数を確認（`--ekf-hold-omega-off` は存在するが `--ekf-sw-hold` は未対応）。
+- 試行:
+  1. `analysis/replay/generate_ekf_algorithm_comparison_windowed.py` を作成し、時間窓付き比較ワークフローを実装。
+  2. 4つのEKF手法を時間窓で再実行：Baseline 3-axis、XY always-on、XY hold-omega-off、Fixed 0.45Hz。
+  3. 各手法のメトリクス（mean, std, mae, p95_step）を算出。
+  4. 時間窓付き比較図（上段: 生データ+SW、下段: 周波数推定）を生成。
+- 結果:
+  - **Fixed 0.45Hz が時間窓でも最高性能**: MAE 0.022Hz（目標0.45Hzに対して）。
+  - **XY hold-omega-off**: MAE 0.150Hz - わずかな改善も、目標からの乖離は大きい。
+  - **Baseline 3-axis / XY always-on**: 0.614Hz で安定（MAE 0.164Hz）。
+  - 時間窓付き分析でも、固定周波数初期化的優位性が再確認された。
+- 備考:
+  - 生成物: `analysis/replay/results/diagnostics/ekf_windowed_comparison_2026-04-06/` 以下に結果を整理。
+  - 詳細レポート: `docs/ekf_external_force_estimation/reports/EKF_WINDOWED_COMPARISON_2026-04-06.md`。
+  - 時間窓抽出でも安定した評価が得られたため、Fixed 0.45Hz を本実装の有力候補として扱う根拠が強化された。
+
+### 2026-04-06 19:20: [Replay/AP_Observer EKF] 統合比較レポートを図埋め込み型に詳細化
+- 問題: EKF方式比較レポートで、図リンクのみでは上段の生データ揺れ+SWと下段の推定周波数を一目で確認しづらかった。
+- 調査:
+  1. `analysis/replay/generate_ekf_algorithm_comparison_report.py` を再実行して、比較図・指標CSVを最新化した。
+  2. 既存 docs レポートが「リンク中心」であり、図の埋め込みとログ別の詳細方針評価が不足していることを確認した。
+- 試行:
+  1. `docs/ekf_external_force_estimation/reports/EKF_ALGORITHM_COMPARISON_2026-04-06.md` を日本語の詳細版へ更新。
+  2. 00000443/00000444 の比較図をレポート内に直接埋め込み、上段(生データ揺れ+SW)/下段(推定周波数)の読み方を明記。
+  3. ログ別所見、方針選定の結論、推奨アクションを追加し、実装検討に使える構成へ整理。
+- 結果:
+  - レポート単体で図と指標を見ながら方針検討できる形式になった。
+  - 「XY always-onを第一候補、SW-holdを運用オプション、固定周波数は前提条件付き」の判断材料を明示できた。
+- 備考: 図とCSVは `analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/` を参照。
+
 ### 2026-04-06 18:40: [Replay/AP_Observer EKF] 複数EKF実装の統合比較レポート作成（生データ揺れ+SW上段付き）
 - 問題: 方針選定のため、複数EKF実装（3軸/XY/SW-hold/固定周波数）を同一時間軸で比較し、周波数推定の差分を一目で判断できる資料が必要だった。
 - 調査:

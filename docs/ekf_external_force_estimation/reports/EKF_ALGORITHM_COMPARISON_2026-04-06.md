@@ -1,42 +1,45 @@
-# EKF Algorithm Comparison Report (2026-04-06)
+# EKFアルゴリズム比較レポート (2026-04-06)
 
-## Scope
-- Compare multiple EKF implementation policies on identical replay logs.
-- Use common x-axis time and y-axis estimated frequency for direct comparison.
-- Include raw payload oscillation and SW on the top panel for each log.
+## 目的
+- さまざまなEKF実装方針を同一ログ・同一時間軸で比較し、推定周波数の挙動差を可視化する。
+- 各比較図の最上段に生データの揺れ (PLX/PLY/PLZ) とSWを表示し、周波数推定との対応関係を確認する。
+- 実装方針を決めるために、指標と波形の両面で詳細に評価する。
 
-## Logs
+## 比較対象ログ
 - 00000443
 - 00000444
 
-## Compared Methods
-1. Baseline EKF (3-axis fusion, log SW)
+## 比較したEKF方式
+1. Baseline EKF (3軸融合, log SW)
 2. XY EKF always-on
 3. XY EKF SW-hold
-4. XY EKF SW + amplitude gate
+4. XY EKF SW + amp-gate
 5. Fixed init 0.45Hz (q_w=1e-9)
 6. Fixed init 0.60Hz (q_w=1e-9)
 
-## Main Figures
-- [00000443 comparison panel](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/figures/00000443_ekf_algorithm_comparison.png)
-- [00000444 comparison panel](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/figures/00000444_ekf_algorithm_comparison.png)
+## 図 (上段: 生データ揺れ + SW, 下段: 推定周波数)
 
-Each figure uses:
-- Top panel: PLX/PLY/PLZ (DC removed) + SW (secondary axis)
-- Bottom panel: Estimated frequency traces for all methods
+### Log 00000443
+![00000443 EKF comparison](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/figures/00000443_ekf_algorithm_comparison.png)
 
-## Evaluation Metrics
-- mean_hz, std_hz, mae_hz (target = 0.45Hz)
-- p95_step_hz, max_step_hz (smoothness)
-- hf_ratio = band power ratio (2-20Hz) / (0-0.5Hz)
+### Log 00000444
+![00000444 EKF comparison](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/figures/00000444_ekf_algorithm_comparison.png)
+
+上段はPLX/PLY/PLZのDC成分を除去した揺れ成分とSWを同時表示しており、下段の推定周波数変化と時刻を直接対応づけて確認できる。
+
+## 評価指標
+- mean_hz, std_hz, mae_hz (target=0.45Hz)
+- p95_step_hz, max_step_hz (時系列の滑らかさ)
+- hf_ratio (2-20Hz帯 / 0-0.5Hz帯)
 - final_abs_err_hz
-- Composite score:
+
+総合スコアは次式で評価した。
 
 $$
 \mathrm{score} = p95\_step + 0.30\cdot MAE + 0.10\cdot std + 0.05\cdot final\_abs\_err
 $$
 
-## Aggregate Ranking (2 logs average)
+## 総合ランキング (2ログ平均)
 
 | method_label | score | mae_hz | std_hz | p95_step_hz | hf_ratio | final_abs_err_hz |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -47,33 +50,44 @@ $$
 | Fixed init 0.60Hz (q_w=1e-9) | 0.0349 | 0.1031 | 0.0118 | 0.0000 | 0.0001 | 0.0558 |
 | Baseline EKF (3-axis, log SW) | 0.0514 | 0.1455 | 0.0283 | 0.0011 | 0.1196 | 0.0774 |
 
-## Detailed Interpretation For Policy Selection
+## ログ別の詳細所見
 
-### 1) Baseline 3-axis fusion is weakest on this dataset
-- Z-axis contribution appears to degrade fused frequency behavior for these logs.
-- Highest MAE and highest HF ratio among compared methods.
+### 00000443
+- 最良は Fixed init 0.45Hz と XY always-on が僅差。
+- XY SW-hold はOFF区間の保持には有利だが、最終誤差はalways-onより大きい。
+- Baseline 3軸融合はMAEが大きく、3軸平均により高め方向へ引っ張られる傾向が見える。
 
-### 2) XY-only policy is consistently effective
-- XY EKF always-on is 2nd overall and near-best in both logs.
-- This supports the prior observation that XY resonance around ~0.45Hz is dominant.
+### 00000444
+- Fixed init 0.45Hz が最良で、target=0.45Hzへ非常に近い。
+- XY always-on も良好で、運用上の安定候補として十分な性能。
+- XY SW-hold はドリフト抑制に効くが、SW運用に依存するトレードオフが残る。
+- Fixed init 0.60Hz は滑らかだが高めにバイアスし、初期値依存が顕著。
 
-### 3) SW-hold is useful as an operational safety option
-- SW-hold score is lower than XY always-on, but it reduces OFF-window drift risk.
-- Recommended as a selectable mode when operator-side SW behavior is important.
+## 方針検討に向けた結論
 
-### 4) Fixed-frequency behavior has strongest smoothness but clear initialization sensitivity
-- Fixed init 0.45Hz gives the best score.
-- Fixed init 0.60Hz is clearly biased, showing insufficient forgetting with tiny q_w.
-- This indicates fixed-frequency mode should only be used when initialization can be trusted.
+### 1) Baseline 3軸融合は今回データでは不利
+- MAEとHF比が最も悪く、方針候補としては優先度が低い。
 
-## Recommended Direction (Practical)
-1. Default candidate: XY EKF always-on + low q_w (frequency-only slow update).
-2. Add operator option: SW-hold mode for OFF-window drift suppression.
-3. Keep fixed-frequency mode as optional fallback, not as universal default.
-4. Validate on additional logs/airframes before freezing runtime defaults.
+### 2) 実運用の第一候補はXY EKF always-on
+- 2ログで一貫して上位。
+- 固定周波数ほど初期値依存が強くなく、運用上の扱いやすさが高い。
 
-## Reproducibility Artifacts
-- [Detailed auto report](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/EKF_ALGORITHM_COMPARISON_REPORT_2026-04-06.md)
-- [Per-log x method metrics CSV](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/ekf_algorithm_metrics.csv)
-- [Aggregate ranking CSV](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/ekf_algorithm_ranking.csv)
-- [Input run map CSV](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/input_run_map.csv)
+### 3) SW-holdは運用オプションとして価値あり
+- SW OFF中の周波数ドリフトを抑える用途で有効。
+- ただしON/OFF切替頻度によって追従性とのトレードオフが生じる。
+
+### 4) Fixed 0.45Hzは強力だが前提条件付き
+- 初期値を確信できる条件では有効。
+- 一方でFixed 0.60Hzの結果から、初期値誤差があるとバイアスを残しやすい。
+
+## 推奨アクション
+1. デフォルト案: XY EKF always-on + 低q_w (周波数のみ遅く更新)
+2. 運用案: SW-hold を切替可能なオプションとして維持
+3. 固定周波数: 0.45Hz前提が満たせる条件で限定利用
+4. 次検証: 別機体・別運用ログで再評価し、一般性を確認
+
+## 再現用成果物
+- [自動生成レポート](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/EKF_ALGORITHM_COMPARISON_REPORT_2026-04-06.md)
+- [方式別メトリクスCSV](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/ekf_algorithm_metrics.csv)
+- [総合ランキングCSV](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/ekf_algorithm_ranking.csv)
+- [入力runマップCSV](../../../analysis/replay/results/diagnostics/ekf_algorithm_comparison_2026-04-06/input_run_map.csv)
