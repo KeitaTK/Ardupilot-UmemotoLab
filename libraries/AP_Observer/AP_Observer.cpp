@@ -163,10 +163,10 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
 
     // @Param: EKF_AX_GAT
     // @DisplayName: EKF Axis Gate Enable
-    // @Description: Enable axis selection gate for frequency fusion using |d|, innovation and NIS thresholds
+    // @Description: Enable legacy axis selection gate for frequency fusion using |d|, innovation and NIS thresholds
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("EKF_AX_GAT", 21, AP_Observer, _ekf_axis_gate_enable, 1),
+    AP_GROUPINFO("EKF_AX_GAT", 21, AP_Observer, _ekf_axis_gate_enable, 0),
 
     // @Param: EKF_AMP_MIN
     // @DisplayName: EKF Axis Amplitude Minimum
@@ -196,40 +196,68 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_NIS_MAX", 25, AP_Observer, _ekf_nis_max, 4.0f),
 
+    // @Param: EKF_EN_GAT
+    // @DisplayName: EKF Energy Gate Enable
+    // @Description: Enable RMS-based axis gating for frequency fusion
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    AP_GROUPINFO("EKF_EN_GAT", 26, AP_Observer, _ekf_energy_gate_enable, 1),
+
+    // @Param: EKF_EN_ON
+    // @DisplayName: EKF Energy Gate On Threshold
+    // @Description: RMS threshold for enabling an axis in fused frequency update [N]
+    // @Range: 0.0 5.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_EN_ON", 27, AP_Observer, _ekf_energy_rms_on, 0.20f),
+
+    // @Param: EKF_EN_OFF
+    // @DisplayName: EKF Energy Gate Off Threshold
+    // @Description: RMS threshold for disabling an axis in fused frequency update [N]
+    // @Range: 0.0 5.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_EN_OFF", 28, AP_Observer, _ekf_energy_rms_off, 0.16f),
+
+    // @Param: EKF_EN_TAU
+    // @DisplayName: EKF Energy Gate Time Constant
+    // @Description: EMA time constant used to estimate RMS energy [s]
+    // @Range: 0.1 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_EN_TAU", 29, AP_Observer, _ekf_energy_tau_sec, 2.0f),
+
     // @Param: EKF_FHOLD
     // @DisplayName: EKF Force Hold Threshold
     // @Description: Hold the previous omega estimate when |force| is at or below this threshold [N]
     // @Range: 0.0 20.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_FHOLD", 26, AP_Observer, _ekf_force_hold_max, 0.0f),
+    AP_GROUPINFO("EKF_FHOLD", 30, AP_Observer, _ekf_force_hold_max, 0.0f),
 
     // @Param: EKF_FREJ
     // @DisplayName: EKF Force Reject Threshold
     // @Description: Reject force samples from estimation when |force| is at or above this threshold [N]
     // @Range: 0.0 20.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_FREJ", 27, AP_Observer, _ekf_force_reject_min, 5.0f),
+    AP_GROUPINFO("EKF_FREJ", 31, AP_Observer, _ekf_force_reject_min, 5.0f),
 
     // @Param: EKF_SW_RST
     // @DisplayName: EKF Reset On Switch Edge
     // @Description: Reset frequency estimator when switch toggles OFF->ON
     // @Values: 0:NoReset,1:Reset
     // @User: Advanced
-    AP_GROUPINFO("EKF_SW_RST", 28, AP_Observer, _ekf_reset_on_switch, 0),
+    AP_GROUPINFO("EKF_SW_RST", 32, AP_Observer, _ekf_reset_on_switch, 0),
 
     // @Param: EKF_AX_MASK
     // @DisplayName: EKF Axis Fusion Mask
     // @Description: Bitmask for axes included in fused frequency estimate (bit0=X, bit1=Y, bit2=Z)
     // @Range: 0 7
     // @User: Advanced
-    AP_GROUPINFO("EKF_AX_MASK", 29, AP_Observer, _ekf_axis_mask, 3),
+    AP_GROUPINFO("EKF_AX_MASK", 33, AP_Observer, _ekf_axis_mask, 3),
 
     // @Param: EKF_SW_HOLD
     // @DisplayName: EKF Hold Omega When Switch Off
     // @Description: Hold omega state when frequency estimation switch is OFF
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("EKF_SW_HOLD", 30, AP_Observer, _ekf_hold_omega_when_off, 0),
+    AP_GROUPINFO("EKF_SW_HOLD", 34, AP_Observer, _ekf_hold_omega_when_off, 0),
 
     AP_GROUPEND
 };
@@ -241,12 +269,15 @@ void AP_Observer::init() {
     // フィルタ初期化
     float sample_freq = 100.0f; // サンプリング周波数 [Hz]
     _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
+    _energy_bandpass_fast.set_cutoff_frequency(sample_freq, 0.80f);
+    _energy_bandpass_slow.set_cutoff_frequency(sample_freq, 0.25f);
 
     // 基本変数初期化
     current_filtered_force = Vector3f();
     current_correction_quat = Quaternion(1, 0, 0, 0);
     last_update_ms = 0;
     _payload_filtered = Vector3f();
+    _energy_band_proxy = Vector3f();
     filter_initialized = true;
 
     // EKF初期化
@@ -285,7 +316,9 @@ void AP_Observer::ekf_init() {
         ekf_axis_nis[axis] = 0.0f;
         ekf_axis_amp[axis] = 0.0f;
         ekf_axis_force_abs[axis] = 0.0f;
+        ekf_axis_energy_power[axis] = 0.0f;
         ekf_axis_trusted[axis] = 1U;
+        ekf_axis_energy_trusted[axis] = 0U;
 
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
             for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
@@ -327,6 +360,12 @@ bool AP_Observer::is_axis_frequency_trusted(uint8_t axis) const {
         return false;
     }
 
+    if (_ekf_energy_gate_enable.get() != 0) {
+        if (!ekf_axis_energy_trusted[axis]) {
+            return false;
+        }
+    }
+
     if (_ekf_axis_gate_enable.get() == 0) {
         return true;
     }
@@ -354,6 +393,10 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
     }
 
     dt = constrain_value(dt, 0.001f, 0.05f);
+
+    const Vector3f energy_fast = _energy_bandpass_fast.apply(y_output);
+    const Vector3f energy_slow = _energy_bandpass_slow.apply(y_output);
+    _energy_band_proxy = energy_fast - energy_slow;
 
     for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
         float measurement = 0.0f;
@@ -399,12 +442,42 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float force_abs = fabsf(measurement);
     ekf_axis_force_abs[axis] = force_abs;
 
+    const float energy_tau = MAX(0.1f, _ekf_energy_tau_sec.get());
+    const float energy_alpha = constrain_value(1.0f - expf(-dt / energy_tau), 0.0f, 1.0f);
+    const float energy_proxy = fabsf(_energy_band_proxy[axis]);
+    const float energy_proxy_sq = energy_proxy * energy_proxy;
+    if (ekf_sample_count == 0U || !isfinite(ekf_axis_energy_power[axis])) {
+        ekf_axis_energy_power[axis] = energy_proxy_sq;
+    } else {
+        ekf_axis_energy_power[axis] = energy_alpha * energy_proxy_sq + (1.0f - energy_alpha) * ekf_axis_energy_power[axis];
+    }
+
+    bool energy_gate_enabled = false;
+    if (_ekf_energy_gate_enable.get() != 0) {
+        const float energy_on = MAX(0.0f, _ekf_energy_rms_on.get());
+        const float energy_off = constrain_value(_ekf_energy_rms_off.get(), 0.0f, energy_on);
+        const float power_on = energy_on * energy_on;
+        const float power_off = energy_off * energy_off;
+        if (ekf_axis_energy_trusted[axis] == 0U) {
+            if (ekf_axis_energy_power[axis] >= power_on) {
+                ekf_axis_energy_trusted[axis] = 1U;
+            }
+        } else if (ekf_axis_energy_power[axis] <= power_off) {
+            ekf_axis_energy_trusted[axis] = 0U;
+        }
+        energy_gate_enabled = (ekf_axis_energy_trusted[axis] != 0U);
+    } else {
+        ekf_axis_energy_trusted[axis] = 1U;
+        energy_gate_enabled = true;
+    }
+
     const float force_hold_max = MAX(0.0f, _ekf_force_hold_max.get());
     const float force_reject_min = MAX(force_hold_max + 1.0e-3f, _ekf_force_reject_min.get());
     const bool force_hold_omega = force_abs <= force_hold_max;
     const bool force_reject = force_abs >= force_reject_min;
     const bool switch_hold_omega = (!_freq_estimation_active && _ekf_hold_omega_when_off.get() != 0);
-    const bool hold_omega = force_hold_omega || switch_hold_omega;
+    const bool energy_hold_omega = !energy_gate_enabled;
+    const bool hold_omega = force_hold_omega || switch_hold_omega || energy_hold_omega;
 
     const float omega = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
     const float d = x[0];
@@ -1116,6 +1189,16 @@ void AP_Observer::set_ekf_axis_gate_for_replay(bool enabled,
     _ekf_amp_max.set(MAX(_ekf_amp_min.get() + 1.0e-3f, amp_max));
     _ekf_innov_max.set(MAX(1.0e-3f, innov_max));
     _ekf_nis_max.set(MAX(1.0e-3f, nis_max));
+}
+
+void AP_Observer::set_ekf_energy_gate_for_replay(bool enabled,
+                                                 float rms_on,
+                                                 float rms_off,
+                                                 float tau_sec) {
+    _ekf_energy_gate_enable.set(enabled ? 1 : 0);
+    _ekf_energy_rms_on.set(MAX(0.0f, rms_on));
+    _ekf_energy_rms_off.set(constrain_value(rms_off, 0.0f, _ekf_energy_rms_on.get()));
+    _ekf_energy_tau_sec.set(MAX(0.1f, tau_sec));
 }
 
 void AP_Observer::set_ekf_force_thresholds_for_replay(float hold_max,

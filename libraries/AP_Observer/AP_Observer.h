@@ -65,6 +65,10 @@ public:
                                       float amp_max,
                                       float innov_max,
                                       float nis_max);
+    void set_ekf_energy_gate_for_replay(bool enabled,
+                                        float rms_on,
+                                        float rms_off,
+                                        float tau_sec);
     void set_ekf_force_thresholds_for_replay(float hold_max,
                                              float reject_min);
     void set_ekf_reset_on_switch_for_replay(bool enabled);
@@ -97,7 +101,10 @@ private:
 
     // ローパスフィルタ
     LowPassFilter2pVector3f _payload_filter;
+    LowPassFilter2pVector3f _energy_bandpass_fast;
+    LowPassFilter2pVector3f _energy_bandpass_slow;
     Vector3f _payload_filtered = Vector3f();
+    Vector3f _energy_band_proxy = Vector3f();
     bool filter_initialized = false;
 
     // EKF (harmonic disturbance observer) state
@@ -126,7 +133,9 @@ private:
     float ekf_axis_nis[RLS_NUM_AXES];
     float ekf_axis_amp[RLS_NUM_AXES];
     float ekf_axis_force_abs[RLS_NUM_AXES];
+    float ekf_axis_energy_power[RLS_NUM_AXES];
     uint8_t ekf_axis_trusted[RLS_NUM_AXES];
+    uint8_t ekf_axis_energy_trusted[RLS_NUM_AXES];
 
     // EKF tuning parameters
     AP_Float _ekf_q_d;
@@ -142,6 +151,10 @@ private:
     AP_Float _ekf_amp_max;
     AP_Float _ekf_innov_max;
     AP_Float _ekf_nis_max;
+    AP_Int8  _ekf_energy_gate_enable;
+    AP_Float _ekf_energy_rms_on;
+    AP_Float _ekf_energy_rms_off;
+    AP_Float _ekf_energy_tau_sec;
     AP_Float _ekf_force_hold_max;
     AP_Float _ekf_force_reject_min;
     AP_Int8  _ekf_reset_on_switch;

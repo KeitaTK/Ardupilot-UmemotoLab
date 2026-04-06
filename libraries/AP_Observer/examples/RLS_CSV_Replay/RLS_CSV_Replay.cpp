@@ -148,6 +148,14 @@ struct ReplayRunConfig {
     float ekf_innov_max = 0.7f;
     bool has_ekf_nis_max = false;
     float ekf_nis_max = 4.0f;
+    bool has_ekf_energy_gate = false;
+    int ekf_energy_gate = 1;
+    bool has_ekf_energy_rms_on = false;
+    float ekf_energy_rms_on = 0.20f;
+    bool has_ekf_energy_rms_off = false;
+    float ekf_energy_rms_off = 0.16f;
+    bool has_ekf_energy_tau = false;
+    float ekf_energy_tau = 2.0f;
     bool has_ekf_force_hold_max = false;
     float ekf_force_hold_max = 1.5f;
     bool has_ekf_force_reject_min = false;
@@ -178,6 +186,7 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-r-meas <var>]\n");
             printf("      [--sw-mode log|always-on|always-off] [--ekf-reset-on-switch 0|1]\n");
             printf("      [--ekf-axis-gate 0|1] [--ekf-amp-min <v>] [--ekf-amp-max <v>] [--ekf-innov-max <v>] [--ekf-nis-max <v>]\n");
+            printf("      [--ekf-energy-gate 0|1] [--ekf-energy-rms-on <v>] [--ekf-energy-rms-off <v>] [--ekf-energy-tau <s>]\n");
             printf("      [--ekf-force-hold-max <n>] [--ekf-force-reject-min <n>] [--ekf-axis-mask <mask>] [--ekf-hold-omega-off 0|1]\n");
             printf("\n");
             printf("Default mode runs the built-in regression file list.\n");
@@ -334,6 +343,54 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-nis-max=", 14) == 0) {
             cfg.ekf_nis_max = strtof(arg + 14, nullptr);
             cfg.has_ekf_nis_max = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-energy-gate") == 0) && next != nullptr) {
+            cfg.ekf_energy_gate = (int)strtol(next, nullptr, 10);
+            cfg.has_ekf_energy_gate = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-energy-gate=", 18) == 0) {
+            cfg.ekf_energy_gate = (int)strtol(arg + 18, nullptr, 10);
+            cfg.has_ekf_energy_gate = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-energy-rms-on") == 0) && next != nullptr) {
+            cfg.ekf_energy_rms_on = strtof(next, nullptr);
+            cfg.has_ekf_energy_rms_on = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-energy-rms-on=", 20) == 0) {
+            cfg.ekf_energy_rms_on = strtof(arg + 20, nullptr);
+            cfg.has_ekf_energy_rms_on = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-energy-rms-off") == 0) && next != nullptr) {
+            cfg.ekf_energy_rms_off = strtof(next, nullptr);
+            cfg.has_ekf_energy_rms_off = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-energy-rms-off=", 21) == 0) {
+            cfg.ekf_energy_rms_off = strtof(arg + 21, nullptr);
+            cfg.has_ekf_energy_rms_off = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-energy-tau") == 0) && next != nullptr) {
+            cfg.ekf_energy_tau = strtof(next, nullptr);
+            cfg.has_ekf_energy_tau = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-energy-tau=", 17) == 0) {
+            cfg.ekf_energy_tau = strtof(arg + 17, nullptr);
+            cfg.has_ekf_energy_tau = true;
             continue;
         }
 
@@ -542,6 +599,15 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
             cfg.ekf_amp_max,
             cfg.ekf_innov_max,
             cfg.ekf_nis_max
+        );
+    }
+    if (cfg.has_ekf_energy_gate || cfg.has_ekf_energy_rms_on || cfg.has_ekf_energy_rms_off || cfg.has_ekf_energy_tau) {
+        const bool energy_gate_enabled = cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true;
+        observer.set_ekf_energy_gate_for_replay(
+            energy_gate_enabled,
+            cfg.ekf_energy_rms_on,
+            cfg.ekf_energy_rms_off,
+            cfg.ekf_energy_tau
         );
     }
     if (cfg.has_ekf_force_hold_max || cfg.has_ekf_force_reject_min) {
