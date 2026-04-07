@@ -26,6 +26,23 @@
 
 ---
 
+### 2026-04-07 18:10: [Docs/Experiment Organization] 実験レポート集約構成への再編開始
+- 問題: 実験レポート、実験Program参照、元データ、生成物が複数箇所に散在し、時系列追跡と再現手順の導線が分かりづらかった。
+- 調査:
+  1. `docs/ekf_external_force_estimation/reports` と `analysis/replay/results/diagnostics` に重複レポートが混在していることを確認。
+  2. レポート内リンクは旧階層前提（`../../../analysis/...`）で、移設時に相対パス更新が必要と判定。
+- 試行:
+  1. `docs/experiments/` を新設し、EKFキャンペーンを `docs/experiments/ekf_external_force_estimation/` に集約。
+  2. レポート正本を `YYYY-MM-DD_日本語表題.md` へ統一リネームして移設。
+  3. `programs/`, `data/`, `artifacts/` の分類READMEを作成し、実体は既存配置を相対参照で紐付け。
+  4. analysis側の重複mdを削除し、バックアップ文書を `docs/experiments/archive/2026-04-07/` へ退避。
+  5. 旧導線（`docs/ekf_external_force_estimation/*`）を新ポータルへの案内に更新。
+- 結果:
+  - 実験レポートの正本が `docs/experiments` 配下に一元化され、日付ソートで時系列に閲覧可能となった。
+  - Program相対パス記載セクションを全レポートに追加し、再現手順の入口を統一した。
+  - 重複レポートを整理し、archive運用を開始した。
+- 備考: 生成物（PNG/CSV）の未参照判定は次フェーズで全件リンク検証とあわせて継続。
+
 ### 2026-04-06 17:35: [Replay/AP_Observer EKF] 0.60Hz固定初期値追加と40-110秒窓への再構成
 - 問題: 比較レポートに 0.60Hz 固定初期値の条件を追加したい。また、後半窓を 40-130 秒から 40-110 秒へ変更して比較範囲を揃えたい。
 - 調査:
