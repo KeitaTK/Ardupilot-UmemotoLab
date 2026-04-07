@@ -1,19 +1,37 @@
 # EKF エネルギー閾値判定レポート（現行実装ベース）
 
 目的
+- 旧STFTベースの暫定評価を、現行 `AP_Observer` 実装そのものの判定指標に置き換えて評価する。
+- 00000443 / 00000444 について、時間軸で
   - 上段: ペイロードフォース
   - 下段: X/Y 各軸の判定指標と閾値
   を可視化する。
 
 対象実装（現在の判定）
+- バンド指標: `band_proxy = LPF(0.80Hz) - LPF(0.25Hz)`
+- パワー更新: `power[k] = alpha * band_proxy[k]^2 + (1-alpha) * power[k-1]`
+- `alpha = 1 - exp(-dt/tau)`, `tau = EKF_EN_TAU`
+- 判定（ヒステリシス）:
   - 現在OFFなら `power >= EKF_EN_ON^2` でON
   - 現在ONなら `power <= EKF_EN_OFF^2` でOFF
+- 表示指標は比較しやすいよう `RMS = sqrt(power)` とした（閾値は `EKF_EN_ON`, `EKF_EN_OFF` をそのまま重ね描き）
 
 採用パラメータ
+- `EKF_EN_ON = 0.20`
+- `EKF_EN_OFF = 0.16`
+- `EKF_EN_TAU = 2.0`
 
 入力データ
+- [00000443_w35_100_extracted.csv](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/csv/00000443_w35_100_extracted.csv)
+- [00000443_w40_110_extracted.csv](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/csv/00000443_w40_110_extracted.csv)
+- [00000444_w35_100_extracted.csv](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/csv/00000444_w35_100_extracted.csv)
+- [00000444_w40_110_extracted.csv](../../../analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07/csv/00000444_w40_110_extracted.csv)
 
 生成物
+- スクリプト: [plot_energy_gate_indicator_xy.py](../../../analysis/replay/plot_energy_gate_indicator_xy.py)
+- 要約CSV: [indicator_summary.csv](../../../analysis/replay/results/diagnostics/energy_gate_indicator_xy_2026-04-07/indicator_summary.csv)
+- 時系列CSV（各窓）: [energy_gate_indicator_xy_2026-04-07/csv](../../../analysis/replay/results/diagnostics/energy_gate_indicator_xy_2026-04-07/csv)
+- 図（各窓）: [energy_gate_indicator_xy_2026-04-07/figures](../../../analysis/replay/results/diagnostics/energy_gate_indicator_xy_2026-04-07/figures)
 
 ## 1. 00000443（X/Y 判定時系列）
 
@@ -21,6 +39,8 @@
 ![00000443 w40-110 indicator](../../../analysis/replay/results/diagnostics/energy_gate_indicator_xy_2026-04-07/figures/00000443_w40_110_indicator_xy.png)
 
 観測
+- X指標（RMS_X）は閾値ON=0.20を十分超える時間が長く、Trust_X が有効化される。
+- Y指標（RMS_Y）は閾値OFF=0.16を下回る領域が大半で、Trust_Y はほぼ常時0。
 
 ## 2. 00000444（X/Y 判定時系列）
 
@@ -28,6 +48,8 @@
 ![00000444 w40-110 indicator](../../../analysis/replay/results/diagnostics/energy_gate_indicator_xy_2026-04-07/figures/00000444_w40_110_indicator_xy.png)
 
 観測
+- 00000444 でも X指標はON閾値を超える時間が長く、Trust_X が有効。
+- Y指標は低く、Trust_Y は0のまま。
 
 ## 3. 443/444 横断の要約
 
@@ -41,3 +63,5 @@
 | 00000444_w40_110 | 0.7343 | 0.0000 | 0.7165 | 0.0663 |
 
 結論
+- 現行実装の判定指標で見ても、00000443 / 00000444 はどちらも「Xは閾値を超えやすく、Yは閾値未満になりやすい」ケースだった。
+- 閾値 `ON=0.20, OFF=0.16` は、この2ログに対して X/Y 分離が明確で、先行の周波数推定結果（X-only/XY が 0.45Hz 付近へ収束）と整合する。
