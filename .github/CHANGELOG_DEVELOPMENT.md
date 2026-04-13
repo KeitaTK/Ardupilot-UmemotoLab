@@ -26,6 +26,21 @@
 
 ---
 
+### 2026-04-08 19:40: [Replay/AP_Observer EKF] リプレイ実験環境の現状調査と再現実行確認
+- 問題: EKFリプレイ実験（energy gate系）が現在のリポジトリ構成で実行可能か、整理時に必要資産が消失していないかを確認したい。
+- 調査:
+  1. `libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp` を確認し、`.BIN`入力時の `bin_to_replay_csv.py` 自動変換、`--ekf-energy-gate` などのEKF関連CLI引数、`set_ekf_energy_gate_for_replay()` 適用経路が有効なことを確認。
+  2. `analysis/replay/bin_to_replay_csv.py` を確認し、`DFReader_binary` から `OBSV` を抽出し、`--start-time-sec` / `--end-time-sec` の時間窓抽出（先頭OBSVを相対0秒基準）が有効なことを確認。
+  3. `git log --name-status` を確認し、直近の削除は主に重複レポート整理（analysis側md削除とdocs側への移設/統合）で、実行に必要なProgram本体の欠落は確認されなかった。
+- 試行:
+  1. `./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --outdir analysis/replay/results/runs/00000444_recheck_2026-04-08 --tag 00000444_recheck --plot --sw-mode log --ekf-reset-on-switch 0 --ekf-axis-gate 0 --ekf-energy-gate 1 --ekf-energy-rms-on 0.20 --ekf-energy-rms-off 0.16 --ekf-energy-tau 2.0 --ekf-w-init-hz 0.60 --ekf-q-w 1e-9 --ekf-axis-mask 3` を実行。
+  2. `python3 analysis/replay/energy_gate_retune_00000443_00000444.py --replay-bin build/sitl/examples/RLS_CSV_Replay --outdir analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-08_recheck --q-w 1e-9 --w-init-hz 0.60 --energy-on 0.20 --energy-off 0.16 --energy-tau 2.0 --thresholds 0.20 0.25` を実行。
+- 結果:
+  - リプレイ実行は成功し、`00000444_from_bin.csv` / `00000444_recheck_result.csv` / `plots/result_combined.png` / `plots/summary.json` を生成。
+  - summaryでは `est_freq_start_hz=0.6`, `est_freq_end_hz=0.4643`, `est_freq_min_hz=0.35`, `est_freq_max_hz=0.7677` を確認。
+  - retune再実行でも既存レポート傾向を再現（`energy_on=0.20` で 00000443/00000444 のX/XYが約0.45Hz、Yは0.60Hz保持）。
+- 備考: 復元作業は不要と判断。必要資産は現行ツリー上で利用可能で、削除分は主に文書整理に伴う重複排除。
+
 ### 2026-04-07 18:10: [Docs/Experiment Organization] 実験レポート集約構成への再編開始
 - 問題: 実験レポート、実験Program参照、元データ、生成物が複数箇所に散在し、時系列追跡と再現手順の導線が分かりづらかった。
 - 調査:

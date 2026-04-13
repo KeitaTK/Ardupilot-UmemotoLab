@@ -1,0 +1,9 @@
+{
+  "samples": 15332,
+  "duration_s": 153.94,
+  "est_freq_start_hz": 0.6,
+  "est_freq_end_hz": 0.4643,
+  "est_freq_min_hz": 0.35,
+  "est_freq_max_hz": 0.7677,
+  "mean_abs_wave_error_x": 0.1884529611270545
+}
