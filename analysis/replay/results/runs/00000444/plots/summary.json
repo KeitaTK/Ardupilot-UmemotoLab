@@ -5,5 +5,27 @@
   "est_freq_end_hz": 0.5157,
   "est_freq_min_hz": 0.4156,
   "est_freq_max_hz": 0.8593,
-  "mean_abs_wave_error_x": 0.08183518132011479
+  "mean_abs_wave_error_x": 0.0818351813201148,
+  "rmse_wave_error_x": 0.19328326038851046,
+  "corr_plx_prx": 0.9669736790851067,
+  "plx_diff_std": 0.31979286967814774,
+  "prx_diff_std": 0.14134408602708715,
+  "diff_std_ratio_prx_over_plx": 0.44198635876197445,
+  "freq_mae_hz": 0.09624250587007566,
+  "freq_max_abs_err_hz": 0.2850999999999999,
+  "ekf_sw_active_ratio": 0.3554004696060527,
+  "ekf_params": {
+    "q_w": "0.0005",
+    "r_meas": "0.08",
+    "w_init_hz": "0.6",
+    "axis_mask": "3",
+    "reset_on_switch": "0",
+    "force_hold_max": "0.8",
+    "force_reject_min": "1.5"
+  },
+  "artifacts": {
+    "combined_plot": "analysis/replay/results/runs/00000444/plots/result_combined.png",
+    "compare_plot": "analysis/replay/results/runs/00000444/plots/original_vs_reconstructed.png",
+    "report": "analysis/replay/results/runs/00000444/plots/REPLAY_EKF_REPORT.md"
+  }
 }

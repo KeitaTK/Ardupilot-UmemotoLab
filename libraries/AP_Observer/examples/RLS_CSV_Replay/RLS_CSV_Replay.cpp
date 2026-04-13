@@ -136,8 +136,16 @@ struct ReplayRunConfig {
     float ekf_w_init_hz = 0.0f;
     bool has_ekf_q_w = false;
     float ekf_q_w = 0.0f;
+    bool has_ekf_q_d = false;
+    float ekf_q_d = 0.0f;
+    bool has_ekf_q_dd = false;
+    float ekf_q_dd = 0.0f;
+    bool has_ekf_q_c = false;
+    float ekf_q_c = 0.0f;
     bool has_ekf_r_meas = false;
     float ekf_r_meas = 0.0f;
+    bool has_ekf_pred_time = false;
+    float ekf_pred_time = 0.0f;
     bool has_ekf_axis_gate = false;
     int ekf_axis_gate = 1;
     bool has_ekf_amp_min = false;
@@ -183,7 +191,7 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("Usage:\n");
             printf("  ./build/sitl/examples/RLS_CSV_Replay\n");
             printf("  ./build/sitl/examples/RLS_CSV_Replay --input <path_to_csv_or_bin> [--outdir <dir>] [--tag <name>] [--plot] [--force-window]\n");
-            printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-r-meas <var>]\n");
+            printf("      [--ekf-w-init-hz <hz>] [--ekf-q-w <var>] [--ekf-q-d <var>] [--ekf-q-dd <var>] [--ekf-q-c <var>] [--ekf-r-meas <var>] [--ekf-pred-time <s>]\n");
             printf("      [--sw-mode log|always-on|always-off] [--ekf-reset-on-switch 0|1]\n");
             printf("      [--ekf-axis-gate 0|1] [--ekf-amp-min <v>] [--ekf-amp-max <v>] [--ekf-innov-max <v>] [--ekf-nis-max <v>]\n");
             printf("      [--ekf-energy-gate 0|1] [--ekf-energy-rms-on <v>] [--ekf-energy-rms-off <v>] [--ekf-energy-tau <s>]\n");
@@ -442,6 +450,42 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             continue;
         }
 
+        if ((strcmp(arg, "--ekf-q-d") == 0) && next != nullptr) {
+            cfg.ekf_q_d = strtof(next, nullptr);
+            cfg.has_ekf_q_d = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-q-d=", 10) == 0) {
+            cfg.ekf_q_d = strtof(arg + 10, nullptr);
+            cfg.has_ekf_q_d = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-q-dd") == 0) && next != nullptr) {
+            cfg.ekf_q_dd = strtof(next, nullptr);
+            cfg.has_ekf_q_dd = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-q-dd=", 11) == 0) {
+            cfg.ekf_q_dd = strtof(arg + 11, nullptr);
+            cfg.has_ekf_q_dd = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-q-c") == 0) && next != nullptr) {
+            cfg.ekf_q_c = strtof(next, nullptr);
+            cfg.has_ekf_q_c = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-q-c=", 10) == 0) {
+            cfg.ekf_q_c = strtof(arg + 10, nullptr);
+            cfg.has_ekf_q_c = true;
+            continue;
+        }
+
         if ((strcmp(arg, "--ekf-r-meas") == 0) && next != nullptr) {
             cfg.ekf_r_meas = strtof(next, nullptr);
             cfg.has_ekf_r_meas = true;
@@ -451,6 +495,18 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-r-meas=", 13) == 0) {
             cfg.ekf_r_meas = strtof(arg + 13, nullptr);
             cfg.has_ekf_r_meas = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-pred-time") == 0) && next != nullptr) {
+            cfg.ekf_pred_time = strtof(next, nullptr);
+            cfg.has_ekf_pred_time = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-pred-time=", 16) == 0) {
+            cfg.ekf_pred_time = strtof(arg + 16, nullptr);
+            cfg.has_ekf_pred_time = true;
             continue;
         }
 
@@ -567,9 +623,9 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     // 初期化後にパラメータを上書き
     observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
     
-    if (AP_Param::set_by_name("OBS_EKF_Q_D", 0.02f)) {}
-    if (AP_Param::set_by_name("OBS_EKF_Q_DD", 0.05f)) {}
-    if (AP_Param::set_by_name("OBS_EKF_Q_C", 0.001f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_Q_D", cfg.has_ekf_q_d ? cfg.ekf_q_d : 0.02f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_Q_DD", cfg.has_ekf_q_dd ? cfg.ekf_q_dd : 0.05f)) {}
+    if (AP_Param::set_by_name("OBS_EKF_Q_C", cfg.has_ekf_q_c ? cfg.ekf_q_c : 0.001f)) {}
     if (AP_Param::set_by_name("OBS_EKF_Q_W", 0.0005f)) {}
     if (AP_Param::set_by_name("OBS_EKF_R_MEAS", 0.08f)) {}
     if (cfg.has_ekf_w_init_hz) {
@@ -580,6 +636,9 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     }
     if (cfg.has_ekf_r_meas) {
         observer.set_ekf_r_meas_for_replay(cfg.ekf_r_meas);
+    }
+    if (cfg.has_ekf_pred_time) {
+        if (AP_Param::set_by_name("PRED_TIME", cfg.ekf_pred_time)) {}
     }
     if (cfg.has_ekf_reset_on_switch) {
         observer.set_ekf_reset_on_switch_for_replay(cfg.ekf_reset_on_switch != 0);

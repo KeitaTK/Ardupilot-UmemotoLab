@@ -26,6 +26,76 @@
 
 ---
 
+### 2026-04-13 23:10: [Replay/AP_Observer EKF] 先読み時間と中間Q/R条件の追加検証
+- 問題: `R↑, Q↓` の強め条件で、波の頂点付近にノイズ様の揺れと、実データの振幅減少区間での過大推定が残った。原因が先読み時間か、モデルの無減衰性かを切り分けたい。
+- 調査:
+  1. `get_predicted_force()` が `_prediction_time` を使って先読み外力を返す構造を確認。
+  2. `PRED_TIME` を 0 にしても、今回の replay 出力が `model_strong` とほぼ同一であることを確認し、先読みは主因ではないと判断。
+  3. EKF/調和振動子の一般論として、無減衰の2次系は共振点近傍で振幅が大きくなりやすく、EKFは誤モデルや線形化誤差で不整合を起こし得ることを確認。
+- 試行:
+  1. `R=0.16, Q_D=0.01, Q_DD=0.025, Q_C=0.0005` の中間条件（model_mid）を 00000443/00000444 の両方で実行。
+  2. `PRED_TIME=0.0` でも replay を実行し、先読み影響の有無を比較。
+  3. X軸のみの3条件比較図（baseline/model_strong/model_mid）を生成。
+- 結果:
+  - model_mid は model_strong より振幅過大が緩和されるが、00000443 では終端PRXが依然として実データを大きく上回った。
+  - 00000444 では model_mid が折衷案として有効で、平滑化と周波数維持のバランスは良好。
+  - `PRED_TIME=0.0` は今回の replay では有効な改善にならず、主因は無減衰モデルとQ/Rの重みづけにある可能性が高い。
+- 備考:
+  - 追加成果物: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/figures/00000443_w35_100_xaxis_compare_three.png`
+  - 追加成果物: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/figures/00000444_w40_110_xaxis_compare_three.png`
+
+### 2026-04-13 22:45: [Docs/Replay Report] モデル正弦波強調レポートへX軸比較図を追加
+- 問題: 比較レポートに数値要約はあるが、Baseline と Model-strong の波形差をX軸で直接比較できる図が不足していた。
+- 調査:
+  1. 既存成果物に各ケースの `*_result.csv`（PLX/PRX/Time_s含む）が揃っていることを確認。
+  2. ユーザ要件が「比較はX軸のみ」であることを確認。
+- 試行:
+  1. 00000443(w35_100), 00000444(w40_110) について、`PLX` と `PRX`（Baseline/Model-strong）を同一時間軸で重ねた比較図を生成。
+  2. 残差 `PLX-PRX` の比較を下段に追加した2段構成図を作成。
+  3. レポート `2026-04-13_モデル正弦波強調リプレイ検証_443_444.md` に図埋め込みセクションを追記。
+- 結果:
+  - `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/figures/00000443_w35_100_xaxis_compare.png`
+  - `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/figures/00000444_w40_110_xaxis_compare.png`
+  - レポート内でX軸のみの視覚比較が可能になった。
+- 備考: 比較対象は要件どおりX軸のみ（PLX/PRX）。
+
+### 2026-04-13 22:20: [Replay/AP_Observer EKF] モデル正弦波強調条件（R↑, Q_D/Q_DD/Q_C↓）の443/444リプレイ検証
+- 問題: 「観測よりモデル予測を強く反映」するための `EKF_R_MEAS` 増加と `EKF_Q_D/Q_DD/Q_C` 低減を、実リプレイで比較評価したい。あわせて周波数推定精度を維持できるか確認が必要。
+- 調査:
+  1. `RLS_CSV_Replay.cpp` は既存CLIで `--ekf-q-w` / `--ekf-r-meas` は受けるが、`Q_D/Q_DD/Q_C` の上書きは未対応であることを確認。
+  2. `run_case()` 内で `OBS_EKF_Q_D=0.02`, `OBS_EKF_Q_DD=0.05`, `OBS_EKF_Q_C=0.001` が固定設定されていることを確認。
+- 試行:
+  1. `libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp` に `--ekf-q-d`, `--ekf-q-dd`, `--ekf-q-c` を追加し、`AP_Param::set_by_name` に上書き反映できるよう拡張。
+  2. `./waf build --target examples/RLS_CSV_Replay` でバイナリ更新。
+  3. 00000443(35-100s), 00000444(40-110s) を同一窓で比較実行。
+     - Baseline: `R=0.08, Q_D=0.02, Q_DD=0.05, Q_C=0.001`
+     - Model-strong: `R=0.32, Q_D=0.005, Q_DD=0.0125, Q_C=0.00025`
+     - 周波数関連は据え置き: `Q_W=1e-9, W_INIT=0.60Hz`
+  4. 4ケースの `summary.json` から比較CSVを生成し、レポート化。
+- 結果:
+  - 00000443: RMSE改善（2.5122→2.1669）だが、周波数MAE悪化（0.0994→0.1201）。
+  - 00000444: 平滑化指標改善（差分比 0.5196→0.4524）、周波数MAEは同等（0.13075→0.13059）。
+  - 一律スケーリングではログ依存性が残り、全ログでの同時改善は未達。
+- 備考:
+  - 成果物: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/`
+  - レポート: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_モデル正弦波強調リプレイ検証_443_444.md`
+
+### 2026-04-13 21:30: [Replay/AP_Observer EKF] 周波数以外の推定パラメータ可視化・再現比較図・EKFパラメータ付きレポート自動生成
+- 問題: `plot_replay_results.py` が周波数推定とPLX/PRXの2段表示のみで、EKF内部状態・SW挙動・元データ対再現の並列比較、さらにEKF設定値を含むレポート化に対応していなかった。
+- 調査:
+  1. 既存の replay 結果CSVに `DX/VX/CX/SW/RealSW/RealPhase` が含まれていることを確認。
+  2. 既存スクリプトは `Time_s, PLX, PRX, EstFreq_Hz, RealFreq_Hz` のみ読込で、`result_combined.png` と簡易 `summary.json` のみ出力していることを確認。
+- 試行:
+  1. `analysis/replay/plot_replay_results.py` を拡張し、CSV読込対象を `PLY/PLZ/DX/VX/CX/SW/RealSW/RealPhase` まで追加。
+  2. 拡張図 `result_combined.png`（周波数・EKF状態・入力+SW・再現誤差）と、並列比較図 `original_vs_reconstructed.png`（元データと推定再現）を出力。
+  3. 指標を追加（`freq_mae_hz`, `freq_max_abs_err_hz`, `rmse_wave_error_x`, `corr_plx_prx`, `diff_std_ratio_prx_over_plx`, `ekf_sw_active_ratio`）。
+  4. EKFパラメータをCLI (`--ekf-*`, `--ekf-param k=v`) で受け取り、`REPLAY_EKF_REPORT.md` と `summary.json` に保存。
+  5. 既存データ `analysis/replay/results/runs/00000444/00000444_bin_result.csv` で実行し、成果物生成を確認。
+- 結果:
+  - `analysis/replay/results/runs/00000444/plots/` に `result_combined.png`, `original_vs_reconstructed.png`, `summary.json`, `REPLAY_EKF_REPORT.md` を生成。
+  - レポート内にEKFパラメータとフィルタ確認用指標（再現誤差・相関・差分標準偏差比）を明記できるようになった。
+- 備考: EKFパラメータは replay 実行時引数をそのまま渡す設計。既存CSV単体からは完全復元できないため、必要に応じて `--ekf-param` で補完する。
+
 ### 2026-04-08 19:40: [Replay/AP_Observer EKF] リプレイ実験環境の現状調査と再現実行確認
 - 問題: EKFリプレイ実験（energy gate系）が現在のリポジトリ構成で実行可能か、整理時に必要資産が消失していないかを確認したい。
 - 調査:

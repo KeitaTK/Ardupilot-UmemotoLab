@@ -1,0 +1,23 @@
+{
+  "samples": 6465,
+  "duration_s": 64.9903,
+  "est_freq_start_hz": 0.6,
+  "est_freq_end_hz": 0.4582,
+  "est_freq_min_hz": 0.35,
+  "est_freq_max_hz": 0.6644,
+  "mean_abs_wave_error_x": 1.4748355297757154,
+  "rmse_wave_error_x": 2.1668546958691195,
+  "corr_plx_prx": 0.3553955073091413,
+  "plx_diff_std": 0.23303328041074062,
+  "prx_diff_std": 0.14379194687636865,
+  "diff_std_ratio_prx_over_plx": 0.6170446840164775,
+  "freq_mae_hz": 0.12006106728538282,
+  "freq_max_abs_err_hz": 0.25,
+  "ekf_sw_active_ratio": 0.6597061098221191,
+  "ekf_params": {},
+  "artifacts": {
+    "combined_plot": "docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444\u30ea\u30d7\u30ec\u30a4\u691c\u8a3c_model_strong/00000443_w35_100_model_strong/plots/result_combined.png",
+    "compare_plot": "docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444\u30ea\u30d7\u30ec\u30a4\u691c\u8a3c_model_strong/00000443_w35_100_model_strong/plots/original_vs_reconstructed.png",
+    "report": "docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444\u30ea\u30d7\u30ec\u30a4\u691c\u8a3c_model_strong/00000443_w35_100_model_strong/plots/REPLAY_EKF_REPORT.md"
+  }
+}

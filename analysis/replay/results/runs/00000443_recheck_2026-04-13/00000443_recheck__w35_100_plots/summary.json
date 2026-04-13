@@ -1,0 +1,23 @@
+{
+  "samples": 6465,
+  "duration_s": 64.99029999999999,
+  "est_freq_start_hz": 0.4398,
+  "est_freq_end_hz": 0.5702,
+  "est_freq_min_hz": 0.3703,
+  "est_freq_max_hz": 0.8643,
+  "mean_abs_wave_error_x": 0.09785590100541378,
+  "rmse_wave_error_x": 0.12666487735537596,
+  "corr_plx_prx": 0.9866753927198368,
+  "plx_diff_std": 0.23303328041074062,
+  "prx_diff_std": 0.09203929967061984,
+  "diff_std_ratio_prx_over_plx": 0.39496203936361746,
+  "freq_mae_hz": 0.05992004640371228,
+  "freq_max_abs_err_hz": 0.2643,
+  "ekf_sw_active_ratio": 0.6597061098221191,
+  "ekf_params": {},
+  "artifacts": {
+    "combined_plot": "./analysis/replay/results/runs/00000443_recheck_2026-04-13/00000443_recheck__w35_100_plots/result_combined.png",
+    "compare_plot": "./analysis/replay/results/runs/00000443_recheck_2026-04-13/00000443_recheck__w35_100_plots/original_vs_reconstructed.png",
+    "report": "./analysis/replay/results/runs/00000443_recheck_2026-04-13/00000443_recheck__w35_100_plots/REPLAY_EKF_REPORT.md"
+  }
+}
