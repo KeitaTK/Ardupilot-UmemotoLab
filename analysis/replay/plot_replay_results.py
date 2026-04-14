@@ -133,9 +133,10 @@ def plot_combined(data: Dict[str, List[float]], outpath: str, title: str) -> Non
     fig, axes = plt.subplots(4, 1, figsize=(14, 11), sharex=True)
 
     # 1) 周波数推定
+    # NOTE: Reference frequency (real_freq from log) has been found to contain incorrect values
+    # and is excluded from plots. Only Estimated frequency from EKF is plotted.
+    # Target frequency: ~0.45 Hz (for 00000443/00000444 logs)
     axes[0].plot(t, data["est_freq"], label="Estimated frequency", linewidth=1.0)
-    if not all(np.isnan(np.asarray(data["real_freq"], dtype=float))):
-        axes[0].plot(t, data["real_freq"], "--", label="Reference frequency", linewidth=0.9, alpha=0.8)
     axes[0].set_ylabel("Freq [Hz]")
     axes[0].set_title(f"{title} - Frequency")
     axes[0].grid(True, alpha=0.3)

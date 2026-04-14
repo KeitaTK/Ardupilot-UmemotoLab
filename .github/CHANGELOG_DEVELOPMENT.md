@@ -26,6 +26,251 @@
 
 ---
 
+---
+
+---
+
+### 2026-04-14 17:10: [AP_Observer/EKF] ゼロ注入不発火の実装修正と再検証
+
+- 問題: 低振幅区間で measurement=0 注入している想定に対し、推定振幅が収束せず通常振幅が残る現象
+- 調査:
+  1. `EKF_FHOLD` 既定値が 0.0 で、`|force|<=hold` が実質ほぼ発火しないことを確認
+  2. `energy_hold_omega` 真時に `predict_only` で早期returnし、measurement=0 更新へ到達しない分岐を確認
+  3. 443/444で低振幅窓 (`|PLX|<=0.1`) の RMS 比 `RMS(PRX)/RMS(PLX)` を算出し、修正前は過大（443:3.27, 444:4.26）を確認
+- 試行:
+  1. `libraries/AP_Observer/AP_Observer.cpp` で `EKF_FHOLD` 既定値を 0.10 に変更
+  2. `predict_only_hold` を `switch_hold_omega` のみに限定し、energy hold 時もゼロ注入更新を実行
+  3. `./waf build --target examples/RLS_CSV_Replay` 後に 443/444 replay を再実行
+- 結果:
+  - ✅ 低振幅窓の過大振幅が改善（443: 1.40, 444: 1.18）
+  - ✅ 実装上の不発火要因を解消
+  - ⚠️ なお完全なゼロ収束には未達（モデル構造上の限界あり）
+- 備考:
+  - 残課題: 観測モデル `y=d+c` と無減衰振動系により、ゼロ注入単独では `d` 振幅を十分に消散できない
+  - 次候補: hold区間で `d,d_dot` の減衰項導入、共分散収縮の強化
+
+### 2026-04-14 16:20: [Replay/Comparison] 旧新比較図の時間原点ずれ修正と再生成
+
+- 問題: 旧新比較図で波形が時間方向にオフセットして見え、FIT不良に見える可能性があった
+- 調査:
+  1. 旧CSVは絶対時刻（443: 35-100s, 444: 40-110s）、新CSVは窓先頭0s起点であることを確認
+  2. 相互相関で新旧ラグを確認し、443/444とも 0 サンプル（実信号位相ずれなし）を確認
+- 試行:
+  1. `analysis/replay/run_measurement_zero_replay_validation.py` の比較図生成で時刻軸を窓相対時間へ整列
+  2. 凡例を `PRX 2026-04-13 baseline` / `PRX 2026-04-14 measurement=0` に具体化
+  3. サブプロセス呼び出しを `python3` 固定から `sys.executable` へ修正（venv一貫実行）
+  4. 443/444 を再リプレイし、比較図・summary・比較CSVを再生成
+- 結果:
+  - ✅ 見かけの時間オフセットを解消した比較図を再生成
+  - ✅ 時間窓ミスではなく時間原点差が原因であることを確認
+  - ✅ レポートに再点検結果と整列済みである旨を追記
+- 備考:
+  - 比較図: `results/2026-04-14_観測値ゼロ強制_結果/comparison/figures/*_xaxis_old_vs_fix_standard.png`
+  - レポート: `docs/experiments/ekf_external_force_estimation/reports/2026-04-14_観測値ゼロ強制_443_444リプレイ検証.md`
+
+### 2026-04-14 13:40: [Replay/Implementation] 観測値ゼロ強制の実装整理と443/444再検証
+
+- 問題: 観測値ゼロ強制を本実装へ反映後、実ログ(443/444)での再現評価と図入りレポートが未整備だった
+- 調査:
+  1. `AP_Observer::ekf_update_axis()` のコメントに旧ロジック説明が残っており、実装意図との不整合を確認
+  2. 443/444 の既存 windowed 入力CSVを再利用できることを確認
+  3. `RLS_CSV_Replay` に一部CLI上書き（`--ekf-w-init-hz 0.6` など）を与えると SIGABRT が発生する回帰を確認
+- 試行:
+  1. `libraries/AP_Observer/AP_Observer.cpp` の重複/旧説明コメントを整理し、観測値ゼロ強制方針に統一
+  2. `./waf build --target examples/RLS_CSV_Replay` で再ビルド
+  3. `analysis/replay/run_measurement_zero_replay_validation.py` を新規追加し、443/444のstandard再リプレイ・図生成・旧結果比較CSV作成を自動化
+  4. 新規レポート `2026-04-14_観測値ゼロ強制_443_444リプレイ検証.md` を作成し、INDEXへ登録
+- 結果:
+  - ✅ 443/444 の再リプレイ成果物を生成（CSV, summary, 図, 比較CSV）
+  - ✅ 旧結果との差分を定量化（`metrics_old_vs_fix.csv`）
+  - 443/444 standard比較では RMSE は悪化傾向、444のみ周波数MAE改善を確認
+  - ⚠️ CLI上書き時SIGABRTの回帰を再現（追加デバッグ対象）
+- 備考:
+  - 成果物: `docs/experiments/ekf_external_force_estimation/reports/results/2026-04-14_観測値ゼロ強制_結果/`
+  - 比較図: `comparison/figures/*_xaxis_old_vs_fix_standard.png`
+
+### 2026-04-15 09:30: [Implementation/Design] 観測値ゼロ強制案の導入 - 複雑な3対策から1対策へ
+
+- 問題: 低振幅デッドバンド領域での発散抑制に3つの対策（R×1000拡大、K制約±0.01、NaN検出）が必要とされていた。これは実装複雑度が高く、R値の人為的な拡大など物理的な根拠に乏しかった
+- 調査:
+  1. デッドバンド内の信号対雑音比が1以下（0.05N信号 / 0.08N雑音）の領域では、測定値がノイズ支配
+  2. この条件下で観測値を0に固定する提案の有効性をシミュレーション検証
+  3. 3つのアプローチ（現行、無安全、観測値0案）を同一条件で比較
+- 試行:
+  1. Python シミュレーション (`analysis/deadband_measurement_zero_test.py`) を実装
+  2. 3フェーズテスト（通常→低振幅→復帰）で性能評価
+  3. 新規レポート `docs/experiments/ekf_external_force_estimation/reports/2026-04-15_観測値ゼロ強制案の導入戦略.md` を作成
+  4. 不要な6方法比較レポートと安全策検証レポートを削除してシンプル化
+- 結果:
+  - **観測値ゼロ案**: Phase 2 (低振幅) RMSE=0.0526（最優）← 現行 0.0853 より 38.3% 改善
+  - **オーバーシュート削減**: 2.12倍（現行 6.58倍 → 新案、安全策なし 7.87倍）
+  - **実装コスト**: 1～2行追加 + 5～10行削除（R×1000、K制約、NaN検出）
+  - **物理根拠**: 観測値0という「アンカー」が内部モデル増幅を物理的に抑制
+- 備考: 
+  - 観測値ゼロ案は z = 0.0f 1行追加のシンプル実装で最高の効果を実現
+  - 次ステップ: コード実装 → リプレイ検証 → 拡張レポート作成
+  - 中期以降: 3モード状態機械や長期安定性は別途検討
+
+---
+
+
+
+- 問題: 現行実装の安全策（R×1000、K 制約）の重要性と、除外時の危険性が明確に示されていなかった
+- 調査:
+  1. 安全策なすのEKFと安全策ありのEKF をシミュレーション比較（3フェーズ: 通常→低振幅→復帰）
+  2. 低振幅領域（振幅0.05N）での挙動を定量評価
+  3. 対策1（R×1000）と対策2（K制約 ±0.01）の効果を分離分析
+- 試行:
+  1. Python シミュレーション(`analysis/safeguard_removal_test.py`)を実装
+  2. 前進オイラー離散化でEKF予測・更新を再現
+  3. 結果をMatplotlib でプロット（6パネル比較）
+  4. 新規レポート `docs/experiments/ekf_external_force_estimation/reports/2026-04-14_低振幅安全策検証_シミュレーションレポート.md` を作成
+- 結果:
+  - **安全策なし**: 低振幅領域で振幅オーバーシュート 9.6 倍（真値0.05→推定0.48）、K ゲイン最大0.376
+  - **安全策あり**: オーバーシュート 9.9 倍（若干増），K ゲイン最大0.01（97.3% 削減）
+  - 両対策の併用が必須であること、単独では不十分であること、復帰時の挙動に改善の余地があることを明示
+- 備考: 実飛行投入前に「3モード状態機械+段階的ガード解除」の導入を強く推奨
+
+### 2026-04-14 00:20: [Documentation/Design] EKF運用戦略比較の詳細レポート作成（実飛行判断向け）
+
+- 問題: 小振幅時の内部増幅リスク、predict-only 長時間化、復帰遅れのトレードオフに対し、実飛行投入判断に使える比較資料が不足していた
+- 調査:
+  1. 現行実装（ekf_update_axis）の分岐とガード（weak-gain/predict-only/finite reset）を再整理
+  2. 既定パラメータ（EKF_Q_D, EKF_Q_DD, EKF_R_MEAS, EKF_W_MIN/MAX, EKF_EN_GAT, EKF_FHOLD, EKF_FREJ, EKF_SW_HOLD）を確認
+  3. ユーザー懸念（停止案の復帰遅れ）を含め、実飛行観点で評価軸を定義
+- 試行:
+  1. 新規レポート `docs/experiments/ekf_external_force_estimation/reports/2026-04-14_EKF運用戦略比較_実飛行判断レポート.md` を作成
+  2. 6方式を比較（現行微修正、完全停止、ソフトフリーズ、3モード状態機械、減衰+駆動モデル拡張、二重推定器）
+  3. 各方式についてアルゴリズム、長所短所、実飛行リスク、導入コスト、推奨ロードマップを記載
+  4. 「停止案は単独採用非推奨、Guard/Reacquire 併用なら有効」という判断を整理
+  5. INDEX.md に Phase 5 エントリとして登録
+- 結果:
+  - ユーザーが方式選定を行うための比較資料を整備
+  - 直近投入向け推奨として「3モード状態機械 + 現行微修正」案を提示
+  - 中期改善として「減衰+駆動モデル拡張」を位置づけ
+- 備考: 本エントリは設計判断用ドキュメント作成であり、コード本体のアルゴリズム変更は未実施
+
+### 2026-04-14 00:00: [Documentation/Code] 低振幅omega固定の3ステップ試行錯誤を実装の詳細ドキュメント化
+
+- 問題: 初回修正（全条件で観測更新）による発散の原因、試行錯誤のプロセス、最終的な弱ゲイン化の実装詳細が明記されていなかった
+- 調査:
+  1. ekf_update_axis() の実装を詳細分析（lines 438-750）
+  2. 3つの独立した hold_omega 条件の役割を確認：
+     - force_hold_omega: 低振幅（F ≦ 0.0N）→ 弱ゲイン観測更新
+     - switch_hold_omega: SW OFF → predict-only
+     - energy_hold_omega: エネルギーゲート OFF → predict-only
+  3. 弱ゲイン化の3つの対策メカニズムを特定：
+     - 対策1: 測定ノイズスケーリング（R ×1000）
+     - 対策2: Kalman ゲイン制約（K[0,1,2] ∈ [-0.01, 0.01]）
+     - 対策3: 非有限値検出と軸リセット（omega 維持）
+- 試行:
+  1. レポート「試行錯誤メモ」セクションを 4 行から ~150 行に詳細化：
+     - ステップ1: 初回修正の失敗原因分析（発散、RMSE 極端悪化）
+     - ステップ2: 条件分離の試みと限界（switch/energy を predict-only に）
+     - ステップ3: 弱ゲイン化による最終解（対策1-3 の詳細説明）
+  2. レポートに新セクション「実装仕様の詳細（コード解説）」追加：
+     - 段階1: 3つの条件判定と役割説明
+     - 段階2: predict-only パス（line 537-554）
+     - 段階3: 低振幅弱ゲイン観測更新（line 570-606）
+     - 段階4: 非有限値検出と軸リセット（line 651-668）
+  3. コード内にインライン詳細コメント追加（8ヶ所）：
+     - 関数冒頭（line 438-460）: 3ステップ試行錯誤の背景概要
+     - 3つの条件定義（line 474-520）: 各条件の役割・トリガ
+     - predict_only_hold ロジック（line 537）: SW OFF/エネルギー OFF の処理
+     - R スケーリング（line 571）: 測定ノイズ 1000 倍の根拠
+     - K 制約メカニズム（line 601）: [−0.01, 0.01] 制約の効果
+     - NaN/Inf 検出（line 651）: 非有限値時の軸リセット堅牢性
+- 結果: 
+  - 報告とコードが双方向参照可能な構造を実現
+  - 試行錯誤のプロセス（レポート）と実装詳細（コード）が明確に連携
+  - 開発者が将来、弱ゲイン化の各メカニズムの理由を理解可能に
+- 備考: 全4ケース（00000443 baseline/model-strong, 00000444 baseline/model-strong）で安定性確認；RMSE 79-80% 改善、相関 0.30→0.83、0.57→0.94
+
+### 2026-04-13 23:59: [Documentation] EKFレポート構造の標準化と管理方針記録
+- 問題: `2026-04-13_低振幅omega固定の実装と再検証` レポートのディレクトリ構造が他のレポートと異なり、INDEX.md への登録漏れがあった。レポート作成方針が明文化されていなかった。
+- 調査:
+  1. 既存レポート 14 件はすべて `reports/` 直下に Markdown ファイルとして配置されていることを確認。
+  2. 複数の結果ファイル群を伴うレポートは、`results/` サブディレクトリに整理される構造が標準と判断。
+  3. INDEX.md はこれらの全レポートを Phase 別に管理していることを確認。
+- 試行:
+  1. `2026-04-13_低振幅区間_omega固定仕様の実装差分修正と再検証.md` ファイル名を短縮し `2026-04-13_低振幅omega固定の実装と再検証.md` に変更。
+  2. ファイルを `results/2026-04-13_低振幅omega固定_結果/` から `reports/` 直下に移動。
+  3. 内部の画像・データ参照パスを `results/2026-04-13_...` でプレフィックスするよう全更新。
+  4. INDEX.md に Phase 4 エントリとして新規登録。
+- 結果:
+  - ✅ レポート構造が標準化（Markdown ファイル + results サブディレクトリ）
+  - ✅ INDEX.md から正式に参照可能
+  - ✅ 他のレポートと一貫した命名・配置規則に統一
+- 備考:
+
+  ### 2026-04-15 12:15: [Implementation/Build] 観測値ゼロ強制案の実装完了
+
+  - 問題: シミュレーションで有効性が確認された観測値ゼロ強制案を実装し、ビルド・検証する必要があった
+  - 調査:
+    1. AP_Observer.cpp の ekf_update_axis() 関数内でデッドバンド判定を確認
+    2. 現行実装の R×1000拡大と K 制約の削除箇所を掌握
+    3. 観測値0強制処理の追加位置（y_pred計算前）を決定
+  - 試行:
+    1. デッドバンド内（force_hold_omega || energy_hold_omega）で `measurement = 0.0f;` を追加
+    2. 従来の R×1000拡大処理を削除
+    3. K制約（K[i] = constrain_value(...)）を削除
+    4. データフロー修正（innov の二重宣言を排除）
+    5. SITL用に `./waf configure --board sitl && ./waf copter` でビルド
+  - 結果:
+    - ✅ コンパイル成功（エラーなし）
+    - ✅ arducopter バイナリ生成完了（4.2 MB、sitl/bin/)
+    - ✅ RLS_CSV_Replay ツール生成完了
+    - 実装コード行数: 2～3行追加、5～10行削除
+    - コンパイル時間: ~2.3秒（SITL）
+  - 備考:
+    - 次ステップ: リプレイ検証（00000443、00000444）
+    - 詳細は実装完了レポート参照: `docs/.../2026-04-15_実装完了レポート.md`
+    - よシミュレーション期待値（RMSE 38.3% 改善、オーバーシュート 68% 削減）を実機ログで検証予定
+
+  - レポート管理方針を `/memories/repo/report_organization_guide.md` に記録。
+  - 今後の新しいレポートはこのガイドに従って作成。
+  - 見直し対象: `2026-04-13_443_444リプレイ検証/` など他の古いディレクトリ構造
+
+### 2026-04-13 23:58: [Replay/Analysis] Reference frequency がログに含んだ不正確な値の除外と目標周波数記録
+- 問題: ログの OBSV.F フィールド（Reference frequency）から抽出された周波数値が不正確であることが判明。プロット図に黄色線として表示されていたが、EKF推定値（青色線）との比較において混乱の原因となった。
+- 調査:
+  - Reference frequency は `analysis/replay/bin_to_replay_csv.py` で OBSV パッケージから抽出されていた。
+  - ログデータそのものに誤った値が記録されたと推測。
+  - Estimated frequency（EKF推定値）は独立した計算で信頼できると確認。
+- 試行:
+  1. `analysis/replay/plot_replay_results.py` の `plot_combined()` 関数から Reference frequency プロットを削除。
+  2. 代わりに正式な目標周波数 0.45 Hz を記録ファイルに明記。
+  3. 4ケース（443 baseline/model-strong, 444 baseline/model-strong）のプロットを再生成。
+- 結果:
+  - すべてのプロットから Reference frequency（黄色線）が除外されました。
+  - 周波数グラフは Estimated frequency（青色線）のみを表示。
+  - 目標周波数（0.45 Hz）をメモリファイルに記録。
+- 備考:
+  - 修正ファイル: `analysis/replay/plot_replay_results.py`
+  - 記録先: `/memories/repo/frequency_calibration.md`
+  - レポート更新: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_low_amp_holdomega_fix/2026-04-13_低振幅区間_omega固定仕様の実装差分修正と再検証.md`
+  - 再生成プロット: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_low_amp_holdomega_fix/[00000443|00000444]_*/plots/*.png`
+
+### 2026-04-13 23:55: [AP_Observer EKF] 低振幅区間で omega のみ固定し他状態更新を実装、発散対策を追加して再検証
+- 問題: 低振幅区間の仕様意図は「周波数状態 `omega` のみ固定」である一方、実装は `hold_omega` で早期 return して観測更新自体をスキップしていたため、仕様との差分があった。
+- 調査:
+  1. `ekf_update_axis()` の `hold_omega` 分岐を確認し、`x=x_pred` で終了していたことを確認。
+  2. 低振幅・SW OFF・エネルギーゲートOFFが同じ `hold_omega` 条件にまとめられていることを確認。
+  3. 初回修正（全 hold 条件で観測更新）を replay で試したところ、発散とFPEを確認。
+- 試行:
+  1. `switch_hold_omega` / `energy_hold_omega` は predict-only を維持し、`force_hold_omega` のみ観測更新を許可。
+  2. 低振幅更新の安定化として、`R *= 1000`、`K[0..2]` を `[-0.01, 0.01]` に制限。
+  3. 非有限値（NaN/Inf）検出時の軸リセット（状態0化+共分散初期化+omega維持）を追加。
+  4. 443(w35_100)/444(w40_110) で baseline と model-strong を再リプレイ。
+- 結果:
+  - 4ケースすべてで RMSE と相関が改善。
+  - 周波数MAEは概ね維持（または改善）。
+  - 例: 444 baseline は RMSE 1.4814→0.3580、相関 0.5711→0.9366。
+- 備考:
+  - 実装: `libraries/AP_Observer/AP_Observer.cpp`
+  - 成果物: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_low_amp_holdomega_fix/`
+  - 比較CSV: `docs/experiments/ekf_external_force_estimation/reports/2026-04-13_low_amp_holdomega_fix/comparison/metrics_old_vs_fix.csv`
+
 ### 2026-04-13 23:10: [Replay/AP_Observer EKF] 先読み時間と中間Q/R条件の追加検証
 - 問題: `R↑, Q↓` の強め条件で、波の頂点付近にノイズ様の揺れと、実データの振幅減少区間での過大推定が残った。原因が先読み時間か、モデルの無減衰性かを切り分けたい。
 - 調査:

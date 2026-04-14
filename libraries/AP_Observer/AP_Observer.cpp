@@ -229,7 +229,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Hold the previous omega estimate when |force| is at or below this threshold [N]
     // @Range: 0.0 20.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_FHOLD", 30, AP_Observer, _ekf_force_hold_max, 0.0f),
+    AP_GROUPINFO("EKF_FHOLD", 30, AP_Observer, _ekf_force_hold_max, 0.10f),
 
     // @Param: EKF_FREJ
     // @DisplayName: EKF Force Reject Threshold
@@ -436,6 +436,9 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
 }
 
 void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
+    // EKF 1軸更新: 予測 -> 条件分岐（predict-only / reject）-> 観測更新
+    // 低振幅・低エネルギー領域では measurement を 0 に固定して発散を抑える。
+
     float* x = ekf_state[axis];
     float (*P)[EKF_STATE_SIZE] = ekf_P[axis];
     const float omega_prev = x[3];
@@ -473,11 +476,25 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
 
     const float force_hold_max = MAX(0.0f, _ekf_force_hold_max.get());
     const float force_reject_min = MAX(force_hold_max + 1.0e-3f, _ekf_force_reject_min.get());
+    
+    // 条件1: force_hold_omega - 低振幅時（omega固定）
     const bool force_hold_omega = force_abs <= force_hold_max;
-    const bool force_reject = force_abs >= force_reject_min;
+    
+    // 条件2: switch_hold_omega - スイッチ OFF 時（predict-only）
     const bool switch_hold_omega = (!_freq_estimation_active && _ekf_hold_omega_when_off.get() != 0);
+    
+    // 条件3: energy_hold_omega - エネルギーゲート OFF 時（predict-only）
     const bool energy_hold_omega = !energy_gate_enabled;
-    const bool hold_omega = force_hold_omega || switch_hold_omega || energy_hold_omega;
+    
+    // 統合判定
+    const bool hold_omega = force_hold_omega || switch_hold_omega || energy_hold_omega;  // omega を固定
+    // ゼロ注入で収束させるため、predict-only はスイッチOFF時に限定する。
+    const bool predict_only_hold = switch_hold_omega;  // 予測のみ（観測更新スキップ）
+    
+    // 追加判定: force_reject - 高振幅時の周波数推定拒否
+    //   トリガ：|force| >= force_reject_min（例：5.0 N）
+    //   非線形性や飽和による推定エラーを防ぐため、観測更新を完全に拒否
+    const bool force_reject = force_abs >= force_reject_min;
 
     const float omega = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
     const float d = x[0];
@@ -533,7 +550,8 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     P_pred[2][2] += q_c;
     P_pred[3][3] += q_omega;
 
-    if (hold_omega) {
+    if (predict_only_hold) {
+            // SW OFF またはエネルギーゲート OFF では観測更新を行わない。
         const float y_pred_hold = x_pred[0] + x_pred[2];
         const float innov_hold = measurement - y_pred_hold;
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
@@ -561,6 +579,11 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
         ekf_axis_amp[axis] = fabsf(x[0]);
         return;
+    }
+
+    // 低振幅デッドバンドでは観測値をゼロ強制して更新の暴れを抑制する。
+    if (force_hold_omega || energy_hold_omega) {
+        measurement = 0.0f;
     }
 
     const float y_pred = x_pred[0] + x_pred[2];
@@ -591,8 +614,12 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     }
 
     if (hold_omega) {
+        // hold 条件下では omega 更新を止める。
         K[3] = 0.0f;
     }
+    
+    ekf_axis_innovation[axis] = innov;
+    ekf_axis_nis[axis] = nis;
 
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         x[i] = x_pred[i] + K[i] * innov;
@@ -639,6 +666,34 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
             P[3][i] = P_pred[3][i];
             P[i][3] = P_pred[i][3];
         }
+    }
+
+    bool finite_ok = true;
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        finite_ok = finite_ok && isfinite(x[i]);
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            finite_ok = finite_ok && isfinite(P[i][j]);
+        }
+    }
+    if (!finite_ok) {
+        // [対策3] 非有限値（NaN/Inf）検出時の軸リセット
+        // 数値計算による発散を検出したら、軸状態を安全値にリセット。
+        // omega は前フレーム値を維持（周波数推定は継続）し、他の状態は 0 化。
+        // この堅牢性対策により、局所的な演算エラーから回復。
+        const float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
+        x[0] = 0.0f;
+        x[1] = 0.0f;
+        x[2] = 0.0f;
+        x[3] = constrain_value(omega_prev, _ekf_omega_min.get(), _ekf_omega_max.get());
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = (i == j) ? init_cov : 0.0f;
+            }
+        }
+        ekf_axis_innovation[axis] = 0.0f;
+        ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
+        ekf_axis_amp[axis] = 0.0f;
+        return;
     }
 
     x[3] = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
