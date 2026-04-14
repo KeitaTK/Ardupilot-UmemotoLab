@@ -136,29 +136,29 @@ def plot_combined(data: Dict[str, List[float]], outpath: str, title: str) -> Non
     # NOTE: Reference frequency (real_freq from log) has been found to contain incorrect values
     # and is excluded from plots. Only Estimated frequency from EKF is plotted.
     # Target frequency: ~0.45 Hz (for 00000443/00000444 logs)
-    axes[0].plot(t, data["est_freq"], label="Estimated frequency", linewidth=1.0)
+    axes[0].plot(t, data["est_freq"], label="Estimated frequency", color="#102040", linewidth=1.8)
     axes[0].set_ylabel("Freq [Hz]")
     axes[0].set_title(f"{title} - Frequency")
     axes[0].grid(True, alpha=0.3)
     axes[0].legend(loc="upper right")
 
     # 2) EKF内部状態（推定結果）
-    axes[1].plot(t, data["dx"], label="DX", linewidth=0.9)
-    axes[1].plot(t, data["vx"], label="VX", linewidth=0.9)
-    axes[1].plot(t, data["cx"], label="CX", linewidth=0.9)
+    axes[1].plot(t, data["dx"], label="DX", color="#102040", linewidth=1.8)
+    axes[1].plot(t, data["vx"], label="VX", color="#802000", linewidth=1.8)
+    axes[1].plot(t, data["cx"], label="CX", color="#105020", linewidth=1.8)
     axes[1].set_ylabel("State")
     axes[1].set_title(f"{title} - EKF states")
     axes[1].grid(True, alpha=0.3)
     axes[1].legend(loc="upper right", ncol=3)
 
     # 3) 入力信号とSW
-    axes[2].plot(t, data["plx"], label="PLX", linewidth=0.8)
-    axes[2].plot(t, data["ply"], label="PLY", linewidth=0.8)
-    axes[2].plot(t, data["plz"], label="PLZ", linewidth=0.8, alpha=0.8)
+    axes[2].plot(t, data["plx"], label="PLX", color="#102040", linewidth=1.8)
+    axes[2].plot(t, data["ply"], label="PLY", color="#105020", linewidth=1.8)
+    axes[2].plot(t, data["plz"], label="PLZ", color="#802000", linewidth=1.8, alpha=0.95)
     ax2_sw = axes[2].twinx()
-    ax2_sw.plot(t, data["sw"], "k--", label="SW", linewidth=0.8, alpha=0.7)
+    ax2_sw.plot(t, data["sw"], color="#202020", linestyle="--", label="SW", linewidth=1.3, alpha=0.95)
     if not all(np.isnan(np.asarray(data["real_sw"], dtype=float))):
-        ax2_sw.plot(t, data["real_sw"], color="gray", linestyle=":", label="RealSW", linewidth=0.8, alpha=0.8)
+        ax2_sw.plot(t, data["real_sw"], color="#444444", linestyle=":", label="RealSW", linewidth=1.3, alpha=0.95)
     axes[2].set_ylabel("Payload force")
     ax2_sw.set_ylabel("SW")
     axes[2].set_title(f"{title} - Input forces and switch")
@@ -169,9 +169,9 @@ def plot_combined(data: Dict[str, List[float]], outpath: str, title: str) -> Non
 
     # 4) 観測と再現波形
     residual = np.asarray(data["plx"], dtype=float) - np.asarray(data["prx"], dtype=float)
-    axes[3].plot(t, data["plx"], label="Measured PLX", linewidth=0.8)
-    axes[3].plot(t, data["prx"], label="Reconstructed PRX", linewidth=0.9)
-    axes[3].plot(t, residual, label="Residual (PLX-PRX)", linewidth=0.8, alpha=0.8)
+    axes[3].plot(t, data["plx"], label="Measured PLX", color="#102040", linewidth=1.8)
+    axes[3].plot(t, data["prx"], label="Reconstructed PRX", color="#802000", linewidth=1.8)
+    axes[3].plot(t, residual, label="Residual (PLX-PRX)", color="#a00000", linewidth=1.5, alpha=0.95)
     axes[3].set_xlabel("Time [s]")
     axes[3].set_ylabel("Force proxy")
     axes[3].set_title(f"{title} - Reconstruction quality")
@@ -190,25 +190,25 @@ def plot_original_vs_reconstructed(data: Dict[str, List[float]], outpath: str, t
 
     fig, axes = plt.subplots(2, 2, figsize=(14, 8), sharex="col")
 
-    axes[0, 0].plot(t, plx, color="tab:blue", linewidth=0.9)
+    axes[0, 0].plot(t, plx, color="#404040", linewidth=1.8, alpha=0.95)
     axes[0, 0].set_title("Original replay input - X axis (PLX)")
     axes[0, 0].set_ylabel("Force proxy")
     axes[0, 0].grid(True, alpha=0.3)
 
-    axes[1, 0].plot(t, np.asarray(data["ply"], dtype=float), color="tab:green", linewidth=0.9)
+    axes[1, 0].plot(t, np.asarray(data["ply"], dtype=float), color="#404040", linewidth=1.8, alpha=0.95)
     axes[1, 0].set_title("Original replay input - Y axis (PLY)")
     axes[1, 0].set_xlabel("Time [s]")
     axes[1, 0].set_ylabel("Force proxy")
     axes[1, 0].grid(True, alpha=0.3)
 
-    axes[0, 1].plot(t, prx, color="tab:orange", linewidth=0.9)
+    axes[0, 1].plot(t, prx, color="#802000", linewidth=1.8)
     axes[0, 1].set_title("Reconstructed from estimate (PRX)")
     axes[0, 1].set_ylabel("Force proxy")
     axes[0, 1].grid(True, alpha=0.3)
 
-    axes[1, 1].plot(t, plx, color="tab:blue", linewidth=0.8, label="PLX")
-    axes[1, 1].plot(t, prx, color="tab:orange", linewidth=0.9, label="PRX")
-    axes[1, 1].plot(t, plx - prx, color="tab:red", linewidth=0.8, alpha=0.8, label="Residual")
+    axes[1, 1].plot(t, plx, color="#404040", linewidth=1.8, alpha=0.95, label="PLX")
+    axes[1, 1].plot(t, prx, color="#802000", linewidth=1.8, label="PRX")
+    axes[1, 1].plot(t, plx - prx, color="#a00000", linewidth=1.5, alpha=0.95, label="Residual")
     axes[1, 1].set_title("Overlay for filter check")
     axes[1, 1].set_xlabel("Time [s]")
     axes[1, 1].set_ylabel("Force proxy")

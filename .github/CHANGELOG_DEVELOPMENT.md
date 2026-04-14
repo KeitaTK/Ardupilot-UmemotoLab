@@ -2,6 +2,24 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-15 02:39: [AP_Observer/EKF] 連結後リプレイ方式へ変更（連結ログを直接リプレイ）
+
+- 問題: 443/444の各リプレイ結果を後処理で連結する方式ではなく、連結した入力ログそのものに対するリプレイ結果が必要になった
+- 調査:
+  1. 連結元入力CSVは `TimeUS,PLX,PLY,PLZ,SW,F,P` で同一ヘッダを持つことを確認
+  2. `TimeUS` を単調増加で連結すれば、単一の入力CSVとして `RLS_CSV_Replay` で処理可能と判断
+- 試行:
+  1. `analysis/replay/run_robust_smooth_m30_concat_direct_replay.py` を新規追加
+  2. 443入力末尾に合わせて444入力の `TimeUS` をオフセットし、連結入力CSVを生成
+  3. `Robust + Smooth M30` パラメータで連結入力CSVを直接リプレイ
+  4. X/Y比較図、周波数推定図、低振幅0収束性指標を含む新規レポートを生成
+- 結果:
+  - ✅ 連結ログ直接リプレイ結果CSVを生成
+  - ✅ 新規レポート `2026-04-15_02:39:01_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md` を作成
+  - ✅ 要望どおり「連結してからリプレイ」の検証方式へ切り替え完了
+- 備考:
+  - 出力先: `docs/experiments/ekf_external_force_estimation/reports/results/2026-04-15_robust_smooth_m30_concat_direct_replay/`
+
 ### 2026-04-15 02:24: [AP_Observer/EKF] Robust+Smooth M30 の 443/444 連結リプレイ検証を追加
 
 - 問題: `Robust + Smooth M30` 採用方針に対し、443/444を分割ではなく前後連結した単一時系列で、X/Yの0収束と周波数推定を同時確認したい要求があった
