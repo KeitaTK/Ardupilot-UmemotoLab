@@ -1,0 +1,23 @@
+{
+  "samples": 6465,
+  "duration_s": 64.9903,
+  "est_freq_start_hz": 0.6,
+  "est_freq_end_hz": 0.5209,
+  "est_freq_min_hz": 0.35,
+  "est_freq_max_hz": 0.91,
+  "mean_abs_wave_error_x": 0.15934938901778808,
+  "rmse_wave_error_x": 0.21953599514245128,
+  "corr_plx_prx": 0.9655621678078169,
+  "plx_diff_std": 0.23303328041074062,
+  "prx_diff_std": 0.08166316909648552,
+  "diff_std_ratio_prx_over_plx": 0.35043565001765997,
+  "freq_mae_hz": 0.10908343387470995,
+  "freq_max_abs_err_hz": 0.31000000000000005,
+  "ekf_sw_active_ratio": 0.6597061098221191,
+  "ekf_params": {},
+  "artifacts": {
+    "combined_plot": "/home/memoto/Ardupilot-UmemotoLab/docs/experiments/ekf_external_force_estimation/reports/results/2026-04-14_\u89b3\u6e2c\u5024\u30bc\u30ed\u5f37\u5236_\u7d50\u679c/00000443_w35_100_standard_fix/plots/result_combined.png",
+    "compare_plot": "/home/memoto/Ardupilot-UmemotoLab/docs/experiments/ekf_external_force_estimation/reports/results/2026-04-14_\u89b3\u6e2c\u5024\u30bc\u30ed\u5f37\u5236_\u7d50\u679c/00000443_w35_100_standard_fix/plots/original_vs_reconstructed.png",
+    "report": "/home/memoto/Ardupilot-UmemotoLab/docs/experiments/ekf_external_force_estimation/reports/results/2026-04-14_\u89b3\u6e2c\u5024\u30bc\u30ed\u5f37\u5236_\u7d50\u679c/00000443_w35_100_standard_fix/plots/REPLAY_EKF_REPORT.md"
+  }
+}
