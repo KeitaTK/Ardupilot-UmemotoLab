@@ -684,7 +684,7 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     
     std::ofstream outfile(out_filename);
     // Write header
-    outfile << "Time_s,PLX,PLY,PLZ,EstFreq_Hz,SW,RealSW,DX,VX,CX,PRX,RealFreq_Hz,RealPhase\n";
+    outfile << "Time_s,PLX,PLY,PLZ,EstFreq_Hz,SW,RealSW,DX,DY,VX,VY,CX,CY,PRX,PRY,RealFreq_Hz,RealPhase\n";
 
     uint32_t start_time_us = data[0].time_us;
     uint32_t prev_time_ms = 0;
@@ -738,12 +738,12 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         
         const int sw_out = current_sw ? 1 : 0;
         const int real_sw_out = real_sw ? 1 : 0;
-        char buf[256];
-        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
+        char buf[320];
+        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
             rel_time_s, d.plx, d.ply, d.plz,
             observer.get_estimated_frequency(),
             sw_out, real_sw_out,
-            D.x, V.x, C.x, P.x,
+            D.x, D.y, V.x, V.y, C.x, C.y, P.x, P.y,
             d.real_freq, d.real_phase);
         outfile << buf << "\n";
     }
