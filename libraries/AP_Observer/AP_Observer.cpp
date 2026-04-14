@@ -259,6 +259,20 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_SW_HOLD", 34, AP_Observer, _ekf_hold_omega_when_off, 0),
 
+    // @Param: EKF_RB_EN
+    // @DisplayName: EKF Robust Update Enable
+    // @Description: Enable robust observation update (innovation clipping and outlier reject)
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    AP_GROUPINFO("EKF_RB_EN", 35, AP_Observer, _ekf_robust_update_enable, 0),
+
+    // @Param: EKF_RB_NIS
+    // @DisplayName: EKF Robust Reject NIS Scale
+    // @Description: Reject observation update when NIS exceeds EKF_NIS_MAX multiplied by this scale
+    // @Range: 1.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_RB_NIS", 36, AP_Observer, _ekf_robust_nis_reject_scale, 3.0f),
+
     AP_GROUPEND
 };
 
@@ -587,26 +601,68 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     }
 
     const float y_pred = x_pred[0] + x_pred[2];
-    const float innov = measurement - y_pred;
+    const float innov_raw = measurement - y_pred;
+    float innov_used = innov_raw;
     float R = _ekf_r_meas.get();
     if (R < 1.0e-6f) {
         R = 1.0e-6f;
     }
+    float R_eff = R;
 
     float PHt[EKF_STATE_SIZE];
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         PHt[i] = P_pred[i][0] + P_pred[i][2];
     }
 
-    const float S = PHt[0] + PHt[2] + R;
+    float S = PHt[0] + PHt[2] + R_eff;
     if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
-        ekf_axis_innovation[axis] = innov;
+        ekf_axis_innovation[axis] = innov_raw;
         ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
         ekf_axis_amp[axis] = fabsf(x[0]);
         ekf_axis_trusted[axis] = 0U;
         return;
     }
-    const float nis = (S > 1.0e-6f) ? ((innov * innov) / S) : (_ekf_nis_max.get() + 1.0f);
+    const float nis_raw = (S > 1.0e-6f) ? ((innov_raw * innov_raw) / S) : (_ekf_nis_max.get() + 1.0f);
+
+    bool robust_reject = false;
+    if (_ekf_robust_update_enable.get() != 0) {
+        const float innov_max = MAX(1.0e-3f, _ekf_innov_max.get());
+        const float nis_max = MAX(1.0e-3f, _ekf_nis_max.get());
+        const float reject_nis_scale = MAX(1.0f, _ekf_robust_nis_reject_scale.get());
+
+        innov_used = constrain_value(innov_used, -innov_max, innov_max);
+
+        if (nis_raw > nis_max) {
+            const float nis_ratio = constrain_value(nis_raw / nis_max, 1.0f, 50.0f);
+            R_eff = R * nis_ratio;
+            S = PHt[0] + PHt[2] + R_eff;
+            if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
+                ekf_axis_innovation[axis] = innov_raw;
+                ekf_axis_nis[axis] = nis_raw;
+                ekf_axis_amp[axis] = fabsf(x[0]);
+                ekf_axis_trusted[axis] = 0U;
+                return;
+            }
+        }
+
+        robust_reject = (nis_raw > (nis_max * reject_nis_scale));
+    }
+
+    if (robust_reject) {
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            x[i] = x_pred[i];
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = P_pred[i][j];
+            }
+        }
+        if (hold_omega) {
+            x[3] = omega_prev;
+        }
+        ekf_axis_innovation[axis] = innov_raw;
+        ekf_axis_nis[axis] = nis_raw;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        return;
+    }
 
     float K[EKF_STATE_SIZE];
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
@@ -618,11 +674,11 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         K[3] = 0.0f;
     }
     
-    ekf_axis_innovation[axis] = innov;
-    ekf_axis_nis[axis] = nis;
+    ekf_axis_innovation[axis] = innov_raw;
+    ekf_axis_nis[axis] = nis_raw;
 
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
-        x[i] = x_pred[i] + K[i] * innov;
+        x[i] = x_pred[i] + K[i] * innov_used;
     }
     if (hold_omega) {
         x[3] = omega_prev;
@@ -697,15 +753,15 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     }
 
     x[3] = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
-    ekf_axis_innovation[axis] = innov;
-    ekf_axis_nis[axis] = nis;
+    ekf_axis_innovation[axis] = innov_raw;
+    ekf_axis_nis[axis] = nis_raw;
     ekf_axis_amp[axis] = fabsf(x[0]);
 
 #if HAL_GCS_ENABLED
     if ((ekf_sample_count % 100U) == 0U && axis == 0) {
         gcs().send_text(MAV_SEVERITY_INFO,
             "EKF[%d]: y=%.3f pred=%.3f err=%.3f f=%.3f",
-            axis, measurement, y_pred, innov, (double)(x[3] / (2.0f * M_PI)));
+            axis, measurement, y_pred, innov_raw, (double)(x[3] / (2.0f * M_PI)));
     }
 #endif
 }
@@ -1272,6 +1328,12 @@ void AP_Observer::set_ekf_axis_mask_for_replay(uint8_t mask) {
 
 void AP_Observer::set_ekf_hold_omega_when_off_for_replay(bool enabled) {
     _ekf_hold_omega_when_off.set(enabled ? 1 : 0);
+}
+
+void AP_Observer::set_ekf_robust_update_for_replay(bool enabled,
+                                                   float nis_reject_scale) {
+    _ekf_robust_update_enable.set(enabled ? 1 : 0);
+    _ekf_robust_nis_reject_scale.set(MAX(1.0f, nis_reject_scale));
 }
 #endif
 

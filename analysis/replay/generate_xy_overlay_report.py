@@ -23,6 +23,8 @@ from typing import Dict, List, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
+import datetime
+import zoneinfo
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -111,8 +113,14 @@ def main() -> None:
         ),
     ]
 
+    # JSTでの現在時刻を取得し、レポート先頭に追加
+    jst = zoneinfo.ZoneInfo("Asia/Tokyo")
+    now_jst = datetime.datetime.now(jst)
+    dt_str = now_jst.strftime("%Y-%m-%d %H:%M:%S")
+
     lines: List[str] = []
-    lines.append("# 2026-04-14 XY Axis Overlay Report (Current EKF)")
+    lines.append(f"# 2026-04-14 XY軸重ね合わせ 観測値ゼロ強制リプレイ\n\n**作成日時（JST）: {dt_str}**\n")
+    lines.append("---")
     lines.append("")
     lines.append("## Purpose")
     lines.append("This report overlays original replay signals and EKF-reconstructed signals for X and Y axes separately.")

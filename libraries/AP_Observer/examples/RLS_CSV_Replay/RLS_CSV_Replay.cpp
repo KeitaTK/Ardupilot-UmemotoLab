@@ -174,6 +174,10 @@ struct ReplayRunConfig {
     int ekf_axis_mask = 3;
     bool has_ekf_hold_omega_when_off = false;
     int ekf_hold_omega_when_off = 0;
+    bool has_ekf_robust_update = false;
+    int ekf_robust_update = 0;
+    bool has_ekf_robust_nis_reject = false;
+    float ekf_robust_nis_reject = 3.0f;
 };
 
 static bool parse_replay_args(ReplayRunConfig& cfg) {
@@ -196,6 +200,7 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("      [--ekf-axis-gate 0|1] [--ekf-amp-min <v>] [--ekf-amp-max <v>] [--ekf-innov-max <v>] [--ekf-nis-max <v>]\n");
             printf("      [--ekf-energy-gate 0|1] [--ekf-energy-rms-on <v>] [--ekf-energy-rms-off <v>] [--ekf-energy-tau <s>]\n");
             printf("      [--ekf-force-hold-max <n>] [--ekf-force-reject-min <n>] [--ekf-axis-mask <mask>] [--ekf-hold-omega-off 0|1]\n");
+            printf("      [--ekf-robust-update 0|1] [--ekf-robust-nis-reject <scale>]\n");
             printf("\n");
             printf("Default mode runs the built-in regression file list.\n");
             exit(0);
@@ -291,6 +296,30 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-hold-omega-off=", 21) == 0) {
             cfg.ekf_hold_omega_when_off = (int)strtol(arg + 21, nullptr, 10);
             cfg.has_ekf_hold_omega_when_off = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-robust-update") == 0) && next != nullptr) {
+            cfg.ekf_robust_update = (int)strtol(next, nullptr, 10);
+            cfg.has_ekf_robust_update = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-robust-update=", 20) == 0) {
+            cfg.ekf_robust_update = (int)strtol(arg + 20, nullptr, 10);
+            cfg.has_ekf_robust_update = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-robust-nis-reject") == 0) && next != nullptr) {
+            cfg.ekf_robust_nis_reject = strtof(next, nullptr);
+            cfg.has_ekf_robust_nis_reject = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-robust-nis-reject=", 24) == 0) {
+            cfg.ekf_robust_nis_reject = strtof(arg + 24, nullptr);
+            cfg.has_ekf_robust_nis_reject = true;
             continue;
         }
 
@@ -648,6 +677,12 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     }
     if (cfg.has_ekf_hold_omega_when_off) {
         observer.set_ekf_hold_omega_when_off_for_replay(cfg.ekf_hold_omega_when_off != 0);
+    }
+    if (cfg.has_ekf_robust_update || cfg.has_ekf_robust_nis_reject) {
+        observer.set_ekf_robust_update_for_replay(
+            cfg.has_ekf_robust_update ? (cfg.ekf_robust_update != 0) : false,
+            cfg.has_ekf_robust_nis_reject ? cfg.ekf_robust_nis_reject : 3.0f
+        );
     }
     if (cfg.has_ekf_axis_gate || cfg.has_ekf_amp_min || cfg.has_ekf_amp_max ||
         cfg.has_ekf_innov_max || cfg.has_ekf_nis_max) {

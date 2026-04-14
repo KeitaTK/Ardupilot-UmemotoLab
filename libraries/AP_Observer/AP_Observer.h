@@ -74,6 +74,8 @@ public:
     void set_ekf_reset_on_switch_for_replay(bool enabled);
     void set_ekf_axis_mask_for_replay(uint8_t mask);
     void set_ekf_hold_omega_when_off_for_replay(bool enabled);
+    void set_ekf_robust_update_for_replay(bool enabled,
+                                          float nis_reject_scale);
     float get_estimated_frequency() const { return estimated_frequency; }
     float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal EKF state if needed
@@ -160,6 +162,8 @@ private:
     AP_Int8  _ekf_reset_on_switch;
     AP_Int8  _ekf_axis_mask;
     AP_Int8  _ekf_hold_omega_when_off;
+    AP_Int8  _ekf_robust_update_enable;
+    AP_Float _ekf_robust_nis_reject_scale;
 
     // Legacy parameters retained for compatibility during migration
     AP_Float _rls_forgetting_factor;
