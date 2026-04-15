@@ -385,7 +385,7 @@ def write_json(path: Path, payload: Dict[str, object]) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Thresholded EKF smoothing analysis")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--input", default="analysis/replay/data/00000444.BIN")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/ekf_force_gate_smoothing_2026-04-04")
     args = parser.parse_args()

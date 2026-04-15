@@ -181,7 +181,7 @@ def make_plot(tag: str, csv_input: Path, traces: Dict[str, np.ndarray], method_m
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Generate windowed EKF comparison report")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/ekf_windowed_comparison_2026-04-06")
     args = parser.parse_args()
 

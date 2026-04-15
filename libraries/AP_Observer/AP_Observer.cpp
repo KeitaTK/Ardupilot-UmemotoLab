@@ -47,21 +47,21 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Process noise variance for disturbance state d
     // @Range: 0.0 100.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_Q_D", 4, AP_Observer, _ekf_q_d, 0.02f),
+    AP_GROUPINFO("EKF_Q_D", 4, AP_Observer, _ekf_q_d, 9.5367432e-12f),
 
     // @Param: EKF_Q_DD
     // @DisplayName: EKF Process Noise DDot
     // @Description: Process noise variance for disturbance velocity state d_dot
     // @Range: 0.0 100.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_Q_DD", 5, AP_Observer, _ekf_q_d_dot, 0.05f),
+    AP_GROUPINFO("EKF_Q_DD", 5, AP_Observer, _ekf_q_d_dot, 2.3841858e-11f),
 
     // @Param: EKF_Q_C
     // @DisplayName: EKF Process Noise Offset
     // @Description: Process noise variance for DC offset state c
     // @Range: 0.0 100.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_Q_C", 6, AP_Observer, _ekf_q_c, 0.001f),
+    AP_GROUPINFO("EKF_Q_C", 6, AP_Observer, _ekf_q_c, 4.7683716e-13f),
 
     // @Param: EKF_Q_W
     // @DisplayName: EKF Process Noise Omega
@@ -75,7 +75,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Measurement noise variance for payload force observations
     // @Range: 0.0001 1000.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_R_MEAS", 8, AP_Observer, _ekf_r_meas, 0.08f),
+    AP_GROUPINFO("EKF_R_MEAS", 8, AP_Observer, _ekf_r_meas, 46.0f),
 
     // @Param: EKF_W_INIT
     // @DisplayName: EKF Initial Omega
@@ -112,75 +112,12 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("PRED_TIME", 13, AP_Observer, _prediction_time, 0.01f),
     
-    // @Param: PHASE_CORR
-    // @DisplayName: Phase Correction Enable
-    // @Description: Enable or disable phase correction for disturbance frequency
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Advanced
-    AP_GROUPINFO("PHASE_CORR", 14, AP_Observer, _phase_correction_enabled, 1),
-    
-    // @Param: PHASE_THRESH
-    // @DisplayName: Phase Correction Threshold
-    // @Description: Threshold for applying phase correction [rad]. Correction is only applied if error exceeds this value.
-    // @Range: 0.0 5.0
-    // @User: Advanced
-    AP_GROUPINFO("PHASE_THRESH", 15, AP_Observer, _phase_correction_threshold, 0.0f),
-    
-    // @Param: TEST_INJECT
-    // @DisplayName: Test Force Injection Enable
-    // @Description: Enable test mode to inject known sinusoidal force for RLS validation
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Advanced
-    AP_GROUPINFO("TEST_INJECT", 16, AP_Observer, _test_force_inject_enable, 0),
-    
-    // @Param: TEST_FREQ
-    // @DisplayName: Test Force Frequency
-    // @Description: Frequency of injected test force [Hz]
-    // @Range: 0.35 0.91
-    // @User: Advanced
-    AP_GROUPINFO("TEST_FREQ", 17, AP_Observer, _test_force_freq, 0.7f),
-    
-    // @Param: TEST_AMP
-    // @DisplayName: Test Force Amplitude
-    // @Description: Amplitude of injected test force [N]
-    // @Range: 0.0 10.0
-    // @User: Advanced
-    AP_GROUPINFO("TEST_AMP", 18, AP_Observer, _test_force_amp, 1.0f),
-    
     // @Param: MAX_CORR_ANG
     // @DisplayName: Maximum Correction Angle
     // @Description: Maximum attitude correction angle for roll and pitch [rad]
     // @Range: 0.0 1.0
     // @User: Advanced
     AP_GROUPINFO("MAX_CORR_ANG", 19, AP_Observer, _max_correction_angle, 0.5f),
-
-    // @Param: FREQ_WIN
-    // @DisplayName: Zero-Cross Window Length
-    // @Description: Window length for zero-cross frequency estimation [s]
-    // @Range: 1.0 30.0
-    // @User: Advanced
-    AP_GROUPINFO("FREQ_WIN", 20, AP_Observer, _freq_est_window_sec, 10.0f),
-
-    // @Param: EKF_AX_GAT
-    // @DisplayName: EKF Axis Gate Enable
-    // @Description: Enable legacy axis selection gate for frequency fusion using |d|, innovation and NIS thresholds
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Advanced
-    AP_GROUPINFO("EKF_AX_GAT", 21, AP_Observer, _ekf_axis_gate_enable, 0),
-
-    // @Param: EKF_AMP_MIN
-    // @DisplayName: EKF Axis Amplitude Minimum
-    // @Description: Minimum |d| threshold for including axis in fused frequency update
-    // @Range: 0.0 5.0
-    // @User: Advanced
-    AP_GROUPINFO("EKF_AMP_MIN", 22, AP_Observer, _ekf_amp_min, 0.08f),
-
-    // @Param: EKF_AMP_MAX
-    // @DisplayName: EKF Axis Amplitude Maximum
-    // @Description: Maximum |d| threshold for including axis in fused frequency update
-    // @Range: 0.1 20.0
-    // @User: Advanced
-    AP_GROUPINFO("EKF_AMP_MAX", 23, AP_Observer, _ekf_amp_max, 1.20f),
 
     // @Param: EKF_INN_MAX
     // @DisplayName: EKF Innovation Maximum
@@ -264,7 +201,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Enable robust observation update (innovation clipping and outlier reject)
     // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("EKF_RB_EN", 35, AP_Observer, _ekf_robust_update_enable, 0),
+    AP_GROUPINFO("EKF_RB_EN", 35, AP_Observer, _ekf_robust_update_enable, 1),
 
     // @Param: EKF_RB_NIS
     // @DisplayName: EKF Robust Reject NIS Scale
@@ -300,9 +237,6 @@ void AP_Observer::init() {
     // 予測用キャッシュ初期化
     update_prediction_cache();
     
-    // 位相補正初期化
-    phase_correction_init();
-
     // 離陸検知フラグ初期化
     _has_taken_off = false;
     
@@ -311,7 +245,6 @@ void AP_Observer::init() {
     _freq_estimation_active = false;
     _freq_estimation_prev_switch = false;
     _freq_estimation_result = _disturbance_freq.get();
-    zero_cross_reset_state();
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
@@ -343,7 +276,6 @@ void AP_Observer::ekf_init() {
 
     ekf_sample_count = 0;
     ekf_start_time_ms = get_current_time_ms();
-    phase_correction = 0.0f;
     estimated_frequency = init_omega / (2.0f * M_PI);
     ekf_initialized = true;
 }
@@ -355,7 +287,6 @@ void AP_Observer::reset_frequency_estimation() {
 #endif
 
     ekf_init();
-    phase_correction = 0.0f;
     estimated_frequency = _ekf_omega_init.get() / (2.0f * M_PI);
     _freq_estimation_result = estimated_frequency;
     
@@ -380,21 +311,12 @@ bool AP_Observer::is_axis_frequency_trusted(uint8_t axis) const {
         }
     }
 
-    if (_ekf_axis_gate_enable.get() == 0) {
-        return true;
-    }
-
-    const float amp = ekf_axis_amp[axis];
-    const float amp_min = MAX(0.0f, _ekf_amp_min.get());
-    const float amp_max = MAX(amp_min + 1.0e-3f, _ekf_amp_max.get());
     const float innov_abs = fabsf(ekf_axis_innovation[axis]);
     const float innov_max = MAX(1.0e-3f, _ekf_innov_max.get());
     const float nis = ekf_axis_nis[axis];
     const float nis_max = MAX(1.0e-3f, _ekf_nis_max.get());
 
-    return (amp >= amp_min) &&
-           (amp <= amp_max) &&
-           (innov_abs <= innov_max) &&
+    return (innov_abs <= innov_max) &&
            (nis <= nis_max);
 }
 
@@ -767,7 +689,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
 }
 
 void AP_Observer::update_prediction_cache() {
-    const float omega = constrain_value(estimated_frequency * 2.0f * M_PI, _ekf_omega_min.get(), _ekf_omega_max.get());
+    const float omega = constrain_value(estimated_frequency * 2.0f * float(M_PI), _ekf_omega_min.get(), _ekf_omega_max.get());
     _omega_rad = omega;
 }
 
@@ -789,39 +711,6 @@ void AP_Observer::update() {
     payload.y = UAV_mass * accel.y;
     payload.z = UAV_mass * accel.z - thrust;
     
-    // テスト用外力注入モード（推力とIMUから計算された結果として扱う）
-    if (_test_force_inject_enable.get() == 1) {
-        // 既知の正弦波外力をpayloadに直接代入
-        // テスト注入はシステム起動時刻から計算（RLS開始前でも動作する）
-        static uint32_t test_start_time_ms = 0;
-        static bool test_announced = false;
-        
-        if (test_start_time_ms == 0) {
-            test_start_time_ms = get_current_time_ms();
-        }
-        
-        float t = (get_current_time_ms() - test_start_time_ms) * 0.001f;
-        float test_omega = _test_force_freq.get() * 2.0f * M_PI;  // [rad/s]
-        float amplitude = _test_force_amp.get();                   // 毎回取得
-        
-        payload.x = amplitude * sinf(test_omega * t);
-        payload.y = amplitude * sinf(test_omega * t + M_PI / 2.0f);  // 90度位相差
-        payload.z = 0.0f;  // Z軸は0
-        
-        // デバッグ: 初回と10回後に振幅を確認
-        static uint16_t call_count = 0;
-        call_count++;
-        if (!test_announced || call_count == 1000) {
-#if HAL_GCS_ENABLED
-            gcs().send_text(MAV_SEVERITY_INFO, 
-                "AP_Observer: Test inject count=%u, amp=%.2fN, PLX=%.3fN",
-                call_count, amplitude, payload.x
-            );
-#endif
-            test_announced = true;
-        }
-    }
-
     // フィルタ適用（無効化）
     // _payload_filtered = _payload_filter.apply(payload);
     _payload_filtered = payload; // フィルタなしで生データを使用
@@ -830,7 +719,7 @@ void AP_Observer::update() {
     if (!_has_taken_off && is_taking_off()) {
         _has_taken_off = true;
 #if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Takeoff detected, starting RLS");
+        gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Takeoff detected, starting frequency estimation");
 #endif
     }
     
@@ -973,16 +862,15 @@ Vector3f AP_Observer::calculate_correction_euler_from_force(const Vector3f& forc
     return Vector3f(roll, pitch, 0.0f);
 }
 
-// EKFパラメータの互換ゲッター関数
-Vector3f AP_Observer::get_rls_sin_coeff() const {
+Vector3f AP_Observer::get_harmonic_sin_coeff() const {
     return Vector3f(ekf_state[0][0], ekf_state[1][0], ekf_state[2][0]);
 }
 
-Vector3f AP_Observer::get_rls_cos_coeff() const {
+Vector3f AP_Observer::get_harmonic_cos_coeff() const {
     return Vector3f(ekf_state[0][1], ekf_state[1][1], ekf_state[2][1]);
 }
 
-Vector3f AP_Observer::get_rls_bias() const {
+Vector3f AP_Observer::get_dc_offset() const {
     return Vector3f(ekf_state[0][2], ekf_state[1][2], ekf_state[2][2]);
 }
 
@@ -1013,172 +901,6 @@ Vector3f AP_Observer::get_predicted_force() const {
     }
     
     return predicted;
-}
-
-// 位相補正初期化
-void AP_Observer::phase_correction_init() {
-    phase_correction = 0.0f;
-    estimated_frequency = _ekf_omega_init.get() / (2.0f * M_PI);
-    // 注：_freq_estimation_switch_stateはRC Aux Functionが管理するため、ここでは変更しない
-
-    // EKF state helper variablesもリセット
-    for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
-        ab_phase_unwrapped[axis] = 0.0f;
-        ab_phase_prev_wrapped[axis] = 0.0f;
-        ab_phase_initialized[axis] = false;
-        ab_amp[axis] = 0.0f;
-    }
-    
-}
-
-
-void AP_Observer::zero_cross_start() {
-    const float max_window_sec = (float)ZERO_CROSS_MAX_SAMPLES / ZERO_CROSS_SAMPLE_RATE_HZ;
-    const float window_sec = constrain_value(_freq_est_window_sec.get(), 1.0f, max_window_sec);
-    uint16_t window_samples = (uint16_t)(window_sec * ZERO_CROSS_SAMPLE_RATE_HZ + 0.5f);
-
-    if (window_samples < 2) {
-        window_samples = 2;
-    }
-    if (window_samples > ZERO_CROSS_MAX_SAMPLES) {
-        window_samples = ZERO_CROSS_MAX_SAMPLES;
-    }
-
-    _zc_window_samples = window_samples;
-    _zc_sample_count = 0;
-    _zc_decimation_counter = 0;
-    _zc_window_active = true;
-    _zc_prev_input = 0.0f;
-    _zc_hp_state = 0.0f;
-    _zc_lp_state = 0.0f;
-}
-
-void AP_Observer::zero_cross_stop() {
-    _zc_window_active = false;
-}
-
-void AP_Observer::zero_cross_reset_state() {
-    _zc_window_active = false;
-    _zc_window_samples = 0;
-    _zc_sample_count = 0;
-    _zc_decimation_counter = 0;
-    _zc_prev_input = 0.0f;
-    _zc_hp_state = 0.0f;
-    _zc_lp_state = 0.0f;
-}
-
-float AP_Observer::zero_cross_filter(float input) {
-    const float dt = 1.0f / ZERO_CROSS_SAMPLE_RATE_HZ;
-    const float rc_hp = 1.0f / (2.0f * M_PI * ZERO_CROSS_LOW_CUT_HZ);
-    const float alpha_hp = rc_hp / (rc_hp + dt);
-    const float hp = alpha_hp * (_zc_hp_state + input - _zc_prev_input);
-    _zc_prev_input = input;
-    _zc_hp_state = hp;
-
-    const float rc_lp = 1.0f / (2.0f * M_PI * ZERO_CROSS_HIGH_CUT_HZ);
-    const float alpha_lp = dt / (rc_lp + dt);
-    _zc_lp_state = _zc_lp_state + alpha_lp * (hp - _zc_lp_state);
-
-    return _zc_lp_state;
-}
-
-bool AP_Observer::zero_cross_compute_frequency(float &freq_out, uint16_t &crossings_out) const {
-    crossings_out = 0;
-    if (_zc_sample_count < 2) {
-        freq_out = 0.0f;
-        return false;
-    }
-
-    float sum = 0.0f;
-    for (uint16_t i = 0; i < _zc_sample_count; i++) {
-        sum += _zc_samples[i];
-    }
-    const float mean = sum / (float)_zc_sample_count;
-
-    int16_t last_cross = -1;
-    float interval_sum = 0.0f;
-    for (uint16_t i = 1; i < _zc_sample_count; i++) {
-        const float prev = _zc_samples[i - 1] - mean;
-        const float curr = _zc_samples[i] - mean;
-        const bool crossed = ((prev >= 0.0f && curr < 0.0f) || (prev < 0.0f && curr >= 0.0f));
-        if (crossed) {
-            if (last_cross >= 0) {
-                interval_sum += (float)(i - last_cross);
-            }
-            last_cross = (int16_t)i;
-            crossings_out++;
-        }
-    }
-
-    if (crossings_out < 2) {
-        freq_out = 0.0f;
-        return false;
-    }
-
-    const float mean_interval_samples = interval_sum / (float)(crossings_out - 1);
-    if (mean_interval_samples <= 0.0f) {
-        freq_out = 0.0f;
-        return false;
-    }
-
-    const float period_s = 2.0f * mean_interval_samples / ZERO_CROSS_SAMPLE_RATE_HZ;
-    if (period_s <= 0.0f) {
-        freq_out = 0.0f;
-        return false;
-    }
-
-    freq_out = 1.0f / period_s;
-    return true;
-}
-
-void AP_Observer::zero_cross_update(float sample) {
-    if (!_zc_window_active) {
-        return;
-    }
-
-    if ((++_zc_decimation_counter % ZERO_CROSS_DECIMATION) != 0U) {
-        return;
-    }
-
-    const float filtered = zero_cross_filter(sample);
-    if (_zc_sample_count < _zc_window_samples && _zc_sample_count < ZERO_CROSS_MAX_SAMPLES) {
-        _zc_samples[_zc_sample_count++] = filtered;
-    }
-
-    if (_zc_sample_count < _zc_window_samples) {
-        return;
-    }
-
-    float freq = 0.0f;
-    uint16_t crossings = 0;
-    const bool ok = zero_cross_compute_frequency(freq, crossings);
-
-    if (ok && check_frequency_range(freq)) {
-        estimated_frequency = freq;
-        _freq_estimation_result = estimated_frequency;
-        update_prediction_cache();
-#if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO,
-            "ZeroCross: f=%.3fHz crossings=%u",
-            (double)estimated_frequency, (unsigned)crossings
-        );
-#endif
-    } else {
-#if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_WARNING,
-            "ZeroCross: invalid f=%.3fHz crossings=%u",
-            (double)freq, (unsigned)crossings
-        );
-#endif
-    }
-
-    _zc_window_active = false;
-    _freq_estimation_active = false;
-}
-
-// 周波数範囲チェック（振り子長0.3m~2.0mに対応）
-bool AP_Observer::check_frequency_range(float freq) {
-    return (freq >= FREQ_MIN && freq <= FREQ_MAX);
 }
 
 // 離陸検知（モーターアーム済み）
@@ -1247,7 +969,7 @@ void AP_Observer::set_freq_estimation_active(bool active) {
 
 
 #ifdef AP_OBSERVER_REPLAY_TEST
-void AP_Observer::force_rls_update(const Vector3f& payload) {
+void AP_Observer::force_frequency_estimation_update(const Vector3f& payload) {
     _payload_filtered = payload;
     
     if (ekf_initialized) {
@@ -1264,8 +986,6 @@ void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
     // Force EKF params (workaround for AP_Param failure in replay)
     _rls_forgetting_factor.set(0.99f);
     _rls_initial_covariance.set(100.0f);
-    _phase_correction_enabled.set(1);
-
     // ここで推定周波数も初期化
     estimated_frequency = freq;
 
@@ -1290,14 +1010,8 @@ void AP_Observer::set_ekf_r_meas_for_replay(float r_meas) {
     _ekf_r_meas.set(r_meas);
 }
 
-void AP_Observer::set_ekf_axis_gate_for_replay(bool enabled,
-                                               float amp_min,
-                                               float amp_max,
-                                               float innov_max,
-                                               float nis_max) {
-    _ekf_axis_gate_enable.set(enabled ? 1 : 0);
-    _ekf_amp_min.set(MAX(0.0f, amp_min));
-    _ekf_amp_max.set(MAX(_ekf_amp_min.get() + 1.0e-3f, amp_max));
+void AP_Observer::set_ekf_innovation_limits_for_replay(float innov_max,
+                                                       float nis_max) {
     _ekf_innov_max.set(MAX(1.0e-3f, innov_max));
     _ekf_nis_max.set(MAX(1.0e-3f, nis_max));
 }

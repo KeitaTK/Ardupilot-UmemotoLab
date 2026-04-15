@@ -15,7 +15,7 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPLAY_BIN = REPO_ROOT / "build/sitl/examples/RLS_CSV_Replay"
+REPLAY_BIN = REPO_ROOT / "build/sitl/examples/EKF_CSV_Replay"
 PLOT_SCRIPT = REPO_ROOT / "analysis/replay/plot_replay_results.py"
 
 OLD_BASE = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong"

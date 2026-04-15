@@ -16,7 +16,7 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPLAY_BIN = REPO_ROOT / "build/sitl/examples/RLS_CSV_Replay"
+REPLAY_BIN = REPO_ROOT / "build/sitl/examples/EKF_CSV_Replay"
 
 
 @dataclass

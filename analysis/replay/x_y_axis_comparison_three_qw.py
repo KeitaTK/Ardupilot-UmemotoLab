@@ -153,7 +153,7 @@ def make_q_plot(tag: str, csv_input: Path, traces: Dict[str, np.ndarray], out_pn
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="X/Y vs combined axis comparison for several q_w values")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/xy_axis_comparison_qw_2026-04-06")
     parser.add_argument("--qws", nargs="*", default=DEFAULT_QWS)
     args = parser.parse_args()

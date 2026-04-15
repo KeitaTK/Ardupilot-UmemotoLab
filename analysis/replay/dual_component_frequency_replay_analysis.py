@@ -384,7 +384,7 @@ def plot_amplitude_ratio(run_tag: str, t: np.ndarray, axes: Dict[str, DualAxisEs
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Dual-component frequency replay analysis")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--input-443", default="analysis/replay/data/00000443.BIN")
     parser.add_argument("--input-444", default="analysis/replay/data/00000444.BIN")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/dual_component_frequency_2026-04-04")

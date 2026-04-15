@@ -209,7 +209,7 @@ def make_sweep_plot(sweep_df: pd.DataFrame, out_png: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Retune the EKF energy gate across 00000443 and 00000444")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/xy_axis_retune_00000443_00000444_2026-04-07")
     parser.add_argument("--q-w", default=DEFAULT_Q_W)
     parser.add_argument("--w-init-hz", type=float, default=DEFAULT_W_INIT_HZ)

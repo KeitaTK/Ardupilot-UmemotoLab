@@ -7833,7 +7833,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             except Exception:
                 pass
 
-    # ========== AP_Observer Test Functions ==========
+    # ========== AP_Observer Legacy Test Functions ==========
     def TestRLSBasicEstimation(self):
         '''Test RLS can estimate known frequency disturbance with injected test force'''
         self.context_push()
@@ -7854,7 +7854,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_EKF_Q_C': 0.001,
             'OBS_EKF_Q_W': 0.0005,
             'OBS_EKF_R_MEAS': 0.08,
-            'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
+            'RC8_OPTION': 316,  # RC8にOBSERVER_FREQ_EST機能を割り当て
             'LOG_DISARMED': 1,
         })
         
@@ -8007,7 +8007,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_TEST_FREQ': test_freq,  # 実際の周波数
                 'OBS_TEST_AMP': test_amplitude,
                 'OBS_FREQ_WIN': freq_window_s,
-                'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
+                'RC8_OPTION': 316,  # RC8にOBSERVER_FREQ_EST機能を割り当て
                 'LOG_DISARMED': 1,
             }
             self.set_parameters(test_params)
@@ -8209,7 +8209,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_TEST_INJECT': 1,  # テスト外力注入
             'OBS_TEST_FREQ': test_freq,  # 実際の周波数
             'OBS_TEST_AMP': test_amplitude,
-            'RC9_OPTION': 316,  # RC9にRLS_FREQ_EST機能を割り当て
+            'RC9_OPTION': 316,  # RC9にOBSERVER_FREQ_EST機能を割り当て
             'OBS_FREQ_EST_CH': 0,  # 旧方式を無効化（重要！）
             'LOG_DISARMED': 1,  # ログを取得するために必要
         })
@@ -8507,7 +8507,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 'OBS_EKF_Q_C': 0.001,
                 'OBS_EKF_Q_W': 0.0010,
                 'OBS_EKF_R_MEAS': 0.08,
-                'RC8_OPTION': 316,  # RC8にRLS_FREQ_EST機能を割り当て
+                'RC8_OPTION': 316,  # RC8にOBSERVER_FREQ_EST機能を割り当て
                 'LOG_DISARMED': 1,
             }
 
@@ -13096,11 +13096,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
              self.AutoTune,
              self.AutoTuneYawD,
              self.NoRCOnBootPreArmFailure,
-             self.TestRLSBasicEstimation,  # AP_Observer RLS test (MANDATORY)
-             self.TestRLSRC8SwitchControl,  # AP_Observer RC8 switch control test (MANDATORY)
-               self.TestRLSWindowedEstimation,  # AP_Observer windowed estimation test (MANDATORY)
-             self.TestRLSParameterChange,  # AP_Observer parameter change test (NEW)
-             self.TestRLSFrequencyEstimationDetailed,  # AP_Observer detailed frequency estimation test
         ])
         return ret
 

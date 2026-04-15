@@ -14,7 +14,7 @@ import numpy as np
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPLAY_BIN = REPO_ROOT / "build/sitl/examples/RLS_CSV_Replay"
+REPLAY_BIN = REPO_ROOT / "build/sitl/examples/EKF_CSV_Replay"
 
 RESULT_ROOT = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/results/2026-04-14_観測値ゼロ強制_平滑化調整"
 REPORT_PATH = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/2026-04-14_20:30_X軸推定値_平滑化パラメータ比較.md"

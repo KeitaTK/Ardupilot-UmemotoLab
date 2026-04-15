@@ -26,7 +26,7 @@ import datetime
 import zoneinfo
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-REPLAY_BIN = REPO_ROOT / "build/sitl/examples/RLS_CSV_Replay"
+REPLAY_BIN = REPO_ROOT / "build/sitl/examples/EKF_CSV_Replay"
 
 RESULT_ROOT = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/results/2026-04-15_四シナリオ比較"
 REPORT_PATH = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/2026-04-15_00:45:50_四シナリオ仮説検証.md"

@@ -21,7 +21,7 @@ import numpy as np
 import pandas as pd
 
 
-REPLAY_BIN = Path("build/sitl/examples/RLS_CSV_Replay")
+REPLAY_BIN = Path("build/sitl/examples/EKF_CSV_Replay")
 INPUTS = {
     "00000443": Path("analysis/replay/data/00000443.BIN"),
     "00000444": Path("analysis/replay/data/00000444.BIN"),

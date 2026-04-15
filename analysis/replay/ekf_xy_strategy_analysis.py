@@ -306,7 +306,7 @@ def build_report(
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Compare xy EKF strategies and q_w sweeps")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--input-443", default="analysis/replay/data/00000443.BIN")
     parser.add_argument("--input-444", default="analysis/replay/data/00000444.BIN")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/xy_ekf_2026-04-05")

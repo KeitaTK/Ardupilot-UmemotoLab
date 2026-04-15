@@ -147,7 +147,7 @@ def make_plot(tag: str, csv_input: Path, traces: Dict[str, np.ndarray], out_png:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sweep q_w for fixed 0.60Hz EKF replay")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/fixed_060_qw_sweep_2026-04-06")
     parser.add_argument("--qws", nargs="*", default=DEFAULT_QWS, help="q_w values (strings, e.g. 1e-9)")
     args = parser.parse_args()

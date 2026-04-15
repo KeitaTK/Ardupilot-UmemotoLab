@@ -38,12 +38,12 @@ public:
     // RCチャンネル読み取り（旧方式・互換性のため）
     bool read_freq_estimation_switch();
 
-    // 互換ゲッター関数
-    Vector3f get_rls_sin_coeff() const;
-    Vector3f get_rls_cos_coeff() const;
-    Vector3f get_rls_bias() const;
+    // 状態ゲッター関数
+    Vector3f get_harmonic_sin_coeff() const;
+    Vector3f get_harmonic_cos_coeff() const;
+    Vector3f get_dc_offset() const;
     Vector3f get_predicted_force() const;    // Δt秒後の予測外力
-    bool is_rls_initialized() const { return ekf_initialized; }
+    bool is_frequency_estimation_initialized() const { return ekf_initialized; }
     
     // ログ記録関数
     void Write_Observer_Log();
@@ -55,16 +55,13 @@ public:
     // リプレイテスト用
     void set_replay_time_ms(uint32_t ms) { _test_current_ms = ms; _replay_active = true; }
     void set_freq_estimation_active(bool active);
-    void force_rls_update(const Vector3f& payload);
+    void force_frequency_estimation_update(const Vector3f& payload);
     void set_params_for_replay(float freq, float bw, float gain);
     void set_ekf_w_init_hz_for_replay(float freq_hz);
     void set_ekf_q_w_for_replay(float q_w);
     void set_ekf_r_meas_for_replay(float r_meas);
-    void set_ekf_axis_gate_for_replay(bool enabled,
-                                      float amp_min,
-                                      float amp_max,
-                                      float innov_max,
-                                      float nis_max);
+    void set_ekf_innovation_limits_for_replay(float innov_max,
+                                              float nis_max);
     void set_ekf_energy_gate_for_replay(bool enabled,
                                         float rms_on,
                                         float rms_off,
@@ -77,7 +74,6 @@ public:
     void set_ekf_robust_update_for_replay(bool enabled,
                                           float nis_reject_scale);
     float get_estimated_frequency() const { return estimated_frequency; }
-    float get_phase_correction() const { return phase_correction; }
     // Add logic to get internal EKF state if needed
 // #endif
 
@@ -112,8 +108,7 @@ private:
     // EKF (harmonic disturbance observer) state
     static constexpr uint8_t EKF_STATE_SIZE = 4;  // [d, d_dot, c, omega]
     static constexpr uint8_t EKF_NUM_AXES = 3;     // x, y, z
-    static constexpr uint8_t RLS_PARAM_SIZE = EKF_STATE_SIZE;
-    static constexpr uint8_t RLS_NUM_AXES = EKF_NUM_AXES;
+    static constexpr uint8_t OBS_NUM_AXES = EKF_NUM_AXES;
 
     // 各軸のEKF状態 [軸][状態番号]
     // 状態: [0]=d, [1]=d_dot, [2]=c, [3]=omega
@@ -126,18 +121,13 @@ private:
     uint32_t ekf_sample_count = 0;
     uint32_t ekf_start_time_ms = 0;
 
-    // Legacy phase tracking retained during migration
-    float ab_phase_unwrapped[RLS_NUM_AXES];
-    float ab_phase_prev_wrapped[RLS_NUM_AXES];
-    bool  ab_phase_initialized[RLS_NUM_AXES];
-    float ab_amp[RLS_NUM_AXES];
-    float ekf_axis_innovation[RLS_NUM_AXES];
-    float ekf_axis_nis[RLS_NUM_AXES];
-    float ekf_axis_amp[RLS_NUM_AXES];
-    float ekf_axis_force_abs[RLS_NUM_AXES];
-    float ekf_axis_energy_power[RLS_NUM_AXES];
-    uint8_t ekf_axis_trusted[RLS_NUM_AXES];
-    uint8_t ekf_axis_energy_trusted[RLS_NUM_AXES];
+    float ekf_axis_innovation[OBS_NUM_AXES];
+    float ekf_axis_nis[OBS_NUM_AXES];
+    float ekf_axis_amp[OBS_NUM_AXES];
+    float ekf_axis_force_abs[OBS_NUM_AXES];
+    float ekf_axis_energy_power[OBS_NUM_AXES];
+    uint8_t ekf_axis_trusted[OBS_NUM_AXES];
+    uint8_t ekf_axis_energy_trusted[OBS_NUM_AXES];
 
     // EKF tuning parameters
     AP_Float _ekf_q_d;
@@ -148,9 +138,6 @@ private:
     AP_Float _ekf_omega_init;
     AP_Float _ekf_omega_min;
     AP_Float _ekf_omega_max;
-    AP_Int8  _ekf_axis_gate_enable;
-    AP_Float _ekf_amp_min;
-    AP_Float _ekf_amp_max;
     AP_Float _ekf_innov_max;
     AP_Float _ekf_nis_max;
     AP_Int8  _ekf_energy_gate_enable;
@@ -171,25 +158,14 @@ private:
     AP_Float _disturbance_freq;
     AP_Float _prediction_time;
     
-    // テスト用パラメータ（外力注入）
-    AP_Int8  _test_force_inject_enable;  // テスト用外力注入の有効/無効
-    AP_Float _test_force_freq;           // テスト用外力の周波数 [Hz]
-    AP_Float _test_force_amp;            // テスト用外力の振幅 [N]
-    
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
-    
-    // 位相補正用のパラメータ
-    AP_Int8  _phase_correction_enabled;  // 位相補正の有効/無効
-    AP_Float _phase_correction_threshold; // 位相補正を適用する閾値 [rad]
     
     // 周波数推定制御用（両方式サポート）
     AP_Int8  _freq_estimation_rc_channel;  // 旧方式：チャンネル番号指定（0=無効、1-16=RC1-RC16）
     volatile bool _freq_estimation_switch_state;     // 新方式：RC Aux Function経由
     bool _combined_freq_est_switch;         // 統合されたスイッチ状態（新方式 OR 旧方式）
-    
-    // 位相補正用の変数
-    float phase_correction;                            // 累積位相補正量 [rad]
+
     float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
     // EKF関数
@@ -201,9 +177,6 @@ private:
     Vector3f predict_force_from_state(const float state[EKF_STATE_SIZE], float dt) const;
     void update_prediction_cache();  // 予測用キャッシュ更新
     
-    // 位相補正関数
-    void phase_correction_init();
-    
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
     Vector3f calculate_correction_euler_from_force(const Vector3f& force) const;
@@ -213,9 +186,6 @@ private:
     AP_Float    _correction_gain;
     // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）
     AP_Float    _filter_cutoff_freq;
-    
-    // 周波数推定ウィンドウ長 [s]
-    AP_Float    _freq_est_window_sec;
     
     // 補正角度の最大値
     AP_Float    _max_correction_angle;
@@ -234,18 +204,6 @@ private:
     static constexpr float    RLS_MIN_COVARIANCE    = 0.001f;
     static constexpr float    RLS_MAX_COVARIANCE    = 1000.0f;
     
-    // 周波数範囲制限（振り子長0.3m~2.0mに対応）
-    static constexpr float    FREQ_MIN              = 0.35f;  // 2.0m相当 [Hz]
-    static constexpr float    FREQ_MAX              = 0.91f;  // 0.3m相当 [Hz]
-
-    // ゼロクロス推定用の定数
-    static constexpr bool     ZERO_CROSS_ESTIMATION_ENABLED = true;
-    static constexpr float    ZERO_CROSS_SAMPLE_RATE_HZ = 20.0f;
-    static constexpr uint8_t  ZERO_CROSS_DECIMATION = 5;  // 100Hz -> 20Hz
-    static constexpr float    ZERO_CROSS_LOW_CUT_HZ = 0.4f;
-    static constexpr float    ZERO_CROSS_HIGH_CUT_HZ = 0.8f;
-    static constexpr uint16_t ZERO_CROSS_MAX_SAMPLES = 600;  // 30s @20Hz
-    
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ
     
@@ -254,25 +212,6 @@ private:
     bool _freq_estimation_prev_switch = false; // 前回のスイッチ状態
     float _freq_estimation_result = 0.0f;    // 推定周波数結果 [Hz]
 
-    // ゼロクロス推定の状態
-    bool _zc_window_active = false;
-    uint16_t _zc_window_samples = 0;
-    uint16_t _zc_sample_count = 0;
-    uint8_t _zc_decimation_counter = 0;
-    float _zc_samples[ZERO_CROSS_MAX_SAMPLES];
-    float _zc_prev_input = 0.0f;
-    float _zc_hp_state = 0.0f;
-    float _zc_lp_state = 0.0f;
-    
     // ヘルパー関数
-    bool check_frequency_range(float freq);  // 周波数範囲チェック
     bool is_taking_off();  // 離陸検知
-
-    // ゼロクロス推定
-    void zero_cross_start();
-    void zero_cross_stop();
-    void zero_cross_reset_state();
-    void zero_cross_update(float sample);
-    bool zero_cross_compute_frequency(float &freq_out, uint16_t &crossings_out) const;
-    float zero_cross_filter(float input);
 };

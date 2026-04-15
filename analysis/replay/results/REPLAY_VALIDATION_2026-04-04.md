@@ -118,7 +118,7 @@
 - 統合値: 軸間の分散を反映
 
 ### 4.3 Replay実行器への検証オプション
-新規`RLS_CSV_Replay`オプション:
+新規`EKF_CSV_Replay`オプション:
 - `--sw-mode log|always-on|always-off`: 運用モード選択
 - `--ekf-reset-on-switch 0|1`: リセット有無
 - `--ekf-axis-gate 0|1`: ゲート機能有無

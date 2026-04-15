@@ -2,7 +2,7 @@
 """Synthetic PLY injection test.
 
 Generates a CSV containing only a PLY sinusoid at 0.45 Hz and runs the
-RLS_CSV_Replay for Y-only (`--ekf-axis-mask 2`) across a set of `q_w` values.
+EKF_CSV_Replay for Y-only (`--ekf-axis-mask 2`) across a set of `q_w` values.
 Writes metrics and figures to the output directory.
 """
 
@@ -106,7 +106,7 @@ def make_plot(csv_input: Path, result_csv: Path, out_png: Path, title: str) -> N
 
 def main() -> int:
     parser = argparse.ArgumentParser(description='Synthetic PLY injection test (Y-only)')
-    parser.add_argument('--replay-bin', default='build/sitl/examples/RLS_CSV_Replay')
+    parser.add_argument('--replay-bin', default='build/sitl/examples/EKF_CSV_Replay')
     parser.add_argument('--outdir', default='analysis/replay/results/diagnostics/synth_ply_045_2026-04-06')
     parser.add_argument('--duration', type=float, default=75.0)
     parser.add_argument('--fs', type=float, default=100.0)

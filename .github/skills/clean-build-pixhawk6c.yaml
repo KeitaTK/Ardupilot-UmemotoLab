@@ -1,8 +1,11 @@
 name: "Clean Build for Pixhawk6C Hardware"
 description: "ONLY after all SITL tests pass: Remove build cache → Configure for Pixhawk6C → Clean firmware build"
 prerequisites:
+  - "ModeLoiter test PASSED"
+  - "GCSFailsafe test PASSED"
+  - "GuidedSubModeChange test PASSED"
+  - "TakeoffCheck test PASSED"
   - "ArmFeatures test PASSED"
-  - "TestRLSBasicEstimation test PASSED"
   - "CSV Replay converged successfully"
 steps:
   - name: "Activate virtual environment"

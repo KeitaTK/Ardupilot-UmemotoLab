@@ -1,84 +1,76 @@
-# ArduPilot Custom Autotest Specification (Observer RLS->EKF Migration)
+# ArduPilot Custom Autotest Specification (Observer EKF Fixed Policy)
 
-## Mandatory Tests
+## Mandatory SITL Tests
 
-All code changes affecting AP_Observer must pass these tests.
-
-During EKF migration, the following tests are kept as regression guards for current behavior.
+All code changes affecting AP_Observer, ArduCopter integration, or RC-based switching must pass these tests.
 
 | Test | Purpose | Timeout | Freq |
 |------|---------|---------|------|
-| `test.Copter.ArmFeatures` | Core ArduPilot arming | 300s | Every change |
-| `test.Copter.TestRLSBasicEstimation` | Baseline harmonic estimation regression | 600s | Every AP_Observer change |
-| `test.Copter.TestRLSRC8SwitchControl` | RC Aux Function (RC8_OPTION=316) control | 600s | After RC/integration changes |
-| `test.Copter.TestRLSWindowedEstimation` | RC-gated frequency estimation regression | 600s | After frequency estimation changes |
-| `RLS_CSV_Replay (Simulation)` | Offline replay of flight data | ~30s | After frequency estimation code changes |
+| `test.Copter.ArmFeatures` | Core arming and safety path | 300s | Every change |
+| `test.Copter.ModeLoiter` | Loiter mode behavior regression | 300s | Every AP_Observer change |
+| `test.Copter.GCSFailsafe` | GCS link loss failsafe behavior | 300s | Every AP_Observer change |
+| `test.Copter.GuidedSubModeChange` | Guided sub-mode transition safety | 300s | Integration changes / pre-release |
+| `test.Copter.TakeoffCheck` | Takeoff gate and safety checks | 300s | Integration changes / pre-release |
+| `EKF_CSV_Replay` | Offline replay convergence check | ~30s | After observer estimation changes |
 
 ---
 
-## Log Simulation & Offline Analysis
+## Legacy Test Status
 
-When modifying observer estimation logic (RLS or EKF path), you **MUST** run the offline simulation to verify convergence and stability using real flight data.
+Legacy injected-force observer autotests (`TestRLS*`) are no longer part of default Copter suites under the EKF-fixed policy.
+These tests depended on removed parameters (for example `OBS_TEST_*`, `OBS_PHASE_*`, `OBS_FREQ_WIN`) and are retained only as historical references in source code.
 
-During EKF migration, replay analysis must additionally evaluate:
+---
 
-- frequency trajectory (`f_est`) against baseline replay results
-- disturbance reconstruction quality (NRMSE)
-- innovation trend (mean and lag-1 correlation)
+## Log Replay and Offline Analysis
 
-### 1. Build & Run Replay
+When modifying observer estimation logic, you MUST run offline replay for convergence/stability checks.
+
+### 1. Build and Run Replay
+
 ```bash
-# Build the replay example
-./waf build --target examples/RLS_CSV_Replay
-
-# Run simulation from BIN directly (single-input mode)
-./build/sitl/examples/RLS_CSV_Replay --input analysis/replay/data/00000444.BIN --plot
+./waf build --target examples/EKF_CSV_Replay
+./build/sitl/examples/EKF_CSV_Replay --input analysis/replay/data/00000444.BIN --plot
 ```
 
-### 2. Generate Comparison Graph
+### 2. Generate Plots from Existing Replay Output (Optional)
+
 ```bash
-# Optional standalone plotting from replay output CSV
 python3 analysis/replay/plot_replay_results.py \
   --input analysis/replay/results/runs/00000444/00000444_bin_result.csv \
   --outdir analysis/replay/results/runs/00000444/plots \
   --title 00000444
 ```
 
-### 3. Analyze SITL/Flight BIN Logs
-If you have a `.BIN` log from SITL or flight:
+### 3. Analyze Any SITL/Flight BIN
+
 ```bash
-# Replay can now read BIN directly and emit plots in one run:
-./build/sitl/examples/RLS_CSV_Replay --input path/to/log.BIN --plot
-# Output: analysis/replay/results/runs/<tag>/
-#   - *_from_bin.csv
-#   - *_result.csv
-#   - plots/frequency_transition.png
-#   - plots/waveform_compare_x.png
+./build/sitl/examples/EKF_CSV_Replay --input path/to/log.BIN --plot
 ```
 
----
+Expected output directory:
 
-## Extended / Long Tests
-
-These tests are experimental or require long execution time:
-
-| Test | Purpose | Timeout | Notes |
-|------|---------|---------|-------|
-| `test.Copter.TestRLSFrequencyEstimation` | Zero-cross estimation with injected force | 800s | Timing-sensitive, may timeout |
-| `test.Copter.TestRLSFrequencyEstimationMulti` | Multi-scenario zero-cross convergence | 1200s | 20+ min execution, before releases only |
+- `analysis/replay/results/runs/<tag>/`
+- `*_from_bin.csv`
+- `*_result.csv`
+- `plots/frequency_transition.png`
+- `plots/waveform_compare_x.png`
 
 ---
 
-## Quick Test Command
+## Quick Mandatory Test Command Sequence
 
 ```bash
 cd /home/memoto/Ardupilot-UmemotoLab
 source venv/bin/activate
+./waf clean
+./waf configure --board sitl
 ./waf -j$(nproc) copter
-timeout 300 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.ArmFeatures || exit 1
-timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSBasicEstimation || exit 1
-timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSRC8SwitchControl || exit 1
-timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestRLSWindowedEstimation || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ModeLoiter || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GCSFailsafe || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GuidedSubModeChange || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.TakeoffCheck || exit 1
+timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ArmFeatures || exit 1
 ```
 
 ---
@@ -86,67 +78,76 @@ timeout 600 Tools/autotest/autotest.py --no-clean build.Copter test.Copter.TestR
 ## Test Details
 
 ### test.Copter.ArmFeatures
-- **Category**: Core ArduPilot functionality
-- **Run frequency**: Every code change
-- **Success criteria**: Vehicle arms correctly
 
-### test.Copter.TestRLSBasicEstimation
-- **Category**: AP_Observer core functionality
-- **Parameters**: 
-  - Test frequency: 0.6 Hz
-  - Test amplitude: 10.0 N
-  - Zero-cross window: 10s (RC8 OFF during test)
-  - Test force injection: ON
-- **Success criteria**: RLS accurately estimates known disturbance
-- **Run frequency**: Every AP_Observer change
+- Category: Core ArduPilot functionality
+- Success criteria: Vehicle arms/disarms with expected gating behavior
 
-### test.Copter.TestRLSRC8SwitchControl
-  - RC channel: RC8
-  - RC8_OPTION: 316 (RLS_FREQ_EST)
-  - OBS_FREQ_WIN: 10s
-  - Switch logic: HIGH = ON, LOW = OFF
+### test.Copter.ModeLoiter
+
+- Category: Flight mode regression
+- Success criteria: Loiter mode remains stable and command transitions are valid
+
+### test.Copter.GCSFailsafe
+
+- Category: Communication failsafe
+- Success criteria: Correct failsafe behavior when GCS link is lost/restored
+
+### test.Copter.GuidedSubModeChange
+
+- Category: Guided mode transitions
+- Success criteria: Sub-mode transitions occur without unexpected disarm/crash states
+
+### test.Copter.TakeoffCheck
+
+- Category: Takeoff safety
+- Success criteria: Takeoff checks and mode interactions behave as expected
 
 ---
 
 ## Test Failure Debugging
 
-| Failure | Cause | Solution |
-|---------|-------|----------|
-| ArmFeatures timeout | SITL startup issue | Reboot SITL, check resources |
-| TestRLSBasicEstimation fails | Estimation not converging | Increase hover time, check RLS parameters |
-| TestRLSRC8SwitchControl fails | RC Aux Function misconfigured | Verify RC8_OPTION=316 is set |
+| Failure | Likely Cause | Suggested Action |
+|---------|--------------|------------------|
+| `ModeLoiter` timeout | SITL startup/config mismatch | Re-run from clean configure/build sequence |
+| `GCSFailsafe` failure | Link/failsafe parameter drift | Verify failsafe params and expected mode transitions |
+| `GuidedSubModeChange` failure | Guided transition regression | Inspect mode switch and state machine logs |
+| `TakeoffCheck` failure | Pre-arm/takeoff gating regression | Check pre-arm status and takeoff condition changes |
+| `ArmFeatures` failure | Core arming regression | Validate arming checks and RC defaults |
 
 ---
 
 ## Development Workflow Integration
 
-### Phase 1: SITL Development (MANDATORY)
-1. Make code changes
-2. Build: `./waf copter`
-3. **Run ALL mandatory tests**
-4. If tests fail → Debug and repeat
-5. **Do NOT proceed to Phase 2 until all tests pass**
+### Phase 1: SITL Development (Mandatory)
 
-### EKF Migration Validation (Required when EKF logic changes)
-1. Run all mandatory regression tests above
-2. Run replay simulation and graph generation
-3. Compare EKF-side estimates to RLS baseline and MATLAB reference behavior
-4. Record convergence/stability observations in `.github/CHANGELOG_DEVELOPMENT.md`
+1. Make code changes.
+2. Build (`./waf configure --board sitl` and `./waf copter`).
+3. Run all mandatory SITL tests above.
+4. If any test fails, debug and rerun until all pass.
+5. Do not proceed to hardware build until Phase 1 is green.
+
+### EKF Validation (Required When Estimation Logic Changes)
+
+1. Run all mandatory SITL tests.
+2. Run replay simulation and generate plots.
+3. Compare EKF behavior with recent EKF baseline results and MATLAB reference trends.
+4. Record results in `.github/CHANGELOG_DEVELOPMENT.md`.
 
 ### Phase 2: Hardware Build (Pixhawk6C)
-- Only after Phase 1 tests PASS
-- Clean build: `rm -rf build/ && ./waf configure --board Pixhawk6C && ./waf copter`
+
+- Run only after all mandatory SITL tests pass.
+- Clean build command: `rm -rf build/ && ./waf configure --board Pixhawk6C && ./waf copter`
 
 ---
 
-## Test Execution Time
+## Test Execution Time (Reference)
 
-- **Mandatory tests**: ~10 minutes total
-- **With optional tests**: 30+ minutes
-- **TestRLSFrequencyEstimationMulti alone**: 20+ minutes
+- Mandatory SITL tests: about 10 to 20 minutes depending on host performance
+- Replay validation: about 5 to 10 minutes
 
 ---
 
 ## Last Updated
-- **Date**: 2026-04-04
-- **Author**: Development team
+
+- Date: 2026-04-15
+- Author: Development team

@@ -2,6 +2,61 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-15 17:50: [Autotest/EKF] RLS依存autotest整理と必須SITL回帰実行
+
+- Problem: EKF固定方針へ移行済みなのに、autotest運用定義に `TestRLS*` 系が残っており、現行方針と不整合だった。
+- Investigation:
+  1. `Tools/autotest/arducopter.py` の `tests1a()` に `TestRLS*` が mandatory コメント付きで残存していることを確認。
+  2. `.github/AUTOTEST_SPECIFICATION.md` と `.github/skills/build-and-test.yaml` / `clean-build-pixhawk6c.yaml` が旧RLS系テストを前提にしていることを確認。
+  3. 必須SITL対象を `ModeLoiter`, `GCSFailsafe`, `GuidedSubModeChange`, `TakeoffCheck`, `ArmFeatures` に統一して実行検証した。
+- Attempted:
+  1. `tests1a()` から `TestRLSBasicEstimation`, `TestRLSRC8SwitchControl`, `TestRLSWindowedEstimation`, `TestRLSParameterChange`, `TestRLSFrequencyEstimationDetailed` を除外。
+  2. `AUTOTEST_SPECIFICATION.md` を EKF 固定方針で書き換え、Quick command も venv + clean/configure/build + 必須5テストへ更新。
+  3. `build-and-test.yaml` を必須5テスト実行フローへ更新し、`clean-build-pixhawk6c.yaml` の前提条件を同セットに更新。
+  4. venv有効化後に `./waf clean`, `./waf configure --board sitl`, `./waf -j$(nproc) copter` を実行し、必須5テストを順次実行。
+- Result:
+  - ✅ PASS: `test.Copter.ModeLoiter`
+  - ✅ PASS: `test.Copter.TakeoffCheck`
+  - ✅ PASS: `test.Copter.ArmFeatures`
+  - ❌ FAIL: `test.Copter.GCSFailsafe` (`ConnectionRefusedError` 発生後、cleanup側で `'NoneType' object has no attribute 'recv'`)
+  - ❌ FAIL: `test.Copter.GuidedSubModeChange`（`Unexpected heading` と `Connection refused` を再現）
+  - ℹ️ 失敗ログ: `/home/memoto/buildlogs/ArduCopter-GCSFailsafe.txt`, `/home/memoto/buildlogs/ArduCopter-GuidedSubModeChange.txt`
+
+### 2026-04-15 23:10: [AP_Observer/EKF] RLS残滓削減・EKF_CSV_Replay改名・M30初期値化
+
+- Problem: 実装と運用導線に RLS 命名・zero-cross 系・研究用パラメータが残っており、Robust + Smooth M30 固定方針と不整合だった。
+- Investigation:
+  1. AP_Observer 本体で zero-cross 関数群、phase/test 注入系、axis-gate 系の使用実態を再確認。
+  2. replay 実行器と scripts/docs の `RLS_CSV_Replay` 参照、および `get_rls_*` 系 API 参照を全体検索。
+  3. RC Aux enum 316 のシンボル改名影響を ArduCopter 側 switch 分岐で確認。
+- Attempted:
+  1. AP_Observer 公開 API を `get_harmonic_sin_coeff` / `get_harmonic_cos_coeff` / `get_dc_offset` / `force_frequency_estimation_update` に改名。
+  2. zero-cross 実装一式、phase correction、test inject、axis-gate（AMP_MIN/MAX 含む）を削除。
+  3. EKF 初期値を M30 に反映（`EKF_Q_D`, `EKF_Q_DD`, `EKF_Q_C`, `EKF_R_MEAS`, `EKF_RB_EN`）。
+  4. replay 実行器を `RLS_CSV_Replay` から `EKF_CSV_Replay` へディレクトリ/ファイル名含め改名し、wscript と scripts/docs を追従。
+  5. RC Aux enum を `RLS_FREQ_EST` から `OBSERVER_FREQ_EST` へ改名し、Copter 側分岐を更新。
+- Result:
+  - ✅ `./waf configure --board sitl`, `./waf copter`, `./waf build --target examples/EKF_CSV_Replay` が通過。
+  - ✅ `./build/sitl/examples/EKF_CSV_Replay --help` が新名称で起動。
+  - ✅ BIN スモーク実行（`00000444.BIN`）で `/tmp/ekf_replay_smoke/smoke_444_result.csv` を生成確認。
+  - ⚠️ `Tools/autotest/arducopter.py` の旧パラメータ（`OBS_TEST_*`, `OBS_PHASE_*`, `OBS_FREQ_WIN`）依存テストは未整理のため、次段でテスト仕様の棚卸しが必要。
+
+### 2026-04-15 15:16: [AP_Observer/Docs] READMEを現行Robust+Smooth M30アルゴリズムへ更新
+
+- 問題: `libraries/AP_Observer/README.md` が RLS中心の説明のままで、現行EKF実装（ロバスト更新・測定ゼロ注入・軸統合）と乖離していた
+- 調査:
+  1. `AP_Observer.cpp` の `ekf_update_axis()` と軸統合ロジックを読んで、実際の更新式・分岐条件を確認
+  2. `run_robust_smooth_m30_concat_direct_replay.py` から M30確定値（Q/R・ロバスト設定）を抽出
+- 試行:
+  1. `libraries/AP_Observer/README.md` を全面改訂
+  2. 状態方程式、ヤコビアン、NISベースのロバスト更新、hold/reject条件、周波数統合式を数式付きで記載
+  3. Robust + Smooth M30 の推奨値テーブルを追加
+- 結果:
+  - ✅ OBSドキュメントが現行アルゴリズム仕様に一致
+  - ✅ 実装追従の数式説明を追加し、今後の整理作業の基準文書として利用可能になった
+- 備考:
+  - 次段で replay/CPP の必要不要分岐と RLS命名残存の整理案を作成予定
+
 ### 2026-04-15 02:39: [AP_Observer/EKF] 連結後リプレイ方式へ変更（連結ログを直接リプレイ）
 
 - 問題: 443/444の各リプレイ結果を後処理で連結する方式ではなく、連結した入力ログそのものに対するリプレイ結果が必要になった

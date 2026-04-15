@@ -304,7 +304,7 @@ public:
         SCRIPTING_14 =       313,
         SCRIPTING_15 =       314,
         SCRIPTING_16 =       315,
-        RLS_FREQ_EST =       316, // RLS frequency estimation ON/OFF
+        OBSERVER_FREQ_EST =  316, // Observer frequency estimation ON/OFF
 
         // this must be higher than any aux function above
         AUX_FUNCTION_MAX =   317,

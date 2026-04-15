@@ -702,7 +702,7 @@ def main() -> int:
     parser.add_argument("--result-444", default="analysis/replay/results/runs/00000444/00000444_bin_result.csv")
     parser.add_argument("--input-bin-444", default="analysis/replay/data/00000444.BIN")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     args = parser.parse_args()
 
     outdir = Path(args.outdir)

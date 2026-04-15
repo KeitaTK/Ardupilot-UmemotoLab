@@ -1,69 +1,22 @@
-# AP_Observer - 外乱推定システム (RLS -> EKF移行中)
+# AP_Observer - 外乱推定システム (EKF: Robust + Smooth M30)
 
-**最終更新日**: 2026年4月4日 (EKF移行計画を追加)
+最終更新日: 2026-04-15
 
-## 1. 概要
+## 1. 目的と現状
 
-AP_Observerは、ドローンに作用する外部からの周期的な外力（吊り荷の揺れなど）をリアルタイムで推定し、その外力を打ち消して機体を安定化させるためのライブラリです。
+AP_Observer は、機体座標系で観測される外力をオンライン推定し、予測外力に基づく姿勢補正へ接続するライブラリです。
 
-現在はRLSベース実装が動作中ですが、MATLAB参照実装に合わせて正弦波モデルEKFへ移行する計画です。
-詳細な差分と移行タスクは `EKF_MIGRATION_PLAN.md` を参照してください。
+現行の推定器コアは EKF ベースです。運用上の推奨プロファイルは Robust + Smooth M30 で、外れ値抑制を優先しながら低振幅領域のスパイクを抑える構成になっています。
 
-### 主な機能
-1.  **外力算出**: 加速度センサと推力指令値から、機体に加わる外力ベクトルを計算
-2.  **推定器更新 (移行中)**: 現行RLS推定をEKFベース推定へ段階移行
-3.  **未来予測**: 推定したモデルを用いて、通信遅延や制御遅れを補償するための「Δt秒先の外力」を予測
-4.  **姿勢補正**: 予測された外力に基づいて、機体の目標姿勢（ロール・ピッチ）を補正
+- 本番接続先: ArduCopter から observer.init と observer.update を呼び出し
+- 出力: 予測外力 get_predicted_force、姿勢補正 get_correction_euler
+- ログ: OBSV
 
----
+## 2. 状態定義とモデル
 
-## 2. 外力推定の基礎理論
+各軸を独立な 1D EKF として更新します。軸インデックスは X, Y, Z の 3軸です。
 
-### 2.1 外力の定義
-
-ドローンの運動方程式に基づき、機体に作用する外力ベクトル $\mathbf{F}_{ext}$ は次のように算出されます。
-
-$$
-\mathbf{F}_{ext} = m \cdot \mathbf{a}_{meas} - \mathbf{F}_{thrust}
-$$
-
-ここで：
-*   $m$: 機体質量 (`UAV_mass`)
-*   $\mathbf{a}_{meas}$: IMUで計測された機体座標系の加速度
-*   $\mathbf{F}_{thrust}$: モータ出力から計算された推力ベクトル
-
-### 2.2 外乱モデル
-
-吊り荷の揺れなどの周期的外乱は、以下の正弦波モデルで近似できると仮定します。
-
-$$
-y(t) = A \sin(\omega t) + B \cos(\omega t) + C
-$$
-
-ここで：
-*   $y(t)$: 時刻 $t$ における外力（各軸独立に計算）
-*   $\omega$: 外乱の角周波数 ($2\pi f$)。パラメータ `DIST_FREQ` で設定。
-*   $A, B$: 正弦波成分の係数（振幅と位相情報を含む）
-*   $C$: 定常偏差（オフセット成分）
-
-このモデルは、時刻 $t$ における既知の信号ベクトル $\phi(t)$ と、推定すべき未知パラメータベクトル $\theta$ の内積として表現できます。
-
-$$
-y(t) = \mathbf{\phi}(t)^T \mathbf{\theta}
-$$
-
-$$
-\mathbf{\phi}(t) = \begin{bmatrix} \sin(\omega t) \\ \cos(\omega t) \\ 1 \end{bmatrix}, \quad
-\mathbf{\theta} = \begin{bmatrix} A \\ B \\ C \end{bmatrix}
-$$
-
----
-
-## 3. EKF (拡張カルマンフィルタ) アルゴリズム方針
-
-移行先の推定器では、正弦波外乱成分と周波数を状態として同時推定します。
-
-### 3.1 状態定義
+状態ベクトル:
 
 $$
 \mathbf{x}_k = [d_k,\ \dot d_k,\ c_k,\ \omega_k]^T
@@ -74,115 +27,226 @@ $$
 - $c_k$: DCオフセット
 - $\omega_k$: 角周波数 [rad/s]
 
-### 3.2 状態方程式（離散化）
+観測量:
 
 $$
-d_{k+1}=d_k+\Delta t\dot d_k
-$$
-$$
-\dot d_{k+1}=\dot d_k-\Delta t\omega_k^2d_k
-$$
-$$
-c_{k+1}=c_k,\quad \omega_{k+1}=\omega_k
+z_k = d_k + c_k + v_k
 $$
 
-### 3.3 観測方程式
+観測行列:
 
 $$
-y_k = d_k + c_k + v_k
+\mathbf{H} = [1,\ 0,\ 1,\ 0]
 $$
 
-### 3.4 更新式
+## 3. 離散時間状態遷移
 
-通常のEKF予測・更新を適用します。
+サンプル間隔を $\Delta t$ とすると、予測モデルは次です。
 
 $$
-\hat{\mathbf{x}}_{k|k-1}=f(\hat{\mathbf{x}}_{k-1|k-1}),\quad
-P_{k|k-1}=F_kP_{k-1|k-1}F_k^T+Q
+d_{k+1} = d_k + \Delta t\,\dot d_k
 $$
 
 $$
-K_k=P_{k|k-1}H_k^TS_k^{-1},\quad
-\hat{\mathbf{x}}_{k|k}=\hat{\mathbf{x}}_{k|k-1}+K_k\tilde y_k
+\dot d_{k+1} = \dot d_k - \Delta t\,\omega_k^2 d_k
 $$
 
-詳細式は `EKF_MIGRATION_PLAN.md` および MATLAB 側 `docs/02_ekf_design_math.md` を参照してください。
+$$
+c_{k+1} = c_k,\quad \omega_{k+1} = \omega_k
+$$
 
-### 3.5 外力の未来予測
+ヤコビアン:
 
-`PRED_TIME` 後の予測は、EKF状態遷移で $t+\Delta t$ へ伝播させた状態から算出します。
+$$
+\mathbf{F}_k =
+\begin{bmatrix}
+1 & \Delta t & 0 & 0 \\
+-\Delta t\,\omega^2 & 1 & 0 & -2\Delta t\,\omega d \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1
+\end{bmatrix}
+$$
 
----
+予測:
 
-## 4. 実装詳細
+$$
+\hat{\mathbf{x}}_{k|k-1} = f(\hat{\mathbf{x}}_{k-1|k-1})
+$$
 
-### 4.1 クラス構造
+$$
+\mathbf{P}_{k|k-1} = \mathbf{F}_k\mathbf{P}_{k-1|k-1}\mathbf{F}_k^T + \mathbf{Q}_k
+$$
 
-主要な機能は `AP_Observer` クラスに集約されています。
+## 4. Hold / Reject ロジック
 
-*   `init()`: 推定器パラメータとフィルタの初期化
-*   `update()`: メインループ。外力計算、推定器更新、予測値計算を実行
-*   `rls_update()`: 現行RLS中核処理（移行期間中）
-*   `get_predicted_force()`: 現時点の推定パラメータを用いた未来の外力を取得
+現行実装は、推定の暴れを避けるために観測更新の挙動を条件分岐させます。
 
-### 4.3 座標系
+### 4.1 条件定義
 
-*   推定は機体固定座標系（Body Frame）で行われます。
-*   X軸: 前方, Y軸: 右方, Z軸: 下方
+$$
+F_{abs} = |z_k|
+$$
 
----
+- force_hold: $F_{abs} \le F_{hold}$
+- switch_hold: 周波数推定SWがOFF かつ EKF_SW_HOLD=1
+- energy_hold: エネルギーゲートが非信頼
+- hold_omega: force_hold または switch_hold または energy_hold
+- predict_only_hold: switch_hold のみ
+- force_reject: $F_{abs} \ge F_{reject}$
 
-## 5. パラメータ設定
+### 4.2 観測値ゼロ注入
 
-| パラメータ名 | デフォルト | 説明 |
-|------------|----------|------|
-| `CORR_GAIN` | 0.004 | 姿勢補正ゲイン。値を大きくすると補正量が増えますが、発振のリスクがあります。 |
-| `FILT_CUTOFF` | 20.0 | 入力外力データのローパスフィルタ・カットオフ周波数 [Hz] |
-| `RLS_LAMBDA` | 0.98 | 現行RLSの忘却係数（EKF移行完了後は廃止予定）。 |
-| `RLS_COV_INIT` | 100.0 | 現行RLSの初期共分散（EKF移行完了後は廃止予定）。 |
-| `DIST_FREQ` | 0.6 | 推定対象とする外乱の周波数 [Hz]。吊り荷の振り子周期などに合わせます。 |
-| `PRED_TIME` | 0.01 | 予測時間 [秒]。システムの遅延に合わせて設定します。 |
+低振幅または低エネルギーでは観測をゼロへ寄せます。
 
-> 注記: EKF用パラメータ群（`Q`, `R`, `OMEGA`関連）は移行実装フェーズで追加予定です。
+$$
+\text{if }(force\_hold \lor energy\_hold),\quad z_k \leftarrow 0
+$$
 
----
+### 4.3 omega のプロセスノイズ制御
 
-## 6. ログデータ (OBSV)
+周波数状態のプロセスノイズは、SW状態と hold/reject に応じて切り替えます。
 
-`AP_Observer` は `OBSV` ラベルで詳細な内部状態をログに記録します。
+$$
+q_{\omega,base} =
+\begin{cases}
+q_\omega & (freq\_est\_active=1)\\
+0 & (freq\_est\_active=0)
+\end{cases}
+$$
 
-| フィールド | 説明 |
-|-----------|------|
-| `TimeUS` | タイムスタンプ [us] |
-| `PLX, PLY, PLZ` | フィルタリング済みの観測外力 (Payload Force) [N/kg] |
-| `AX, AY` | 推定された sin係数 (X, Y軸) |
-| `BX, BY` | 推定された cos係数 (X, Y軸) |
-| `CX, CY` | 推定された 定常偏差 (X, Y軸) |
-| `PRX, PRY, PRZ` | 予測された外力 (Predicted Force) |
+$$
+q_\omega^{eff} =
+\begin{cases}
+q_{\omega,base} & (active \land \neg hold\_omega \land \neg force\_reject)\\
+\max(q_{\omega,base},10^{-6}) & (active \land (hold\_omega \lor force\_reject))\\
+0 & (\neg active)
+\end{cases}
+$$
 
----
+## 5. Robust 観測更新
 
-## 7. xyz軸の周波数推定平均化の物理的妥当性と高調波リスクについて
+イノベーション:
 
-### 現状の実装
-- 各軸（X/Y/Z）のEKFは、それぞれ独立に正弦波モデルの周波数（ω）を推定します。
-- 推定されたω（角周波数）は、各軸の観測値に最も合う1成分のωとして収束します。
-- 実装上は、各軸のωを単純平均し、Hz換算して`estimated_frequency`として出力しています。
+$$
+r_k = z_k - \hat z_{k|k-1},\quad \hat z_{k|k-1} = \hat d_{k|k-1} + \hat c_{k|k-1}
+$$
 
-### 物理的妥当性
-- ひもの長さが同じであれば、xyz軸の物理的な固有周波数は一致します。
-- 各軸の位相が異なっても、推定されるω自体は同じ値に収束するため、平均値も正しいωとなります。
-- たとえばX軸がsin(ωt)、Y軸がcos(ωt)のように90度ずれていても、推定ωは一致します。
-- 180度ずれ（sin(ωt)と-sin(ωt)）でも、推定ωは同じです。
+$$
+S_k = \mathbf{H}\mathbf{P}_{k|k-1}\mathbf{H}^T + R_{eff}
+$$
 
-### 高調波・2倍周波数リスクについて
-- 各軸の推定ωを単純平均しても、位相差による2倍周波数や人工的な高調波は発生しません。
-- もし異なる軸で異なる周波数成分（例：sin(ωt), sin(2ωt)）が混在していれば、平均値は物理的意味を持たなくなりますが、通常の物理モデルでは起こりません。
-- 実装上も、各軸のEKFは「1軸ごとに独立した状態空間モデル」で推定しているため、軸間の位相差が推定ωに悪影響を与えることはありません。
+$$
+\mathrm{NIS}_k = \frac{r_k^2}{S_k}
+$$
 
-### 注意点
-- 各軸のノイズや外乱が大きく異なる場合、平均値が乱れるリスクはあります（高調波ではなくノイズとして現れる）。
-- 軸ごとに信頼度重みを導入することで、より堅牢な推定が可能です（今後の拡張候補）。
+Robust ON 時の処理:
 
----
+- クリップ:
 
+$$
+r_k^{clip} = \mathrm{clip}(r_k, -INN_{max}, +INN_{max})
+$$
+
+- NIS が閾値超過時は観測ノイズを膨張:
+
+$$
+R_{eff} = R \cdot \frac{\mathrm{NIS}_k}{NIS_{max}} \quad (\mathrm{NIS}_k > NIS_{max})
+$$
+
+- 強外れ値は更新拒否:
+
+$$
+\mathrm{reject} \iff \mathrm{NIS}_k > NIS_{max} \cdot RB_{nis}
+$$
+
+拒否でなければ通常のカルマン更新:
+
+$$
+\mathbf{K}_k = \frac{\mathbf{P}_{k|k-1}\mathbf{H}^T}{S_k}
+$$
+
+hold_omega 条件では $K_\omega=0$ とし、更新後も $\omega$ を前値へ戻します。
+
+$$
+\hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k r_k^{use}
+$$
+
+## 6. 軸統合による周波数推定
+
+各軸の $\omega_i$ から fused 周波数を作ります。
+
+信頼軸条件:
+
+- 軸マスク EKF_AX_MASK に含まれる
+- force_reject 条件を満たさない
+- EKF_EN_GAT=1 のとき energy trusted
+- $|innovation| \le INN_{max}$
+- $NIS \le NIS_{max}$
+
+統合式:
+
+$$
+\omega_{fused} = \frac{1}{N}\sum_{i \in trusted}\omega_i,\quad
+f_{est} = \frac{\omega_{fused}}{2\pi}
+$$
+
+trusted 軸が無い場合は前回の推定周波数を維持します。
+
+## 7. 予測外力
+
+制御へ渡す予測外力は、PRED_TIME 先の一次予測を使います。
+
+$$
+d_{pred} = d + PRED\_TIME\cdot\dot d
+$$
+
+$$
+F_{pred} = d_{pred} + c
+$$
+
+これを各軸で計算して PRX, PRY, PRZ として利用します。
+
+## 8. Robust + Smooth M30 プロファイル
+
+以下は検証済みの M30 推奨値です。
+
+| 項目 | 値 |
+|---|---:|
+| EKF_RB_EN | 1 |
+| EKF_RB_NIS | 3.0 |
+| EKF_INN_MAX | 0.70 |
+| EKF_NIS_MAX | 4.0 |
+| EKF_EN_GAT | 1 |
+| EKF_EN_ON | 0.20 |
+| EKF_EN_OFF | 0.16 |
+| EKF_EN_TAU | 2.0 |
+| EKF_AX_MASK | 3 |
+| EKF_Q_D | 9.5367432e-12 |
+| EKF_Q_DD | 2.3841858e-11 |
+| EKF_Q_C | 4.7683716e-13 |
+| EKF_R_MEAS | 46.0 |
+
+補足:
+
+- M30 はスパイク抑制優先の強平滑プロファイルです。
+- ファームウェアの AP_Param デフォルト値は M30 に合わせて初期化されています。
+- 実験再現は [analysis/replay/run_robust_smooth_m30_concat_direct_replay.py](analysis/replay/run_robust_smooth_m30_concat_direct_replay.py) を使用します。
+
+## 9. ログ仕様 (OBSV)
+
+OBSV の主要フィールド:
+
+- TimeUS: タイムスタンプ [us]
+- PLX, PLY, PLZ: 観測外力
+- DX, DY, DZ: 状態 d
+- VX, VY, VZ: 状態 d_dot
+- CX, CY, CZ: 状態 c
+- F: fused 推定周波数 [Hz]
+- SW: 推定スイッチ状態
+
+## 10. 命名統一状況
+
+公開 API と replay 実行器は EKF ベースの命名へ統一済みです。
+
+- API: get_harmonic_sin_coeff, get_harmonic_cos_coeff, get_dc_offset, force_frequency_estimation_update
+- replay: EKF_CSV_Replay

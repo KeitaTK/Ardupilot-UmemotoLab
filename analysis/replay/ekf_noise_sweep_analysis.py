@@ -231,7 +231,7 @@ def write_csv(path: Path, rows: List[Dict[str, object]], fieldnames: List[str]) 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="EKF noise sweep analysis")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--input", default="analysis/replay/data/00000444.BIN")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/ekf_noise_investigation_2026-04-04")
     parser.add_argument("--target-hz", type=float, default=TARGET_HZ)

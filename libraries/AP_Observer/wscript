@@ -25,5 +25,5 @@ def build(bld):
         cxxflags=['-Wno-unused-parameter', '-DAP_OBSERVER_REPLAY_TEST=1']  # 必要に応じて警告抑制
     )
 
-    bld.recurse('examples/RLS_CSV_Replay')
+    bld.recurse('examples/EKF_CSV_Replay')
 

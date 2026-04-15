@@ -145,7 +145,7 @@ def make_plot(tag: str, csv_input: Path, traces: Dict[str, np.ndarray], out_png:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Validate RMS-gated EKF on 00000444 windows")
-    parser.add_argument("--replay-bin", default="build/sitl/examples/RLS_CSV_Replay")
+    parser.add_argument("--replay-bin", default="build/sitl/examples/EKF_CSV_Replay")
     parser.add_argument("--outdir", default="analysis/replay/results/diagnostics/xy_axis_comparison_00000444_energy_gate_2026-04-07")
     parser.add_argument("--qws", nargs="*", default=DEFAULT_QWS)
     args = parser.parse_args()

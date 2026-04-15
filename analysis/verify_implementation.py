@@ -33,8 +33,8 @@ for case_name, bin_path in bin_files.items():
     print(f"\n【処理中】{case_name}")
     print(f"  ファイル: {bin_path}")
     
-    # RLS_CSV_Replay の実行
-    cmd = f"cd {workspace} && source venv/bin/activate && ./build/sitl/examples/RLS_CSV_Replay --input {bin_path} 2>&1"
+    # EKF_CSV_Replay の実行
+    cmd = f"cd {workspace} && source venv/bin/activate && ./build/sitl/examples/EKF_CSV_Replay --input {bin_path} 2>&1"
     
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=60)
@@ -90,7 +90,7 @@ print("""
 
 ビルド結果: ✅ 成功
   バイナリ: /home/memoto/Ardupilot-UmemotoLab/build/sitl/bin/arducopter
-  RLS_CSV_Replay: /home/memoto/Ardupilot-UmemotoLab/build/sitl/examples/RLS_CSV_Replay
+  EKF_CSV_Replay: /home/memoto/Ardupilot-UmemotoLab/build/sitl/examples/EKF_CSV_Replay
 """)
 
 print("\n✅ 実装検証スクリプト完了")
