@@ -28,6 +28,8 @@ def read_result_csv(path: str) -> Dict[str, List[float]]:
     plz: List[float] = []
     prx: List[float] = []
     est_freq: List[float] = []
+    est_freq_x: List[float] = []
+    est_freq_y: List[float] = []
     real_freq: List[float] = []
     sw: List[float] = []
     real_sw: List[float] = []
@@ -45,6 +47,8 @@ def read_result_csv(path: str) -> Dict[str, List[float]]:
             plz.append(_read_float(row, "PLZ"))
             prx.append(_read_float(row, "PRX"))
             est_freq.append(_read_float(row, "EstFreq_Hz"))
+            est_freq_x.append(_read_float(row, "EstFreq_X_Hz"))
+            est_freq_y.append(_read_float(row, "EstFreq_Y_Hz"))
             real_freq.append(_read_float(row, "RealFreq_Hz"))
             sw.append(_read_float(row, "SW"))
             real_sw.append(_read_float(row, "RealSW"))
@@ -60,6 +64,8 @@ def read_result_csv(path: str) -> Dict[str, List[float]]:
         "plz": plz,
         "prx": prx,
         "est_freq": est_freq,
+        "est_freq_x": est_freq_x,
+        "est_freq_y": est_freq_y,
         "real_freq": real_freq,
         "sw": sw,
         "real_sw": real_sw,
@@ -132,15 +138,17 @@ def plot_combined(data: Dict[str, List[float]], outpath: str, title: str) -> Non
     t = data["time_s"]
     fig, axes = plt.subplots(4, 1, figsize=(14, 11), sharex=True)
 
-    # 1) 周波数推定
+    # 1) 周波数推定（統合値と各軸）
     # NOTE: Reference frequency (real_freq from log) has been found to contain incorrect values
     # and is excluded from plots. Only Estimated frequency from EKF is plotted.
     # Target frequency: ~0.45 Hz (for 00000443/00000444 logs)
-    axes[0].plot(t, data["est_freq"], label="Estimated frequency", color="#102040", linewidth=1.8)
+    axes[0].plot(t, data["est_freq"], label="Estimated frequency (fused)", color="#102040", linewidth=2.0, marker='', linestyle='-')
+    axes[0].plot(t, data["est_freq_x"], label="X-axis frequency", color="#802000", linewidth=1.5, marker='', linestyle='--', alpha=0.8)
+    axes[0].plot(t, data["est_freq_y"], label="Y-axis frequency", color="#105020", linewidth=1.5, marker='', linestyle='--', alpha=0.8)
     axes[0].set_ylabel("Freq [Hz]")
-    axes[0].set_title(f"{title} - Frequency")
+    axes[0].set_title(f"{title} - Frequency estimation (fused and per-axis)")
     axes[0].grid(True, alpha=0.3)
-    axes[0].legend(loc="upper right")
+    axes[0].legend(loc="upper right", fontsize=9)
 
     # 2) EKF内部状態（推定結果）
     axes[1].plot(t, data["dx"], label="DX", color="#102040", linewidth=1.8)

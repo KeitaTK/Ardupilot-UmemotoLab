@@ -131,7 +131,7 @@ struct ReplayRunConfig {
     std::string input_path;
     std::string output_dir;
     std::string tag;
-    std::string sw_mode = "log";
+    std::string sw_mode = "always-on";
     bool has_ekf_w_init_hz = false;
     float ekf_w_init_hz = 0.0f;
     bool has_ekf_q_w = false;
@@ -178,6 +178,8 @@ struct ReplayRunConfig {
     int ekf_robust_update = 0;
     bool has_ekf_robust_nis_reject = false;
     float ekf_robust_nis_reject = 3.0f;
+    bool has_ekf_sh_beta = false;
+    float ekf_sh_beta = 0.0f;
 };
 
 static bool parse_replay_args(ReplayRunConfig& cfg) {
@@ -201,8 +203,10 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
             printf("      [--ekf-energy-gate 0|1] [--ekf-energy-rms-on <v>] [--ekf-energy-rms-off <v>] [--ekf-energy-tau <s>]\n");
             printf("      [--ekf-force-hold-max <n>] [--ekf-force-reject-min <n>] [--ekf-axis-mask <mask>] [--ekf-hold-omega-off 0|1]\n");
             printf("      [--ekf-robust-update 0|1] [--ekf-robust-nis-reject <scale>]\n");
+            printf("      [--ekf-sh-beta <0..1>]\n");
             printf("\n");
             printf("Default mode runs the built-in regression file list.\n");
+            printf("Default SW mode is always-on for replay consistency.\n");
             exit(0);
         }
 
@@ -320,6 +324,18 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-robust-nis-reject=", 24) == 0) {
             cfg.ekf_robust_nis_reject = strtof(arg + 24, nullptr);
             cfg.has_ekf_robust_nis_reject = true;
+            continue;
+        }
+
+        if ((strcmp(arg, "--ekf-sh-beta") == 0) && next != nullptr) {
+            cfg.ekf_sh_beta = strtof(next, nullptr);
+            cfg.has_ekf_sh_beta = true;
+            i++;
+            continue;
+        }
+        if (strncmp(arg, "--ekf-sh-beta=", 14) == 0) {
+            cfg.ekf_sh_beta = strtof(arg + 14, nullptr);
+            cfg.has_ekf_sh_beta = true;
             continue;
         }
 
@@ -652,70 +668,55 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     // 初期化後にパラメータを上書き
     observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
     
-    if (AP_Param::set_by_name("OBS_EKF_Q_D", cfg.has_ekf_q_d ? cfg.ekf_q_d : 9.5367432e-12f)) {}
-    if (AP_Param::set_by_name("OBS_EKF_Q_DD", cfg.has_ekf_q_dd ? cfg.ekf_q_dd : 2.3841858e-11f)) {}
-    if (AP_Param::set_by_name("OBS_EKF_Q_C", cfg.has_ekf_q_c ? cfg.ekf_q_c : 4.7683716e-13f)) {}
-    if (AP_Param::set_by_name("OBS_EKF_Q_W", 0.0005f)) {}
-    if (AP_Param::set_by_name("OBS_EKF_R_MEAS", cfg.has_ekf_r_meas ? cfg.ekf_r_meas : 46.0f)) {}
+    observer.set_ekf_process_noises_for_replay(
+        cfg.has_ekf_q_d ? cfg.ekf_q_d : 9.5367432e-12f,
+        cfg.has_ekf_q_dd ? cfg.ekf_q_dd : 2.3841858e-11f,
+        cfg.has_ekf_q_c ? cfg.ekf_q_c : 4.7683716e-13f
+    );
+    observer.set_ekf_q_w_for_replay(cfg.has_ekf_q_w ? cfg.ekf_q_w : 0.0005f);
+    observer.set_ekf_r_meas_for_replay(cfg.has_ekf_r_meas ? cfg.ekf_r_meas : 46.0f);
+
+    // Keep replay behavior deterministic and aligned with historical baseline unless CLI overrides are added.
+    observer.set_ekf_switch_gate_enable_for_replay(true);
+    observer.set_ekf_shared_blend_beta_for_replay(cfg.has_ekf_sh_beta ? cfg.ekf_sh_beta : 0.0f);
+    observer.set_ekf_reset_on_switch_for_replay(cfg.has_ekf_reset_on_switch ? (cfg.ekf_reset_on_switch != 0) : false);
+    observer.set_ekf_hold_omega_when_off_for_replay(cfg.has_ekf_hold_omega_when_off ? (cfg.ekf_hold_omega_when_off != 0) : false);
+    observer.set_ekf_axis_mask_for_replay((uint8_t)MAX(0, cfg.has_ekf_axis_mask ? cfg.ekf_axis_mask : 3));
+    observer.set_ekf_energy_gate_for_replay(
+        cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true,
+        cfg.has_ekf_energy_rms_on ? cfg.ekf_energy_rms_on : 0.20f,
+        cfg.has_ekf_energy_rms_off ? cfg.ekf_energy_rms_off : 0.16f,
+        cfg.has_ekf_energy_tau ? cfg.ekf_energy_tau : 2.0f
+    );
+    observer.set_ekf_innovation_limits_for_replay(
+        cfg.has_ekf_innov_max ? cfg.ekf_innov_max : 0.7f,
+        cfg.has_ekf_nis_max ? cfg.ekf_nis_max : 4.0f
+    );
+    observer.set_ekf_force_thresholds_for_replay(
+        cfg.has_ekf_force_hold_max ? cfg.ekf_force_hold_max : 0.10f,
+        cfg.has_ekf_force_reject_min ? cfg.ekf_force_reject_min : 5.0f
+    );
+    observer.set_ekf_robust_update_for_replay(
+        cfg.has_ekf_robust_update ? (cfg.ekf_robust_update != 0) : false,
+        cfg.has_ekf_robust_nis_reject ? cfg.ekf_robust_nis_reject : 3.0f
+    );
     if (cfg.has_ekf_w_init_hz) {
         observer.set_ekf_w_init_hz_for_replay(cfg.ekf_w_init_hz);
     }
-    if (cfg.has_ekf_q_w) {
-        observer.set_ekf_q_w_for_replay(cfg.ekf_q_w);
-    }
-    if (cfg.has_ekf_r_meas) {
-        observer.set_ekf_r_meas_for_replay(cfg.ekf_r_meas);
-    }
     if (cfg.has_ekf_pred_time) {
-        if (AP_Param::set_by_name("PRED_TIME", cfg.ekf_pred_time)) {}
-    }
-    if (cfg.has_ekf_reset_on_switch) {
-        observer.set_ekf_reset_on_switch_for_replay(cfg.ekf_reset_on_switch != 0);
-    }
-    if (cfg.has_ekf_axis_mask) {
-        observer.set_ekf_axis_mask_for_replay((uint8_t)MAX(0, cfg.ekf_axis_mask));
-    }
-    if (cfg.has_ekf_hold_omega_when_off) {
-        observer.set_ekf_hold_omega_when_off_for_replay(cfg.ekf_hold_omega_when_off != 0);
-    }
-    if (cfg.has_ekf_robust_update || cfg.has_ekf_robust_nis_reject) {
-        observer.set_ekf_robust_update_for_replay(
-            cfg.has_ekf_robust_update ? (cfg.ekf_robust_update != 0) : false,
-            cfg.has_ekf_robust_nis_reject ? cfg.ekf_robust_nis_reject : 3.0f
-        );
+        observer.set_prediction_time_for_replay(cfg.ekf_pred_time);
     }
     if (cfg.has_ekf_axis_gate || cfg.has_ekf_amp_min || cfg.has_ekf_amp_max) {
         printf("Warning: --ekf-axis-gate/--ekf-amp-min/--ekf-amp-max are deprecated and ignored.\n");
     }
-    if (cfg.has_ekf_innov_max || cfg.has_ekf_nis_max) {
-        observer.set_ekf_innovation_limits_for_replay(
-            cfg.has_ekf_innov_max ? cfg.ekf_innov_max : 0.7f,
-            cfg.has_ekf_nis_max ? cfg.ekf_nis_max : 4.0f
-        );
-    }
-    if (cfg.has_ekf_energy_gate || cfg.has_ekf_energy_rms_on || cfg.has_ekf_energy_rms_off || cfg.has_ekf_energy_tau) {
-        const bool energy_gate_enabled = cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true;
-        observer.set_ekf_energy_gate_for_replay(
-            energy_gate_enabled,
-            cfg.ekf_energy_rms_on,
-            cfg.ekf_energy_rms_off,
-            cfg.ekf_energy_tau
-        );
-    }
-    if (cfg.has_ekf_force_hold_max || cfg.has_ekf_force_reject_min) {
-        observer.set_ekf_force_thresholds_for_replay(
-            cfg.has_ekf_force_hold_max ? cfg.ekf_force_hold_max : 1.5f,
-            cfg.has_ekf_force_reject_min ? cfg.ekf_force_reject_min : 5.0f
-        );
-    }
-    if (AP_Param::set_by_name("OBS_CORR_GAIN", 0.0f)) {}
+    
 
-    // Apply EKF parameter overrides by forcing EKF reinitialization after AP_Param updates.
+    // Apply EKF parameter overrides by forcing EKF reinitialization.
     observer.reset_frequency_estimation();
     
     std::ofstream outfile(out_filename);
     // Write header
-    outfile << "Time_s,PLX,PLY,PLZ,EstFreq_Hz,SW,RealSW,DX,DY,VX,VY,CX,CY,PRX,PRY,RealFreq_Hz,RealPhase\n";
+    outfile << "Time_s,PLX,PLY,PLZ,EstFreq_Hz,EstFreq_X_Hz,EstFreq_Y_Hz,SW,RealSW,DX,DY,VX,VY,CX,CY,PRX,PRY,RealFreq_Hz,RealPhase\n";
 
     uint32_t start_time_us = data[0].time_us;
     uint32_t prev_time_ms = 0;
@@ -769,10 +770,12 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         
         const int sw_out = current_sw ? 1 : 0;
         const int real_sw_out = real_sw ? 1 : 0;
-        char buf[320];
-        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
+        char buf[400];
+        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
             rel_time_s, d.plx, d.ply, d.plz,
             observer.get_estimated_frequency(),
+            observer.get_axis_estimated_frequency(0),  // X axis frequency
+            observer.get_axis_estimated_frequency(1),  // Y axis frequency
             sw_out, real_sw_out,
             D.x, D.y, V.x, V.y, C.x, C.y, P.x, P.y,
             d.real_freq, d.real_phase);

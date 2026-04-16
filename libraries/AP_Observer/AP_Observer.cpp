@@ -210,6 +210,41 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_RB_NIS", 36, AP_Observer, _ekf_robust_nis_reject_scale, 3.0f),
 
+    // @Param: EKF_HOLD_W
+    // @DisplayName: EKF Hold Weight for Frozen Axis
+    // @Description: Fusion weight applied to an axis when omega update is held
+    // @Range: 0.0 1.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_HOLD_W", 37, AP_Observer, _ekf_hold_weight, 0.05f),
+
+    // @Param: EKF_SH_BETA
+    // @DisplayName: EKF Shared Omega Blend Beta
+    // @Description: Blend factor for injecting shared XY omega into each XY axis when not in hard mode
+    // @Range: 0.0 1.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_SH_BETA", 38, AP_Observer, _ekf_shared_blend_beta, 0.0f),
+
+    // @Param: EKF_SH_HWM
+    // @DisplayName: EKF Shared Omega Hard-Mode Weight Min
+    // @Description: Minimum total XY fusion weight required to enter hard shared-omega mode
+    // @Range: 0.0 2.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_SH_HWM", 39, AP_Observer, _ekf_shared_hard_weight_min, 1.8f),
+
+    // @Param: EKF_SW_GATE
+    // @DisplayName: EKF Switch Gate Enable
+    // @Description: Enable switch gating for frequency estimation (0=always on, 1=use switch)
+    // @Values: 0:AlwaysOn,1:UseSwitch
+    // @User: Advanced
+    AP_GROUPINFO("EKF_SW_GATE", 41, AP_Observer, _ekf_switch_gate_enable, 1),
+
+    // @Param: EKF_SH_NIS
+    // @DisplayName: EKF Shared Omega Hard-Mode NIS Max
+    // @Description: Maximum XY NIS for enabling hard shared-omega mode
+    // @Range: 0.1 100.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_SH_NIS", 40, AP_Observer, _ekf_shared_hard_nis_max, 1.0f),
+
     AP_GROUPEND
 };
 
@@ -264,8 +299,11 @@ void AP_Observer::ekf_init() {
         ekf_axis_amp[axis] = 0.0f;
         ekf_axis_force_abs[axis] = 0.0f;
         ekf_axis_energy_power[axis] = 0.0f;
+        ekf_axis_weight[axis] = 0.0f;
         ekf_axis_trusted[axis] = 1U;
         ekf_axis_energy_trusted[axis] = 0U;
+        ekf_axis_omega_updated[axis] = 0U;
+        ekf_axis_hold_omega[axis] = 0U;
 
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
             for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
@@ -277,6 +315,9 @@ void AP_Observer::ekf_init() {
     ekf_sample_count = 0;
     ekf_start_time_ms = get_current_time_ms();
     estimated_frequency = init_omega / (2.0f * M_PI);
+    ekf_shared_omega_rad = init_omega;
+    ekf_shared_weight_sum = 0.0f;
+    ekf_shared_hard_mode = 0U;
     ekf_initialized = true;
 }
 
@@ -320,6 +361,48 @@ bool AP_Observer::is_axis_frequency_trusted(uint8_t axis) const {
            (nis <= nis_max);
 }
 
+float AP_Observer::compute_axis_fusion_weight(uint8_t axis) const {
+    // XYのみ周波数融合に使用し、Z軸は常に除外する。
+    if (axis >= 2 || !is_axis_enabled_in_fusion(axis)) {
+        return 0.0f;
+    }
+
+    const float hold_weight = constrain_value(_ekf_hold_weight.get(), 0.0f, 1.0f);
+
+    const float nis_max = MAX(1.0e-3f, _ekf_nis_max.get());
+    const float nis_norm = ekf_axis_nis[axis] / nis_max;
+    float w_nis = 1.0f / (1.0f + nis_norm * nis_norm);
+    if (!isfinite(w_nis)) {
+        w_nis = 0.0f;
+    }
+
+    float w_energy = 1.0f;
+    if (_ekf_energy_gate_enable.get() != 0 && !ekf_axis_energy_trusted[axis]) {
+        w_energy = hold_weight;
+    }
+
+    const float hold_thr = MAX(0.0f, _ekf_force_hold_max.get());
+    const float reject_thr = MAX(hold_thr + 1.0e-3f, _ekf_force_reject_min.get());
+    const float force_abs = ekf_axis_force_abs[axis];
+    float w_amp = 0.0f;
+    if (force_abs >= reject_thr) {
+        w_amp = 0.0f;
+    } else if (force_abs <= hold_thr) {
+        w_amp = hold_weight;
+    } else {
+        // hold閾値直上で滑らかに立ち上げ、十分な振幅で1.0へ飽和。
+        const float ramp_den = MAX(hold_thr, 0.05f);
+        w_amp = constrain_value((force_abs - hold_thr) / ramp_den, 0.0f, 1.0f);
+    }
+
+    const float w_hold = (ekf_axis_omega_updated[axis] != 0U) ? 1.0f : hold_weight;
+    float w = w_nis * w_energy * w_amp * w_hold;
+    if (!isfinite(w)) {
+        w = 0.0f;
+    }
+    return constrain_value(w, 0.0f, 1.0f);
+}
+
 void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
     if (!ekf_initialized) {
 #if HAL_GCS_ENABLED
@@ -344,28 +427,134 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
         ekf_update_axis(axis, measurement, dt);
     }
 
-    float omega_sum = 0.0f;
+    // XY共有周波数: NIS×Energy×Amplitude×Hold の複合重みで融合する。
+    float weighted_omega_sum = 0.0f;
+    float weight_sum = 0.0f;
+    float trusted_omega_sum = 0.0f;
     uint8_t trusted_count = 0;
+    float donor_weighted_omega_sum = 0.0f;
+    float donor_weight_sum = 0.0f;
+    uint8_t trusted_xy_count = 0;
+    uint8_t updated_xy_count = 0;
+    float max_nis_xy = 0.0f;
+    constexpr float donor_weight_min = 0.10f;
+
     for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        ekf_axis_amp[axis] = fabsf(ekf_state[axis][0]);
+        const bool trusted = is_axis_frequency_trusted(axis);
+        ekf_axis_trusted[axis] = trusted ? 1U : 0U;
+        ekf_axis_weight[axis] = 0.0f;
+
+        if (axis >= 2) {
+            // Z軸は周波数融合に使わない。
+            continue;
+        }
         if (!is_axis_enabled_in_fusion(axis)) {
             ekf_axis_trusted[axis] = 0U;
             continue;
         }
+
         const float omega_axis = constrain_value(ekf_state[axis][3], _ekf_omega_min.get(), _ekf_omega_max.get());
-        ekf_axis_amp[axis] = fabsf(ekf_state[axis][0]);
-        const bool trusted = is_axis_frequency_trusted(axis);
-        ekf_axis_trusted[axis] = trusted ? 1U : 0U;
+
         if (trusted) {
-            omega_sum += omega_axis;
+            trusted_xy_count++;
+            trusted_omega_sum += omega_axis;
             trusted_count++;
+        }
+        if (ekf_axis_omega_updated[axis] != 0U) {
+            updated_xy_count++;
+        }
+        if (isfinite(ekf_axis_nis[axis])) {
+            max_nis_xy = MAX(max_nis_xy, ekf_axis_nis[axis]);
+        }
+
+        float w_axis = compute_axis_fusion_weight(axis);
+        if (!trusted) {
+            w_axis *= constrain_value(_ekf_hold_weight.get(), 0.0f, 1.0f);
+        }
+        ekf_axis_weight[axis] = w_axis;
+        weighted_omega_sum += w_axis * omega_axis;
+        weight_sum += w_axis;
+        if (trusted && (ekf_axis_omega_updated[axis] != 0U) && (w_axis >= donor_weight_min)) {
+            donor_weighted_omega_sum += w_axis * omega_axis;
+            donor_weight_sum += w_axis;
         }
     }
 
+    const float beta = constrain_value(_ekf_shared_blend_beta.get(), 0.0f, 1.0f);
+    const bool shared_injection_enabled = (beta > 0.0f);
+
+    // 推定周波数は従来互換の trusted 平均を優先し、共有注入は別レイヤで扱う。
     if (trusted_count > 0U) {
-        estimated_frequency = (omega_sum / trusted_count) / (2.0f * M_PI);
+        estimated_frequency = (trusted_omega_sum / trusted_count) / (2.0f * M_PI);
     } else {
         estimated_frequency = _freq_estimation_result;
     }
+
+    // 既定(beta=0)では、従来の trusted 平均のみを使用して完全後方互換を維持する。
+    if (!shared_injection_enabled) {
+        ekf_shared_weight_sum = weight_sum;
+        ekf_shared_hard_mode = 0U;
+        ekf_shared_omega_rad = constrain_value(estimated_frequency * 2.0f * float(M_PI),
+                                               _ekf_omega_min.get(), _ekf_omega_max.get());
+        _freq_estimation_result = estimated_frequency;
+        update_prediction_cache();
+        ekf_sample_count++;
+        return;
+    }
+
+    float omega_shared = constrain_value(estimated_frequency * 2.0f * float(M_PI),
+                                         _ekf_omega_min.get(), _ekf_omega_max.get());
+    if (!isfinite(omega_shared) || omega_shared <= 0.0f) {
+        omega_shared = constrain_value(_freq_estimation_result * 2.0f * float(M_PI),
+                                       _ekf_omega_min.get(), _ekf_omega_max.get());
+    }
+
+    const bool has_trusted_donor = (donor_weight_sum > 1.0e-6f);
+    if (has_trusted_donor) {
+        omega_shared = constrain_value(donor_weighted_omega_sum / donor_weight_sum,
+                                       _ekf_omega_min.get(), _ekf_omega_max.get());
+    } else if (weight_sum > 1.0e-6f) {
+        omega_shared = constrain_value(weighted_omega_sum / weight_sum,
+                                       _ekf_omega_min.get(), _ekf_omega_max.get());
+    }
+
+    ekf_shared_weight_sum = weight_sum;
+    const float hard_weight_min = constrain_value(_ekf_shared_hard_weight_min.get(), 0.0f, 2.0f);
+    const float hard_nis_max = MAX(1.0e-3f, _ekf_shared_hard_nis_max.get());
+    const bool hard_mode = shared_injection_enabled &&
+                           (weight_sum >= hard_weight_min) &&
+                           (trusted_xy_count >= 2U) &&
+                           (updated_xy_count >= 2U) &&
+                           has_trusted_donor &&
+                           (max_nis_xy <= hard_nis_max) &&
+                           _freq_estimation_active;
+    ekf_shared_hard_mode = hard_mode ? 1U : 0U;
+
+    const bool allow_shared_injection = shared_injection_enabled && _freq_estimation_active && has_trusted_donor;
+    for (uint8_t axis = 0; axis < 2; axis++) {
+        if (!is_axis_enabled_in_fusion(axis)) {
+            continue;
+        }
+        const bool low_conf_axis = (ekf_axis_trusted[axis] == 0U);
+        const bool frozen_axis = (ekf_axis_omega_updated[axis] == 0U) || (ekf_axis_hold_omega[axis] != 0U);
+
+        if (hard_mode) {
+            // 高信頼時の強制置換は低信頼軸に限定し、良好軸は保持する。
+            if (low_conf_axis && frozen_axis && allow_shared_injection) {
+                ekf_state[axis][3] = omega_shared;
+            }
+        } else {
+            // 通常ブレンドは低信頼かつ凍結中の軸のみに適用する。
+            if (low_conf_axis && frozen_axis && allow_shared_injection) {
+                const float blended = (1.0f - beta) * ekf_state[axis][3] + beta * omega_shared;
+                ekf_state[axis][3] = constrain_value(blended, _ekf_omega_min.get(), _ekf_omega_max.get());
+            }
+        }
+    }
+
+    ekf_shared_omega_rad = omega_shared;
+    // 公開推定周波数は従来互換の trusted 平均値を維持する。
     _freq_estimation_result = estimated_frequency;
     update_prediction_cache();
     ekf_sample_count++;
@@ -424,6 +613,8 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     
     // 統合判定
     const bool hold_omega = force_hold_omega || switch_hold_omega || energy_hold_omega;  // omega を固定
+    ekf_axis_hold_omega[axis] = hold_omega ? 1U : 0U;
+    ekf_axis_omega_updated[axis] = 0U;
     // ゼロ注入で収束させるため、predict-only はスイッチOFF時に限定する。
     const bool predict_only_hold = switch_hold_omega;  // 予測のみ（観測更新スキップ）
     
@@ -500,6 +691,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         ekf_axis_innovation[axis] = innov_hold;
         ekf_axis_nis[axis] = 0.0f;
         ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_omega_updated[axis] = 0U;
         return;
     }
 
@@ -514,6 +706,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         ekf_axis_innovation[axis] = 0.0f;
         ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
         ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_omega_updated[axis] = 0U;
         return;
     }
 
@@ -563,6 +756,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
                 ekf_axis_nis[axis] = nis_raw;
                 ekf_axis_amp[axis] = fabsf(x[0]);
                 ekf_axis_trusted[axis] = 0U;
+                ekf_axis_omega_updated[axis] = 0U;
                 return;
             }
         }
@@ -583,6 +777,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         ekf_axis_innovation[axis] = innov_raw;
         ekf_axis_nis[axis] = nis_raw;
         ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_omega_updated[axis] = 0U;
         return;
     }
 
@@ -671,6 +866,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         ekf_axis_innovation[axis] = 0.0f;
         ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
         ekf_axis_amp[axis] = 0.0f;
+        ekf_axis_omega_updated[axis] = 0U;
         return;
     }
 
@@ -678,6 +874,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     ekf_axis_innovation[axis] = innov_raw;
     ekf_axis_nis[axis] = nis_raw;
     ekf_axis_amp[axis] = fabsf(x[0]);
+    ekf_axis_omega_updated[axis] = hold_omega ? 0U : 1U;
 
 #if HAL_GCS_ENABLED
     if ((ekf_sample_count % 100U) == 0U && axis == 0) {
@@ -724,27 +921,33 @@ void AP_Observer::update() {
     }
     
     const bool current_switch = _freq_estimation_switch_state;
+    const bool switch_gate_enabled = (_ekf_switch_gate_enable.get() != 0);
 
-    if (current_switch && !_freq_estimation_prev_switch) {
+    if (!switch_gate_enabled) {
         _freq_estimation_active = true;
-        if (_ekf_reset_on_switch.get() == 1) {
-            reset_frequency_estimation();
+        _freq_estimation_prev_switch = true;
+    } else {
+        if (current_switch && !_freq_estimation_prev_switch) {
+            _freq_estimation_active = true;
+            if (_ekf_reset_on_switch.get() == 1) {
+                reset_frequency_estimation();
 #if HAL_GCS_ENABLED
-            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
+                gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
 #endif
-        } else {
-            _freq_estimation_result = estimated_frequency;
+            } else {
+                _freq_estimation_result = estimated_frequency;
 #if HAL_GCS_ENABLED
-            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (No reset, %.3fHz)", (double)estimated_frequency);
+                gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (No reset, %.3fHz)", (double)estimated_frequency);
+#endif
+            }
+        } else if (!current_switch && _freq_estimation_prev_switch) {
+            _freq_estimation_active = false;
+#if HAL_GCS_ENABLED
+            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
 #endif
         }
-    } else if (!current_switch && _freq_estimation_prev_switch) {
-        _freq_estimation_active = false;
-#if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
-#endif
+        _freq_estimation_prev_switch = current_switch;
     }
-    _freq_estimation_prev_switch = current_switch;
 
     const uint32_t now_ms = get_current_time_ms();
     float dt = 0.01f;
@@ -952,6 +1155,10 @@ void AP_Observer::set_freq_estimation_switch(bool enabled) {
 }
 
 void AP_Observer::set_freq_estimation_active(bool active) {
+    if (_ekf_switch_gate_enable.get() == 0) {
+        active = true;
+    }
+
     if (active && !_freq_estimation_prev_switch) {
         if (_ekf_reset_on_switch.get() == 1) {
             reset_frequency_estimation();
@@ -1002,12 +1209,24 @@ void AP_Observer::set_ekf_w_init_hz_for_replay(float freq_hz) {
     ekf_init();
 }
 
+void AP_Observer::set_ekf_process_noises_for_replay(float q_d,
+                                                    float q_dd,
+                                                    float q_c) {
+    _ekf_q_d.set(MAX(0.0f, q_d));
+    _ekf_q_d_dot.set(MAX(0.0f, q_dd));
+    _ekf_q_c.set(MAX(0.0f, q_c));
+}
+
 void AP_Observer::set_ekf_q_w_for_replay(float q_w) {
     _ekf_q_omega.set(q_w);
 }
 
 void AP_Observer::set_ekf_r_meas_for_replay(float r_meas) {
     _ekf_r_meas.set(r_meas);
+}
+
+void AP_Observer::set_prediction_time_for_replay(float pred_time_sec) {
+    _prediction_time.set(constrain_value(pred_time_sec, 0.0f, 0.5f));
 }
 
 void AP_Observer::set_ekf_innovation_limits_for_replay(float innov_max,
@@ -1044,6 +1263,14 @@ void AP_Observer::set_ekf_hold_omega_when_off_for_replay(bool enabled) {
     _ekf_hold_omega_when_off.set(enabled ? 1 : 0);
 }
 
+void AP_Observer::set_ekf_switch_gate_enable_for_replay(bool enabled) {
+    _ekf_switch_gate_enable.set(enabled ? 1 : 0);
+}
+
+void AP_Observer::set_ekf_shared_blend_beta_for_replay(float beta) {
+    _ekf_shared_blend_beta.set(constrain_value(beta, 0.0f, 1.0f));
+}
+
 void AP_Observer::set_ekf_robust_update_for_replay(bool enabled,
                                                    float nis_reject_scale) {
     _ekf_robust_update_enable.set(enabled ? 1 : 0);
@@ -1053,6 +1280,11 @@ void AP_Observer::set_ekf_robust_update_for_replay(bool enabled,
 
 bool AP_Observer::is_axis_enabled_in_fusion(uint8_t axis) const {
     if (axis >= EKF_NUM_AXES) {
+        return false;
+    }
+
+    // 周波数融合はXYのみを対象とする（Z軸は除外）。
+    if (axis >= 2U) {
         return false;
     }
 

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import csv
 import datetime
 import subprocess
@@ -21,11 +22,12 @@ REPLAY_BIN = REPO_ROOT / "build/sitl/examples/EKF_CSV_Replay"
 INPUT_A = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/00000443_w35_100_input.csv"
 INPUT_B = REPO_ROOT / "docs/experiments/ekf_external_force_estimation/reports/2026-04-13_443_444リプレイ検証_model_strong/00000444_w40_110_input.csv"
 
-# Robust + Smooth M30 from the previous sweep.
-M30_Q_D = 9.5367432e-12
-M30_Q_DD = 2.3841858e-11
-M30_Q_C = 4.7683716e-13
-M30_R_MEAS = 46.0
+# Robust + Smooth M30 baseline-equivalent tuning.
+# Keep these explicit to make replay deterministic across AP_Param behavior changes.
+M30_Q_D = 0.02
+M30_Q_DD = 0.05
+M30_Q_C = 0.001
+M30_R_MEAS = 0.08
 
 
 def read_csv_rows(path: Path) -> tuple[List[Dict[str, str]], List[str]]:
@@ -84,7 +86,7 @@ def build_concatenated_input(out_csv: Path) -> Dict[str, float]:
     }
 
 
-def run_replay(input_csv: Path, out_dir: Path, tag: str) -> Path:
+def run_replay(input_csv: Path, out_dir: Path, tag: str, ekf_sh_beta: float, ekf_q_w: float) -> Path:
     if not REPLAY_BIN.exists():
         raise RuntimeError(f"Replay binary not found: {REPLAY_BIN}")
 
@@ -98,7 +100,7 @@ def run_replay(input_csv: Path, out_dir: Path, tag: str) -> Path:
         "--tag",
         tag,
         "--sw-mode",
-        "log",
+        "always-on",
         "--ekf-axis-mask",
         "3",
         "--ekf-axis-gate",
@@ -115,6 +117,8 @@ def run_replay(input_csv: Path, out_dir: Path, tag: str) -> Path:
         "1",
         "--ekf-robust-nis-reject",
         "3.0",
+        "--ekf-q-w",
+        f"{ekf_q_w}",
         "--ekf-innov-max",
         "0.70",
         "--ekf-nis-max",
@@ -127,6 +131,8 @@ def run_replay(input_csv: Path, out_dir: Path, tag: str) -> Path:
         f"{M30_Q_C}",
         "--ekf-r-meas",
         f"{M30_R_MEAS}",
+        "--ekf-sh-beta",
+        f"{ekf_sh_beta}",
     ]
     subprocess.run(cmd, check=True, cwd=REPO_ROOT)
     return out_dir / f"{tag}_result.csv"
@@ -146,6 +152,8 @@ def read_result_csv(path: Path) -> Dict[str, np.ndarray]:
         "prx": col("PRX"),
         "pry": col("PRY"),
         "est_hz": col("EstFreq_Hz"),
+        "est_hz_x": col("EstFreq_X_Hz") if "EstFreq_X_Hz" in rows[0] else col("EstFreq_Hz"),
+        "est_hz_y": col("EstFreq_Y_Hz") if "EstFreq_Y_Hz" in rows[0] else col("EstFreq_Hz"),
     }
 
 
@@ -228,16 +236,38 @@ def plot_axis_overlay(
     plt.close(fig)
 
 
-def plot_frequency(out_png: Path, t: np.ndarray, est_hz: np.ndarray, split_t: float, title: str) -> None:
-    fig, ax = plt.subplots(figsize=(14, 4.8))
-    ax.plot(t, est_hz, color="tab:purple", linewidth=1.5, label="EstFreq_Hz")
-    ax.axhline(0.454, color="tab:green", linestyle=":", linewidth=1.3, label="Target=0.454 Hz")
-    ax.axvline(split_t, color="tab:red", linestyle="--", linewidth=1.0, alpha=0.7, label="443/444 split")
-    ax.set_xlabel("Replay Time [s]")
-    ax.set_ylabel("Frequency [Hz]")
-    ax.set_title(title)
-    ax.grid(True, alpha=0.3)
-    ax.legend(loc="upper right")
+def plot_frequency(
+    out_png: Path,
+    t: np.ndarray,
+    est_hz: np.ndarray,
+    est_hz_x: np.ndarray,
+    est_hz_y: np.ndarray,
+    plx: np.ndarray,
+    ply: np.ndarray,
+    split_t: float,
+    title: str,
+) -> None:
+    fig, axes = plt.subplots(2, 1, figsize=(14, 7.2), sharex=True)
+
+    axes[0].plot(t, est_hz, color="tab:purple", linewidth=1.5, label="EstFreq_Hz (fused)")
+    axes[0].plot(t, est_hz_x, color="tab:blue", linewidth=1.2, linestyle="--", label="EstFreq_X_Hz")
+    axes[0].plot(t, est_hz_y, color="tab:orange", linewidth=1.2, linestyle="--", label="EstFreq_Y_Hz")
+    axes[0].axhline(0.454, color="tab:green", linestyle=":", linewidth=1.3, label="Target=0.454 Hz")
+    axes[0].axvline(split_t, color="tab:red", linestyle="--", linewidth=1.0, alpha=0.7, label="443/444 split")
+    axes[0].set_ylabel("Frequency [Hz]")
+    axes[0].set_title(title)
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(loc="upper right")
+
+    axes[1].plot(t, plx, color="0.35", linewidth=0.9, label="Raw X (PLX)")
+    axes[1].plot(t, ply, color="0.60", linewidth=0.9, label="Raw Y (PLY)")
+    axes[1].axvline(split_t, color="tab:red", linestyle="--", linewidth=1.0, alpha=0.7)
+    axes[1].set_xlabel("Replay Time [s]")
+    axes[1].set_ylabel("Raw force")
+    axes[1].set_title("Raw inputs (X/Y)")
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend(loc="upper right")
+
     fig.tight_layout()
     out_png.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(out_png, dpi=150, bbox_inches="tight")
@@ -250,6 +280,7 @@ def to_report_rel(report_path: Path, path: Path) -> str:
 
 def metrics_table_for_range(d: Dict[str, np.ndarray], mask: np.ndarray) -> Dict[str, float]:
     est = d["est_hz"][mask]
+    step = np.abs(np.diff(est))
     return {
         "x_rmse": rmse(d["plx"][mask], d["prx"][mask]),
         "x_mae": mae(d["plx"][mask], d["prx"][mask]),
@@ -259,14 +290,23 @@ def metrics_table_for_range(d: Dict[str, np.ndarray], mask: np.ndarray) -> Dict[
         "y_corr": corr(d["ply"][mask], d["pry"][mask]),
         "est_freq_mean": float(np.mean(est)),
         "est_freq_std": float(np.std(est)),
+        "est_freq_step_p95": float(np.percentile(step, 95)) if step.size > 0 else float("nan"),
+        "est_freq_step_max": float(np.max(step)) if step.size > 0 else float("nan"),
     }
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Run Robust+Smooth M30 concat replay and generate report")
+    parser.add_argument("--ekf-sh-beta", type=float, default=0.0, help="Shared omega blend beta [0..1]")
+    parser.add_argument("--ekf-q-w", type=float, default=0.0005, help="Frequency EKF process noise q_w [var]")
+    args = parser.parse_args()
+    ekf_sh_beta = max(0.0, min(1.0, float(args.ekf_sh_beta)))
+    ekf_q_w = float(args.ekf_q_w)
+
     jst = zoneinfo.ZoneInfo("Asia/Tokyo")
     now = datetime.datetime.now(jst)
     date_str = now.strftime("%Y-%m-%d")
-    ts = now.strftime("%H:%M:%S")
+    ts = now.strftime("%H-%M-%S")
 
     result_root = REPORT_DIR / f"results/{date_str}_robust_smooth_m30_concat_direct_replay"
     concat_input_csv = result_root / "concat_input/00000443_00000444_concat_input.csv"
@@ -275,7 +315,7 @@ def main() -> None:
     report_path = REPORT_DIR / f"{date_str}_{ts}_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md"
 
     concat_info = build_concatenated_input(concat_input_csv)
-    result_csv = run_replay(concat_input_csv, replay_out, tag)
+    result_csv = run_replay(concat_input_csv, replay_out, tag, ekf_sh_beta, ekf_q_w)
     d = read_result_csv(result_csv)
 
     split_t = concat_info["split_time_s"]
@@ -310,8 +350,12 @@ def main() -> None:
         f_png,
         d["t"],
         d["est_hz"],
+        d["est_hz_x"],
+        d["est_hz_y"],
+        d["plx"],
+        d["ply"],
         split_t,
-        "Robust + Smooth M30: Estimated frequency (replay on concatenated input)",
+        "Robust + Smooth M30: Estimated frequency (fused + per-axis)",
     )
 
     all_mask = np.ones_like(d["t"], dtype=bool)
@@ -341,18 +385,21 @@ def main() -> None:
     lines.append(f"- 境界時刻: t={split_t:.6f}s （この時刻で443区間と444区間が切り替わる）")
     lines.append("")
     lines.append("## リプレイ設定（Robust + Smooth M30）")
+    lines.append("- SW mode: always-on（リプレイ全区間で周波数推定SWをON）")
     lines.append("- robust update: ON (`--ekf-robust-update 1`) / NIS reject: 3.0")
     lines.append(f"- Q_D={M30_Q_D:.8g}, Q_DD={M30_Q_DD:.8g}, Q_C={M30_Q_C:.8g}, R_MEAS={M30_R_MEAS:.3f}")
+    lines.append(f"- EKF_Q_W={ekf_q_w:.8g} (frequency-estimation gain / process noise)")
+    lines.append(f"- EKF_SH_BETA={ekf_sh_beta:.3f} (shared omega blend)")
     lines.append("- 結果CSV: `" + str(result_csv.relative_to(REPO_ROOT)) + "`")
     lines.append("")
 
     lines.append("## 指標サマリ")
     lines.append("")
-    lines.append("| segment | X RMSE | X MAE | X Corr | Y RMSE | Y MAE | Y Corr | EstFreq mean [Hz] | EstFreq std [Hz] |")
-    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|")
-    lines.append(f"| all | {m_all['x_rmse']:.6f} | {m_all['x_mae']:.6f} | {format_corr(m_all['x_corr'])} | {m_all['y_rmse']:.6f} | {m_all['y_mae']:.6f} | {format_corr(m_all['y_corr'])} | {m_all['est_freq_mean']:.6f} | {m_all['est_freq_std']:.6f} |")
-    lines.append(f"| first (443) | {m_a['x_rmse']:.6f} | {m_a['x_mae']:.6f} | {format_corr(m_a['x_corr'])} | {m_a['y_rmse']:.6f} | {m_a['y_mae']:.6f} | {format_corr(m_a['y_corr'])} | {m_a['est_freq_mean']:.6f} | {m_a['est_freq_std']:.6f} |")
-    lines.append(f"| second (444) | {m_b['x_rmse']:.6f} | {m_b['x_mae']:.6f} | {format_corr(m_b['x_corr'])} | {m_b['y_rmse']:.6f} | {m_b['y_mae']:.6f} | {format_corr(m_b['y_corr'])} | {m_b['est_freq_mean']:.6f} | {m_b['est_freq_std']:.6f} |")
+    lines.append("| segment | X RMSE | X MAE | X Corr | Y RMSE | Y MAE | Y Corr | EstFreq mean [Hz] | EstFreq std [Hz] | EstFreq p95 step [Hz] | EstFreq max step [Hz] |")
+    lines.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
+    lines.append(f"| all | {m_all['x_rmse']:.6f} | {m_all['x_mae']:.6f} | {format_corr(m_all['x_corr'])} | {m_all['y_rmse']:.6f} | {m_all['y_mae']:.6f} | {format_corr(m_all['y_corr'])} | {m_all['est_freq_mean']:.6f} | {m_all['est_freq_std']:.6f} | {m_all['est_freq_step_p95']:.6f} | {m_all['est_freq_step_max']:.6f} |")
+    lines.append(f"| first (443) | {m_a['x_rmse']:.6f} | {m_a['x_mae']:.6f} | {format_corr(m_a['x_corr'])} | {m_a['y_rmse']:.6f} | {m_a['y_mae']:.6f} | {format_corr(m_a['y_corr'])} | {m_a['est_freq_mean']:.6f} | {m_a['est_freq_std']:.6f} | {m_a['est_freq_step_p95']:.6f} | {m_a['est_freq_step_max']:.6f} |")
+    lines.append(f"| second (444) | {m_b['x_rmse']:.6f} | {m_b['x_mae']:.6f} | {format_corr(m_b['x_corr'])} | {m_b['y_rmse']:.6f} | {m_b['y_mae']:.6f} | {format_corr(m_b['y_corr'])} | {m_b['est_freq_mean']:.6f} | {m_b['est_freq_std']:.6f} | {m_b['est_freq_step_p95']:.6f} | {m_b['est_freq_step_max']:.6f} |")
     lines.append("")
 
     lines.append("## 閾値以下での0収束性（全区間）")
@@ -378,7 +425,7 @@ def main() -> None:
     lines.append("### Y軸: 生データと推定値（連結ログを直接リプレイ）")
     lines.append(f"![concat direct replay y]({to_report_rel(report_path, y_png)})")
     lines.append("")
-    lines.append("### 周波数推定: EstFreq_Hz（連結ログを直接リプレイ）")
+    lines.append("### 周波数推定: 統合値+各軸推定（下段: X/Y生データ）")
     lines.append(f"![concat direct replay frequency]({to_report_rel(report_path, f_png)})")
 
     report_path.write_text("\n\n".join(lines) + "\n", encoding="utf-8")

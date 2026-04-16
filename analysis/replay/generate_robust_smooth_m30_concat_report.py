@@ -198,7 +198,7 @@ def format_corr(v: float) -> str:
 def main() -> None:
     jst = zoneinfo.ZoneInfo("Asia/Tokyo")
     now = datetime.datetime.now(jst)
-    report_name = now.strftime("%Y-%m-%d_%H:%M:%S_ロバスト観測更新_Robust+SmoothM30_連結リプレイ検証.md")
+    report_name = now.strftime("%Y-%m-%d_%H-%M-%S_ロバスト観測更新_Robust+SmoothM30_連結リプレイ検証.md")
     report_path = REPORT_DIR / report_name
 
     threshold = 0.10

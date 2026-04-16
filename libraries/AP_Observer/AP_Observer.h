@@ -58,8 +58,12 @@ public:
     void force_frequency_estimation_update(const Vector3f& payload);
     void set_params_for_replay(float freq, float bw, float gain);
     void set_ekf_w_init_hz_for_replay(float freq_hz);
+    void set_ekf_process_noises_for_replay(float q_d,
+                                           float q_dd,
+                                           float q_c);
     void set_ekf_q_w_for_replay(float q_w);
     void set_ekf_r_meas_for_replay(float r_meas);
+    void set_prediction_time_for_replay(float pred_time_sec);
     void set_ekf_innovation_limits_for_replay(float innov_max,
                                               float nis_max);
     void set_ekf_energy_gate_for_replay(bool enabled,
@@ -71,9 +75,17 @@ public:
     void set_ekf_reset_on_switch_for_replay(bool enabled);
     void set_ekf_axis_mask_for_replay(uint8_t mask);
     void set_ekf_hold_omega_when_off_for_replay(bool enabled);
+    void set_ekf_switch_gate_enable_for_replay(bool enabled);
+    void set_ekf_shared_blend_beta_for_replay(float beta);
     void set_ekf_robust_update_for_replay(bool enabled,
                                           float nis_reject_scale);
     float get_estimated_frequency() const { return estimated_frequency; }
+    float get_axis_estimated_frequency(uint8_t axis) const {
+        if (axis >= EKF_NUM_AXES) {
+            return estimated_frequency;  // Invalid axis, return public value
+        }
+        return ekf_state[axis][3] / (2.0f * M_PI);  // Convert rad/s to Hz
+    }
     // Add logic to get internal EKF state if needed
 // #endif
 
@@ -126,8 +138,16 @@ private:
     float ekf_axis_amp[OBS_NUM_AXES];
     float ekf_axis_force_abs[OBS_NUM_AXES];
     float ekf_axis_energy_power[OBS_NUM_AXES];
+    float ekf_axis_weight[OBS_NUM_AXES];
     uint8_t ekf_axis_trusted[OBS_NUM_AXES];
     uint8_t ekf_axis_energy_trusted[OBS_NUM_AXES];
+    uint8_t ekf_axis_omega_updated[OBS_NUM_AXES];
+    uint8_t ekf_axis_hold_omega[OBS_NUM_AXES];
+
+    // XY shared omega fusion state
+    float ekf_shared_omega_rad = 0.0f;
+    float ekf_shared_weight_sum = 0.0f;
+    uint8_t ekf_shared_hard_mode = 0U;
 
     // EKF tuning parameters
     AP_Float _ekf_q_d;
@@ -151,6 +171,11 @@ private:
     AP_Int8  _ekf_hold_omega_when_off;
     AP_Int8  _ekf_robust_update_enable;
     AP_Float _ekf_robust_nis_reject_scale;
+    AP_Float _ekf_hold_weight;
+    AP_Float _ekf_shared_blend_beta;
+    AP_Float _ekf_shared_hard_weight_min;
+    AP_Float _ekf_shared_hard_nis_max;
+    AP_Int8  _ekf_switch_gate_enable;
 
     // Legacy parameters retained for compatibility during migration
     AP_Float _rls_forgetting_factor;
@@ -174,6 +199,7 @@ private:
     void ekf_update_axis(uint8_t axis, float measurement, float dt);
     bool is_axis_frequency_trusted(uint8_t axis) const;
     bool is_axis_enabled_in_fusion(uint8_t axis) const;
+    float compute_axis_fusion_weight(uint8_t axis) const;
     Vector3f predict_force_from_state(const float state[EKF_STATE_SIZE], float dt) const;
     void update_prediction_cache();  // 予測用キャッシュ更新
     

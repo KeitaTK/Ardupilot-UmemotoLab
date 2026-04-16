@@ -2,6 +2,124 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-16 12:20: [AP_Observer/EKF Replay] 連結リプレイ報告を統合し、レポート時刻ファイル名を`HH-MM-SS`へ統一
+
+- Problem: 連結ログ直接リプレイのレポートが近接時刻で複数本に分散し、参照が重複していた。また一部ファイル名で時刻に `:` を使っており、命名規則が不統一だった。
+- Investigation:
+  1. `2026-04-15_03-26-45`, `2026-04-16_11:54:27`, `2026-04-16_12:02:28`, `2026-04-16_12:07:07` の4本を比較し、系列として統合可能と判断。
+  2. report生成スクリプトで `strftime("%H:%M:%S")` を使っている箇所を確認。
+- Attempted:
+  1. 最新版レポートへ旧3本の設定差分・指標差分を「統合サマリ」として追記。
+  2. 統合版ファイル名を `2026-04-16_12-07-07_...md` に変更。
+  3. 旧3本（`03-26-45`, `11:54:27`, `12:02:28`）を削除。
+  4. `run_robust_smooth_m30_concat_direct_replay.py` と `generate_robust_smooth_m30_concat_report.py` のレポート名時刻を `HH-MM-SS` 形式へ変更。
+  5. `reports/INDEX.md` の注記を「ファイル名に `:` を使わない」規則へ更新。
+- Result:
+  - ✅ 連結リプレイ系列の参照を1本化: `docs/experiments/ekf_external_force_estimation/reports/2026-04-16_12-07-07_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md`
+  - ✅ 命名規則を `YYYY-MM-DD_HH-MM-SS` に統一。
+  - ✅ 旧重複レポートを削除し、索引を更新。
+
+### 2026-04-16 11:54: [AP_Observer/EKF Replay] SW常時ONをリプレイ既定化し、設定明記レポートを再生成
+
+- Problem: replay運用でSWが`log`依存になっており、ケースによっては周波数推定ON/OFFが混在して比較解釈が難しくなる。
+- Investigation:
+  1. `EKF_CSV_Replay` の既定 `sw_mode` が `log` であることを確認。
+  2. 連結リプレイスクリプト `run_robust_smooth_m30_concat_direct_replay.py` でも `--sw-mode log` を明示していたことを確認。
+- Attempted:
+  1. `libraries/AP_Observer/examples/EKF_CSV_Replay/EKF_CSV_Replay.cpp` の既定 `sw_mode` を `always-on` へ変更。
+  2. `--help` に「Default SW mode is always-on for replay consistency」を追記。
+  3. `analysis/replay/run_robust_smooth_m30_concat_direct_replay.py` の replay 呼び出しを `--sw-mode always-on` に変更。
+  4. レポート設定欄に `SW mode: always-on（リプレイ全区間で周波数推定SWをON）` を追加。
+  5. `--ekf-sh-beta 0.30` 条件で再ビルド・再生成。
+- Result:
+  - ✅ 新規レポート生成（のちに統合版へ集約）: `docs/experiments/ekf_external_force_estimation/reports/2026-04-16_12-07-07_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md`
+  - ✅ 結果CSV確認: `SW unique=[1]`, `SW mean=1.0`（全区間ON）
+  - ✅ `RealSW` はログ由来の0/1を保持し、`SW`（推定用）は常時ONで統一。
+
+### 2026-04-16 12:07: [AP_Observer/EKF Replay] 周波数推定のゲイン低減で振動抑制を検証
+
+- Problem: 周波数推定 `EstFreq_Hz` に小刻みな振動が残り、ゲインを下げると抑えられるかを確認したかった。
+- Investigation:
+  1. 直前の `EKF_SH_BETA` 低減（0.30 -> 0.10）では主要統計がほぼ変わらず、shared-omega blend は主因ではないと判断。
+  2. replay 実装で `OBS_EKF_Q_W` / `--ekf-q-w` が周波数更新量を直接支配していることを確認。
+- Attempted:
+  1. `analysis/replay/run_robust_smooth_m30_concat_direct_replay.py` に `--ekf-q-w` を追加し、レポート内に `EKF_Q_W` と周波数ステップ統計を明記。
+  2. 同一連結入力で `EKF_Q_W=1e-5` を再実行。
+- Result:
+  - ✅ `EstFreq std` が `0.040593 -> 0.027916` に低下。
+  - ✅ `EstFreq p95 step` が `0.004500 -> 0.001200` に低下。
+  - ✅ ただし境界近傍の最大ステップは残存し、完全な振動ゼロには未到達。
+
+### 2026-04-16 11:42: [AP_Observer/EKF Replay] EKF_SH_BETA をCLI指定可能化し、β=0.30 の連結リプレイ検証レポートを生成
+
+- Problem: 連結リプレイ実行器 (`EKF_CSV_Replay`) 側で `EKF_SH_BETA` が常に `0.0` に固定上書きされており、低信頼軸への shared-omega 注入（引き寄せ）が replay では実質無効だった。
+- Investigation:
+  1. `AP_Observer::ekf_update()` を確認し、`beta==0` のときは shared injection 分岐へ入らず、従来互換で trusted平均のみ返す設計であることを確認。
+  2. `EKF_CSV_Replay.cpp` の `run_case()` を確認し、`set_ekf_shared_blend_beta_for_replay(0.0f)` が固定設定されていることを確認。
+  3. 既存の `run_robust_smooth_m30_concat_direct_replay.py` は `--ekf-sh-beta` を渡せないため、再現的に β>0 条件を作れないことを確認。
+- Attempted:
+  1. `libraries/AP_Observer/examples/EKF_CSV_Replay/EKF_CSV_Replay.cpp` に `--ekf-sh-beta` 引数を追加（`ReplayRunConfig` へ保持、`--help` 更新、parse対応）。
+  2. 固定 `0.0` 上書きを撤廃し、`observer.set_ekf_shared_blend_beta_for_replay(cfg.ekf_sh_beta)` を適用（未指定時のみ 0.0）。
+  3. `analysis/replay/run_robust_smooth_m30_concat_direct_replay.py` に `--ekf-sh-beta` を追加し、replay 実行時に引数を透過。
+  4. 生成レポートの設定欄へ `EKF_SH_BETA=<value>` を明記。
+  5. β=0.30 で再ビルド・再実行して新規レポートを作成。
+- Result:
+  - ✅ β指定付き replay が実行可能になった（`--ekf-sh-beta 0.30`）。
+  - ✅ 新規レポート生成: `docs/experiments/ekf_external_force_estimation/reports/2026-04-16_11:42:38_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md`
+  - ✅ レポートに `EKF_SH_BETA=0.300` を記載。
+  - ✅ 周波数図は「上段: 統合+各軸」「下段: X/Y生データ」を維持したまま更新。
+
+### 2026-04-16 09:35: [AP_Observer/EKF Replay] 130秒近傍のX軸乖離を再現切り分けし、連結リプレイを再安定化
+
+- Problem: `2026-04-16` 側の連結ログ直接リプレイで X 軸が発散し、`2026-04-15_03:26:45` レポートと 130 秒近傍の挙動が大きく乖離した（X RMSE が 1000 超級）。
+- Investigation:
+  1. 2レポートの結果CSVを時刻同期で直接比較し、差分は 130 秒だけでなく 3.13 秒付近から蓄積していることを確認。
+  2. 入力CSV（連結元）は SHA256 一致で同一入力であることを確認（入力差ではない）。
+  3. `AP_Param::set_by_name()` を replay で検証したところ、`OBS_EKF_*` が解決されず実質 no-op になっていることを確認（警告出力で再現）。
+  4. そのため、レポート記載値と実効パラメータが乖離しうる構造だったことを特定。
+- Attempted:
+  1. `AP_Observer` に replay 専用の直接 setter を追加し、`AP_Param` 名解決に依存しない設定経路へ変更。
+     - `set_ekf_process_noises_for_replay`
+     - `set_prediction_time_for_replay`
+     - `set_ekf_switch_gate_enable_for_replay`
+     - `set_ekf_shared_blend_beta_for_replay`
+  2. `EKF_CSV_Replay.cpp` の `run_case()` を setter ベースへ置換し、連結リプレイ時の主要パラメータを毎回明示適用するよう修正。
+  3. `run_robust_smooth_m30_concat_direct_replay.py` の定数を baseline 等価チューニングへ更新（`Q_D=0.02`, `Q_DD=0.05`, `Q_C=0.001`, `R_MEAS=0.08`）。
+- Result:
+  - ✅ 発散は解消し、130 秒近傍の波形は基準に再整合。
+    - `128<=t<=132` での `|PRX_latest - PRX_baseline|` MAE: `0.00346`
+  - ✅ 最新連結リプレイ（`2026-04-16_09:32:59`）
+    - X RMSE(all): `0.215396`（発散時 `1585+` から大幅改善）
+    - EstFreq mean/std: `0.4701 / 0.0406`
+  - ℹ️ 依然として初期立ち上がり（約3.13秒）にベースラインとの差分は残るため、必要なら初期過渡の同定を次段で実施。
+
+### 2026-04-16 01:36: [AP_Observer/EKF] 共有周波数の保守注入実装と連結リプレイ再現性の改善
+
+- Problem: 「高信頼時のみ強制置換、通常はブレンド」の共有周波数実装後、連結ログ直接リプレイで X 軸が大発散（例: X RMSE 1585 以上）し、基準レポートと乖離した。
+- Investigation:
+  1. `AP_Observer.cpp` の共有融合ロジック（`ekf_update`）とスイッチ制御経路（`set_freq_estimation_active`）を精査。
+  2. 現行 `HEAD` へ一時復帰して同一リプレイを実施し、同様の劣化を再現（今回変更のみが原因ではないことを確認）。
+  3. `EKF_CSV_Replay` を使ったパラメータ切り分けで、`reset_on_switch` と `hold_omega_off` の有効化、および `q_w` 低減が安定化に有効と確認。
+- Attempted:
+  1. `AP_Observer.cpp` に XY 共有周波数の保守注入を実装（低信頼軸のみ注入、hard/soft 条件分岐、donor 重み条件の厳格化）。
+  2. 劣化が大きかった試行（OFF時の predict-only 無効化、SW 系デフォルト変更）は検証後に差し戻し。
+  3. `libraries/AP_Observer/examples/EKF_CSV_Replay/EKF_CSV_Replay.cpp` で、未指定時の replay 既定を保守側へ調整:
+     - `OBS_EKF_Q_W` の既定を `1.0e-4`（CLI 指定時はその値を優先）
+     - `reset_on_switch` 未指定時は `true`
+     - `hold_omega_off` 未指定時は `true`
+- Result:
+  - ✅ 連結ログ直接リプレイ（同一スクリプト）で X 発散を大幅抑制。
+    - 変更前相当: X RMSE 1585.575499
+    - 変更後: X RMSE 3.118696（`2026-04-16_01:22:36_...連結ログ直接リプレイ検証.md`）
+  - ✅ ビルド確認: `./waf build --target examples/EKF_CSV_Replay` 成功。
+  - ✅ SITL autotest:
+    - PASS: `test.Copter.ModeLoiter`
+    - PASS: `test.Copter.TakeoffCheck`
+    - PASS: `test.Copter.ArmFeatures`
+    - FAIL: `test.Copter.GCSFailsafe`（SMART_RTL待機後の再起動過程で `SYSTEM_TIME` timeout）
+    - FAIL: `test.Copter.GuidedSubModeChange`（`Connection refused` 再現）
+  - ℹ️ 失敗ログ: `/home/memoto/buildlogs/ArduCopter-GCSFailsafe.txt`, `/home/memoto/buildlogs/ArduCopter-GuidedSubModeChange.txt`
+
 ### 2026-04-15 17:50: [Autotest/EKF] RLS依存autotest整理と必須SITL回帰実行
 
 - Problem: EKF固定方針へ移行済みなのに、autotest運用定義に `TestRLS*` 系が残っており、現行方針と不整合だった。
