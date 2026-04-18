@@ -86,7 +86,14 @@ def build_concatenated_input(out_csv: Path) -> Dict[str, float]:
     }
 
 
-def run_replay(input_csv: Path, out_dir: Path, tag: str, ekf_sh_beta: float, ekf_q_w: float) -> Path:
+def run_replay(
+    input_csv: Path,
+    out_dir: Path,
+    tag: str,
+    ekf_sh_beta: float,
+    ekf_q_w: float,
+    ekf_r_meas: float,
+) -> Path:
     if not REPLAY_BIN.exists():
         raise RuntimeError(f"Replay binary not found: {REPLAY_BIN}")
 
@@ -130,7 +137,7 @@ def run_replay(input_csv: Path, out_dir: Path, tag: str, ekf_sh_beta: float, ekf
         "--ekf-q-c",
         f"{M30_Q_C}",
         "--ekf-r-meas",
-        f"{M30_R_MEAS}",
+        f"{ekf_r_meas}",
         "--ekf-sh-beta",
         f"{ekf_sh_beta}",
     ]
@@ -299,9 +306,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Robust+Smooth M30 concat replay and generate report")
     parser.add_argument("--ekf-sh-beta", type=float, default=0.0, help="Shared omega blend beta [0..1]")
     parser.add_argument("--ekf-q-w", type=float, default=0.0005, help="Frequency EKF process noise q_w [var]")
+    parser.add_argument("--ekf-r-meas", type=float, default=M30_R_MEAS, help="Measurement noise R_meas [var]")
     args = parser.parse_args()
     ekf_sh_beta = max(0.0, min(1.0, float(args.ekf_sh_beta)))
     ekf_q_w = float(args.ekf_q_w)
+    ekf_r_meas = float(args.ekf_r_meas)
 
     jst = zoneinfo.ZoneInfo("Asia/Tokyo")
     now = datetime.datetime.now(jst)
@@ -315,7 +324,7 @@ def main() -> None:
     report_path = REPORT_DIR / f"{date_str}_{ts}_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md"
 
     concat_info = build_concatenated_input(concat_input_csv)
-    result_csv = run_replay(concat_input_csv, replay_out, tag, ekf_sh_beta, ekf_q_w)
+    result_csv = run_replay(concat_input_csv, replay_out, tag, ekf_sh_beta, ekf_q_w, ekf_r_meas)
     d = read_result_csv(result_csv)
 
     split_t = concat_info["split_time_s"]
@@ -387,8 +396,9 @@ def main() -> None:
     lines.append("## リプレイ設定（Robust + Smooth M30）")
     lines.append("- SW mode: always-on（リプレイ全区間で周波数推定SWをON）")
     lines.append("- robust update: ON (`--ekf-robust-update 1`) / NIS reject: 3.0")
-    lines.append(f"- Q_D={M30_Q_D:.8g}, Q_DD={M30_Q_DD:.8g}, Q_C={M30_Q_C:.8g}, R_MEAS={M30_R_MEAS:.3f}")
+    lines.append(f"- Q_D={M30_Q_D:.8g}, Q_DD={M30_Q_DD:.8g}, Q_C={M30_Q_C:.8g}, R_MEAS={ekf_r_meas:.8g}")
     lines.append(f"- EKF_Q_W={ekf_q_w:.8g} (frequency-estimation gain / process noise)")
+    lines.append(f"- Frequency R/Q ratio (R_MEAS / EKF_Q_W)={ekf_r_meas / max(ekf_q_w, 1.0e-30):.6g}")
     lines.append(f"- EKF_SH_BETA={ekf_sh_beta:.3f} (shared omega blend)")
     lines.append("- 結果CSV: `" + str(result_csv.relative_to(REPO_ROOT)) + "`")
     lines.append("")

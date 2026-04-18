@@ -1,252 +1,335 @@
-# AP_Observer - 外乱推定システム (EKF: Robust + Smooth M30)
+# AP_Observer: 外力推定から補正角生成までの数理アルゴリズム
 
-最終更新日: 2026-04-15
+最終更新: 2026-04-18
 
-## 1. 目的と現状
+## 1. 目的
 
-AP_Observer は、機体座標系で観測される外力をオンライン推定し、予測外力に基づく姿勢補正へ接続するライブラリです。
+本書は、AP_Observer の処理をプログラム実行順に従って、数式中心で記述する。
+対象は「外乱力の観測量生成」から「EKFによる状態推定」「予測外力算出」「補正角・補正クォータニオン生成」までである。
 
-現行の推定器コアは EKF ベースです。運用上の推奨プロファイルは Robust + Smooth M30 で、外れ値抑制を優先しながら低振幅領域のスパイクを抑える構成になっています。
+実装上の分岐条件や安全化処理も、推定器の一部として明示する。
 
-- 本番接続先: ArduCopter から observer.init と observer.update を呼び出し
-- 出力: 予測外力 get_predicted_force、姿勢補正 get_correction_euler
-- ログ: OBSV
+## 2. 記号定義
 
-## 2. 状態定義とモデル
+- サンプリング時刻: $k$
+- サンプリング間隔: $\Delta t_k$
+- 予測ホライズン: $\Delta p$
+- 機体質量: $m$
+- 重力加速度: $g$
+- 正規化スロットル指令: $u_k$
+- 推力モデル係数: $\alpha_T,\beta_T$
+- 機体座標系加速度: $\mathbf{a}_k=[a_{x,k},a_{y,k},a_{z,k}]^\top$
+- 観測外力: $\mathbf{z}_k=[z_{x,k},z_{y,k},z_{z,k}]^\top$
+- 軸インデックス: $i\in\{x,y,z\}$
 
-各軸を独立な 1D EKF として更新します。軸インデックスは X, Y, Z の 3軸です。
-
-状態ベクトル:
+各軸EKF状態は
 
 $$
-\mathbf{x}_k = [d_k,\ \dot d_k,\ c_k,\ \omega_k]^T
+\mathbf{x}_{i,k} =
+\begin{bmatrix}
+d_{i,k} \\
+\dot d_{i,k} \\
+c_{i,k} \\
+\omega_{i,k}
+\end{bmatrix},
+\qquad
+\mathbf{P}_{i,k}\in\mathbb{R}^{4\times 4}
 $$
 
-- $d_k$: 周期外乱成分
-- $\dot d_k$: その時間微分
-- $c_k$: DCオフセット
-- $\omega_k$: 角周波数 [rad/s]
+とする。
 
-観測量:
+- $d$: 調和外乱成分
+- $\dot d$: その時間微分
+- $c$: 低周波/バイアス成分
+- $\omega$: 角周波数
+
+## 3. 観測外力の生成 (処理の先頭)
+
+### 3.1 推力補償
+
+推力は線形近似で
+
+$$
+T_k = -\left(\alpha_T u_k + \beta_T\right)g
+$$
+
+とし、機体加速度から外力観測量を
+
+$$
+z_{x,k}=m a_{x,k},\quad
+z_{y,k}=m a_{y,k},\quad
+z_{z,k}=m a_{z,k}-T_k
+$$
+
+として構成する。ここで $\mathbf{z}_k$ は「推定すべき外乱力」の観測値である。
+
+### 3.2 更新ゲート
+
+離陸フラグが真であり、かつ推定器初期化済みの場合にのみEKF更新を実行する。
+周波数更新はスイッチ状態により有効/無効を切り替えるが、状態推定全体は安全側の分岐規則で継続可能とする。
+
+## 4. 軸別EKFの状態方程式と観測方程式
+
+### 4.1 非線形離散時間モデル
+
+各軸の時間更新は
+
+$$
+d_{k+1}=d_k+\Delta t_k\dot d_k
+$$
+$$
+\dot d_{k+1}=\dot d_k-\Delta t_k\omega_k^2 d_k
+$$
+$$
+c_{k+1}=c_k,\qquad \omega_{k+1}=\omega_k
+$$
+
+で与える。観測モデルは
 
 $$
 z_k = d_k + c_k + v_k
 $$
 
-観測行列:
+であり、
 
 $$
-\mathbf{H} = [1,\ 0,\ 1,\ 0]
+\mathbf{H}=\begin{bmatrix}1&0&1&0\end{bmatrix}
 $$
 
-## 3. 離散時間状態遷移
+となる。
 
-サンプル間隔を $\Delta t$ とすると、予測モデルは次です。
+### 4.2 ヤコビアン
 
-$$
-d_{k+1} = d_k + \Delta t\,\dot d_k
-$$
+予測点 $(d_k,\dot d_k,c_k,\omega_k)$ 周りの状態ヤコビアンは
 
 $$
-\dot d_{k+1} = \dot d_k - \Delta t\,\omega_k^2 d_k
-$$
-
-$$
-c_{k+1} = c_k,\quad \omega_{k+1} = \omega_k
-$$
-
-ヤコビアン:
-
-$$
-\mathbf{F}_k =
+\mathbf{F}_k=
 \begin{bmatrix}
-1 & \Delta t & 0 & 0 \\
--\Delta t\,\omega^2 & 1 & 0 & -2\Delta t\,\omega d \\
+1 & \Delta t_k & 0 & 0 \\
+-\Delta t_k\omega_k^2 & 1 & 0 & -2\Delta t_k\omega_k d_k \\
 0 & 0 & 1 & 0 \\
 0 & 0 & 0 & 1
 \end{bmatrix}
 $$
 
-予測:
+である。
+
+### 4.3 標準EKF更新
+
+標準形は
 
 $$
-\hat{\mathbf{x}}_{k|k-1} = f(\hat{\mathbf{x}}_{k-1|k-1})
-$$
-
-$$
-\mathbf{P}_{k|k-1} = \mathbf{F}_k\mathbf{P}_{k-1|k-1}\mathbf{F}_k^T + \mathbf{Q}_k
-$$
-
-## 4. Hold / Reject ロジック
-
-現行実装は、推定の暴れを避けるために観測更新の挙動を条件分岐させます。
-
-### 4.1 条件定義
-
-$$
-F_{abs} = |z_k|
-$$
-
-- force_hold: $F_{abs} \le F_{hold}$
-- switch_hold: 周波数推定SWがOFF かつ EKF_SW_HOLD=1
-- energy_hold: エネルギーゲートが非信頼
-- hold_omega: force_hold または switch_hold または energy_hold
-- predict_only_hold: switch_hold のみ
-- force_reject: $F_{abs} \ge F_{reject}$
-
-### 4.2 観測値ゼロ注入
-
-低振幅または低エネルギーでは観測をゼロへ寄せます。
-
-$$
-\text{if }(force\_hold \lor energy\_hold),\quad z_k \leftarrow 0
-$$
-
-### 4.3 omega のプロセスノイズ制御
-
-周波数状態のプロセスノイズは、SW状態と hold/reject に応じて切り替えます。
-
-$$
-q_{\omega,base} =
-\begin{cases}
-q_\omega & (freq\_est\_active=1)\\
-0 & (freq\_est\_active=0)
-\end{cases}
+\mathbf{x}_{k|k-1}=f(\mathbf{x}_{k-1|k-1}),\qquad
+\mathbf{P}_{k|k-1}=\mathbf{F}_k\mathbf{P}_{k-1|k-1}\mathbf{F}_k^\top+\mathbf{Q}_k
 $$
 
 $$
-q_\omega^{eff} =
-\begin{cases}
-q_{\omega,base} & (active \land \neg hold\_omega \land \neg force\_reject)\\
-\max(q_{\omega,base},10^{-6}) & (active \land (hold\_omega \lor force\_reject))\\
-0 & (\neg active)
-\end{cases}
-$$
-
-## 5. Robust 観測更新
-
-イノベーション:
-
-$$
-r_k = z_k - \hat z_{k|k-1},\quad \hat z_{k|k-1} = \hat d_{k|k-1} + \hat c_{k|k-1}
+r_k=z_k-h(\mathbf{x}_{k|k-1}),\quad
+S_k=\mathbf{H}\mathbf{P}_{k|k-1}\mathbf{H}^\top+R_k
 $$
 
 $$
-S_k = \mathbf{H}\mathbf{P}_{k|k-1}\mathbf{H}^T + R_{eff}
+\mathbf{K}_k=\mathbf{P}_{k|k-1}\mathbf{H}^\top S_k^{-1}
 $$
 
 $$
-\mathrm{NIS}_k = \frac{r_k^2}{S_k}
+\mathbf{x}_{k|k}=\mathbf{x}_{k|k-1}+\mathbf{K}_k r_k,
+\quad
+\mathbf{P}_{k|k}=(\mathbf{I}-\mathbf{K}_k\mathbf{H})\mathbf{P}_{k|k-1}
 $$
 
-Robust ON 時の処理:
-
-- クリップ:
+である。実装では数値安定化のため共分散対称化
 
 $$
-r_k^{clip} = \mathrm{clip}(r_k, -INN_{max}, +INN_{max})
+\mathbf{P}_{k|k}\leftarrow\frac{1}{2}\left(\mathbf{P}_{k|k}+\mathbf{P}_{k|k}^\top\right)
 $$
 
-- NIS が閾値超過時は観測ノイズを膨張:
+を行う。
+
+## 5. ロバスト化分岐 (実装の本質)
+
+本実装は標準EKFをそのまま適用せず、外乱振幅・エネルギー・スイッチ状態に応じた分岐を直列に適用する。
+
+### 5.1 エネルギー信頼度ゲート
+
+高速帯域出力と低速帯域出力の差を $r_k$ とし、エネルギー包絡を
 
 $$
-R_{eff} = R \cdot \frac{\mathrm{NIS}_k}{NIS_{max}} \quad (\mathrm{NIS}_k > NIS_{max})
+p_k = \alpha_k r_k^2 + (1-\alpha_k)p_{k-1},
+\quad
+\alpha_k = 1-e^{-\Delta t_k/\tau}
 $$
 
-- 強外れ値は更新拒否:
+で更新する。ヒステリシス閾値 $(\rho_{on},\rho_{off})$ により信頼フラグを更新し、信頼度が低い場合は周波数更新を凍結方向に誘導する。
+
+### 5.2 振幅ベース保持・除外
+
+観測振幅 $|z_k|$ に対し、保持閾値 $\zeta_h$ と除外閾値 $\zeta_r$ を用いて
+
+- 保持条件: $|z_k|\le \zeta_h$
+- 除外条件: $|z_k|\ge \zeta_r$
+
+を定義する。保持時は角周波数更新を停止し、除外時は観測更新自体をスキップして予測値のみ採用する。
+
+### 5.3 ゼロ注入
+
+低振幅または低エネルギー時には観測値を
 
 $$
-\mathrm{reject} \iff \mathrm{NIS}_k > NIS_{max} \cdot RB_{nis}
+z_k\leftarrow 0
 $$
 
-拒否でなければ通常のカルマン更新:
+に置き換えて更新する。これは更新ゲインが過大化しやすい低SNR領域での過補正を抑えるためである。
+
+### 5.4 Innovation clipping と NIS判定
+
+イノベーションを
 
 $$
-\mathbf{K}_k = \frac{\mathbf{P}_{k|k-1}\mathbf{H}^T}{S_k}
+r_k = z_k-h(\mathbf{x}_{k|k-1})
 $$
 
-hold_omega 条件では $K_\omega=0$ とし、更新後も $\omega$ を前値へ戻します。
+とし、NISを
 
 $$
-\hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k r_k^{use}
+\nu_k=\frac{r_k^2}{S_k}
 $$
 
-## 6. 軸統合による周波数推定
+と定義する。
 
-各軸の $\omega_i$ から fused 周波数を作ります。
+- $|r_k|$ は上限 $r_{max}$ でクリップ
+- $\nu_k>\nu_{max}$ のとき $R_k$ を比例拡大
+- $\nu_k>\gamma\nu_{max}$ のとき更新拒否 (predict-only)
 
-信頼軸条件:
+とする。これにより外れ値での共分散破綻を抑制する。
 
-- 軸マスク EKF_AX_MASK に含まれる
-- force_reject 条件を満たさない
-- EKF_EN_GAT=1 のとき energy trusted
-- $|innovation| \le INN_{max}$
-- $NIS \le NIS_{max}$
+### 5.5 周波数状態の凍結
 
-統合式:
+保持条件成立時はカルマンゲインの周波数成分を
 
 $$
-\omega_{fused} = \frac{1}{N}\sum_{i \in trusted}\omega_i,\quad
-f_{est} = \frac{\omega_{fused}}{2\pi}
+K_{\omega}=0
 $$
 
-trusted 軸が無い場合は前回の推定周波数を維持します。
-
-## 7. 予測外力
-
-制御へ渡す予測外力は、PRED_TIME 先の一次予測を使います。
+とし、更新後も
 
 $$
-d_{pred} = d + PRED\_TIME\cdot\dot d
+\omega_{k|k}\leftarrow\omega_{k-1|k-1}
+$$
+
+を強制する。
+
+## 6. XY軸の共有周波数融合
+
+各軸は独立EKFであるが、周波数推定のみXYで弱結合させる。
+
+### 6.1 融合重み
+
+各軸重みは
+
+$$
+w_i = w_i^{\mathrm{nis}}\,w_i^{\mathrm{eng}}\,w_i^{\mathrm{amp}}\,w_i^{\mathrm{hold}}
+$$
+
+で定義し、たとえば
+
+$$
+w_i^{\mathrm{nis}}=\frac{1}{1+(\nu_i/\nu_{max})^2}
+$$
+
+を用いる。低信頼軸には追加減衰を与える。
+
+### 6.2 共有角周波数
+
+候補共有値 $\bar\omega$ は、信頼軸平均または重み付き平均から決定する。共有注入係数を $\beta\in[0,1]$ とすると、低信頼かつ凍結軸に対して
+
+$$
+\omega_i\leftarrow (1-\beta)\omega_i + \beta\bar\omega
+$$
+
+を適用する。強制モードでは直接置換
+
+$$
+\omega_i\leftarrow\bar\omega
+$$
+
+を用いる。
+
+## 7. 予測外力の生成
+
+補正に使用する外力は現在値ではなく、予測ホライズン $\Delta p$ 先で評価する。
+
+$$
+d_{k+\Delta p}\approx d_k+\Delta p\,\dot d_k
 $$
 
 $$
-F_{pred} = d_{pred} + c
+\hat f_{i,k+\Delta p}=d_{i,k+\Delta p}+c_{i,k}
 $$
 
-これを各軸で計算して PRX, PRY, PRZ として利用します。
+したがって予測外力ベクトルは
 
-## 8. Robust + Smooth M30 プロファイル
+$$
+\hat{\mathbf{f}}_{k+\Delta p}=
+\begin{bmatrix}
+\hat f_{x,k+\Delta p}\\
+\hat f_{y,k+\Delta p}\\
+\hat f_{z,k+\Delta p}
+\end{bmatrix}
+$$
 
-以下は検証済みの M30 推奨値です。
+である。
 
-| 項目 | 値 |
-|---|---:|
-| EKF_RB_EN | 1 |
-| EKF_RB_NIS | 3.0 |
-| EKF_INN_MAX | 0.70 |
-| EKF_NIS_MAX | 4.0 |
-| EKF_EN_GAT | 1 |
-| EKF_EN_ON | 0.20 |
-| EKF_EN_OFF | 0.16 |
-| EKF_EN_TAU | 2.0 |
-| EKF_AX_MASK | 3 |
-| EKF_Q_D | 9.5367432e-12 |
-| EKF_Q_DD | 2.3841858e-11 |
-| EKF_Q_C | 4.7683716e-13 |
-| EKF_R_MEAS | 46.0 |
+## 8. 補正角と補正クォータニオン
 
-補足:
+### 8.1 補正角
 
-- M30 はスパイク抑制優先の強平滑プロファイルです。
-- ファームウェアの AP_Param デフォルト値は M30 に合わせて初期化されています。
-- 実験再現は [analysis/replay/run_robust_smooth_m30_concat_direct_replay.py](analysis/replay/run_robust_smooth_m30_concat_direct_replay.py) を使用します。
+予測外力ノルム $\|\hat{\mathbf{f}}\|$ が閾値 $f_{min}$ 未満なら補正はゼロとする。
 
-## 9. ログ仕様 (OBSV)
+それ以外では、補正ゲイン $k_c$ を用いて
 
-OBSV の主要フィールド:
+$$
+\phi = \mathrm{sat}\!\left(\frac{k_c}{m}\hat f_y,\,\phi_{max}\right),
+\qquad
+	heta = \mathrm{sat}\!\left(-\frac{k_c}{m}\hat f_x,\,\theta_{max}\right),
+\qquad
+\psi=0
+$$
 
-- TimeUS: タイムスタンプ [us]
-- PLX, PLY, PLZ: 観測外力
-- DX, DY, DZ: 状態 d
-- VX, VY, VZ: 状態 d_dot
-- CX, CY, CZ: 状態 c
-- F: fused 推定周波数 [Hz]
-- SW: 推定スイッチ状態
+とする。ここで $\mathrm{sat}(\cdot)$ は角度上限での飽和関数である。
 
-## 10. 命名統一状況
+### 8.2 クォータニオン化
 
-公開 API と replay 実行器は EKF ベースの命名へ統一済みです。
+得られたオイラー角 $(\phi,\theta,\psi)$ から補正クォータニオン $\mathbf{q}_c$ を生成し、正規化して出力する。
 
-- API: get_harmonic_sin_coeff, get_harmonic_cos_coeff, get_dc_offset, force_frequency_estimation_update
-- replay: EKF_CSV_Replay
+## 9. プログラム順アルゴリズム (要約)
+
+1. センサ加速度とスロットルから $\mathbf{z}_k$ を構成
+2. 離陸・スイッチ状態・$\Delta t_k$ を更新
+3. 各軸でEKF予測
+4. 保持/除外/ゼロ注入/ロバスト判定を適用
+5. 許可された場合のみEKF観測更新
+6. XY周波数融合と共有注入
+7. $\Delta p$ 先の予測外力 $\hat{\mathbf{f}}_{k+\Delta p}$ を算出
+8. 補正角 $(\phi,\theta,\psi)$ と補正クォータニオン $\mathbf{q}_c$ を生成
+9. ログ出力
+
+## 10. 実務上の解釈
+
+- この推定器は、単純な「EKF一発更新」ではなく、運用上の異常値・低励振・スイッチ操作を含む条件分岐付き非線形推定器である。
+- よってチューニングでは、$\mathbf{Q},R$ の調整に加え、保持閾値・除外閾値・NIS閾値・共有注入係数を同時に設計する必要がある。
+- 発散回避の観点では、低SNR領域のゼロ注入、NISベース拒否、有限値チェック後の安全リセットが主要な安定化機構である。
+
+## 11. 参考文献 (記法と構成の基準)
+
+1. R. E. Kalman, "A New Approach to Linear Filtering and Prediction Problems," 1960.
+2. EKF標準形式 (非線形状態方程式の一次線形化) に基づく記述。
+3. 科学技術文書の一般構成 (目的・方法・アルゴリズム・解釈の分離) に準拠。
+
+## 12. 補足Q&A (最小限)
+
+Q. なぜ周波数をXYで共有するのか。  
+A. 単軸で低励振・低信頼になった際、他軸の信頼情報を利用して周波数推定の破綻を防ぐためである。
+
+Q. なぜ観測をゼロ注入するのか。  
+A. 低振幅時に観測ノイズ主導の更新となることを防ぎ、状態の過大振動を抑えるためである。

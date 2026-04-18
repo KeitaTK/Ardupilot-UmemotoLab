@@ -2,6 +2,117 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-16 17:20: [AP_Observer/Documentation] 分岐条件・軸間干渉をREADMEへ実装準拠で詳細化
+
+- Problem: 実験結果（x2採用、周波数固定方針）が決まった後、`AP_Observer` READMEが概説中心で、分岐条件と軸間干渉の実装詳細まで追えない状態だった。
+- Investigation:
+  1. `AP_Observer.cpp` の `ekf_update_axis()` と `ekf_update()` を再確認し、実際の条件分岐（hold/reject/robust/shared injection）を抽出。
+  2. 実験レポート側に最終採用値（周波数系固定 + 非周波数系x2）を明示する追記余地を確認。
+- Attempted:
+  1. `libraries/AP_Observer/README.md` を全面更新し、以下を明文化。
+     - グローバルAPパラメータが全軸共通で適用される事実
+     - `ekf_update_axis()` の条件分岐順序（predict-only, force reject, zero-injection, robust reject, finite reset）
+     - XY共有周波数融合（trust/weight/donor/hard-mode）と低信頼・凍結軸への注入条件
+     - `stateqr_x2` 採用、`x4/x8` 不採用の運用判断
+  2. `2026-04-16_13-20-16_...md` に最終決定セクションを追加し、採用パラメータと参照ドキュメントを追記。
+- Result:
+  - ✅ README単体で、分岐条件と軸間干渉の実装意図を追跡可能になった。
+  - ✅ 主レポートから最終採用値と詳細設計資料への導線を明確化できた。
+
+### 2026-04-16 16:55: [AP_Observer/EKF Replay] x2採用を決定し、レポートを統合・詳細化
+
+- Problem: 非周波数EKF比スイープ結果に基づく最終採用値（x2）を明文化し、重複レポートを整理したかった。併せて「周波数推定系とその他EKF系を分離した設定」と「軸間で同一値を使っているか」を明示する必要があった。
+- Investigation:
+  1. `stateqr_x1/x2/x4/x8` 比較で、x2は平滑化効果があり、x4以上は発散することを再確認。
+  2. 連結リプレイ系列に重複版（`12-07-07` と `13-20-16`）が残っていることを確認。
+- Attempted:
+  1. `2026-04-16_16-44-50_...md` を決定版フォーマットに改訂し、採用値・不採用値・アルゴリズム分離方針を詳細追記。
+  2. 軸間同一値の根拠（単一APパラメータを全軸ループで参照）を記述。
+  3. 重複版 `2026-04-16_12-07-07_...md` を削除し、`INDEX.md` を更新。
+- Result:
+  - ✅ 非周波数EKF比は `stateqr_x2` を採用として確定。
+  - ✅ 周波数推定系（`EKF_Q_W`, `EKF_SH_BETA`）と非周波数系（`Q_D/Q_DD/Q_C/R_MEAS`）を分離して管理する方針を明文化。
+  - ✅ 重複レポートを統合し、索引を整理。
+
+### 2026-04-16 16:44: [AP_Observer/EKF Replay] 周波数系を固定して非周波数EKF比をスイープし、X軸平滑化を再評価
+
+- Problem: 周波数推定は `R/Q x10` で差が小さく採用方針が固まった一方、X軸EKF推定（PRX）のノイズが依然大きく、周波数系と独立に平滑化余地を評価したかった。
+- Investigation:
+  1. 周波数推定パラメータ（`EKF_Q_W`, `EKF_SH_BETA`）を固定し、非周波数パラメータ（`Q_D/Q_DD/Q_C/R_MEAS`）のみを比率変更する方針を採用。
+  2. 連結入力 `00000443_00000444_concat_input.csv` に対して `stateqr_x1/x2/x4/x8` を比較。
+- Attempted:
+  1. `./waf build --target examples/EKF_CSV_Replay` を実行し、replayバイナリを再ビルド。
+  2. 新規スクリプト `analysis/replay/run_concat_replay_state_qr_sweep.py` を作成し、ケース別にCSV/図/レポートを自動生成。
+  3. 指標として `X RMSE`, `std(diff(PRX))`, `p95(|diff(PRX)|)`, `max(|diff(PRX)|)` と周波数指標を比較。
+- Result:
+  - ✅ 新規レポート作成: `docs/experiments/ekf_external_force_estimation/reports/2026-04-16_16-44-50_X軸平滑化_非周波数EKF比スイープ_連結リプレイ検証.md`
+  - ✅ `stateqr_x2` は X軸ノイズ指標を低減（基準比で平滑化）
+  - ⚠️ `stateqr_x4`, `stateqr_x8` は発散（不採用）
+  - ✅ 周波数推定系は `R/Q x10` 採用、X軸平滑化は非周波数系の比を分離して調整する運用方針を明文化。
+
+### 2026-04-16 16:40: [AP_Observer/EKF Replay] 旧 smooth_m30 図との差分要因を切り分け（設定差 vs アルゴリズム差）
+
+- Problem: `2026-04-15_robust_qr_smoothing` の `smooth_m30` 図に比べ、最新レポートの X 軸推定で細かな振動が増えて見える原因を特定したかった。
+- Investigation:
+  1. 旧図と最新図は入力範囲（単体ログ vs 連結ログ）とパラメータ（`Q_D/Q_DD/Q_C/R_MEAS/Q_W`、`SW mode`）が大きく異なることを確認。
+  2. 同一入力 `00000443_w35_100_input.csv` で、旧/新パラメータを現行バイナリに統一して再実行する比較実験を実施。
+- Attempted:
+  1. 旧 smooth_m30 相当（log）を現行で再実行: `cur_old_m30_result.csv`。
+  2. 最新条件（x10, always-on）を同入力で再実行: `cur_latest_x10_single_result.csv`。
+  3. 旧 smooth_m30 相当のまま `always-on` にしたケースも追加: `cur_old_m30_always_on_result.csv`。
+  4. `std(diff(PRX))`, `p95(|diff(PRX)|)`, `max(|diff(PRX)|)` と A/B の RMSE を比較。
+- Result:
+  - ✅ 同等パラメータでも旧アーカイブ(A)と現行再実行(B)は一致せず（`RMSE(PRX)=1.099367`）、アルゴリズム/実装世代差が存在。
+  - ✅ B→C で `std(diff(PRX))` と `p95(|diff(PRX)|)` が増加し、最新条件側の設定差でも細かな振動増加を確認。
+  - ✅ 結論は「設定差とアルゴリズム差の両方が要因」。
+
+### 2026-04-16 16:17: [AP_Observer/EKF Replay] R/Q倍率ごとの個別グラフを固定保存し、使用値を明示
+
+- Problem: レポートの図が共通ファイルを参照しており、後続実行で上書きされるため「どの倍率の値で描いた図か」が判別しづらかった。
+- Investigation:
+  1. `results/.../figures/concat_direct_replay_*.png` が毎回同名で更新されることを確認。
+  2. 10/20/30倍比較を同一レポートに載せるには、ケース別の固定ファイル名が必要と判断。
+- Attempted:
+  1. x10, x20, x30 を再実行し、各ケースの図を `rq_x10_*`, `rq_x20_*`, `rq_x30_*` へ保存。
+  2. 結果CSVも `replay/rq_x10_result.csv`, `rq_x20_result.csv`, `rq_x30_result.csv` として固定保存。
+  3. `2026-04-16_13-20-16_...md` を更新し、倍率ごとにパラメータと個別グラフを明示。
+  4. 中間で自動生成された重複レポート（`16-16-42`, `16-17-03`, `16-17-19`）は削除。
+- Result:
+  - ✅ 各倍率の図が上書きされず追跡可能になった。
+  - ✅ レポート閲覧時に「使用値」と「対応グラフ」の対応関係が明確になった。
+
+### 2026-04-16 13:36: [AP_Observer/EKF Replay] R/Q比20倍・30倍を追加し、単一レポートで比較可能化
+
+- Problem: 10倍条件だけでは「どこまで増やすと有効か」の判断が難しく、20倍・30倍も同一形式で比較したかった。
+- Investigation:
+  1. 基準を `EKF_Q_W=1e-5`, `R_MEAS=0.08`（`R/Q=8000`）に固定。
+  2. 10倍（既存）に対し、20倍・30倍は `R_MEAS` 固定で `EKF_Q_W` のみを低減して作る方針を採用。
+- Attempted:
+  1. 20倍条件: `--ekf-q-w 5e-7 --ekf-r-meas 0.08` で再実行。
+  2. 30倍条件: `--ekf-q-w 3.333333333e-7 --ekf-r-meas 0.08` で再実行。
+  3. 取得指標（all区間）を既存レポート `2026-04-16_13-20-16_...md` の比較セクションへ追記し、10/20/30倍を同一表で比較可能化。
+  4. 中間生成された `13-36-19`, `13-36-32` の重複レポートは削除。
+- Result:
+  - ✅ 10/20/30倍の比較を1本のレポートに統合。
+  - ✅ `p95 step` は 10倍以上で `0.000900`（baseline `0.001200` から改善）
+  - ✅ `std` は 10倍が最小で、20倍・30倍の追加改善は限定的。
+
+### 2026-04-16 13:20: [AP_Observer/EKF Replay] 周波数推定のR/Q比を10倍にして平滑化検証
+
+- Problem: 周波数推定の細かな振動をさらに抑えるため、`R/Q` 比を約10倍にした時の効果を確認したかった。
+- Investigation:
+  1. 現行条件を `EKF_Q_W=1e-5`, `R_MEAS=0.08`（`R/Q=8000`）として比較基準化。
+  2. 重複ファイル `2026-04-16_12:07:07_...md`（コロン付き）が残っていることを確認。
+- Attempted:
+  1. `analysis/replay/run_robust_smooth_m30_concat_direct_replay.py` に `--ekf-r-meas` を追加し、`R_MEAS / EKF_Q_W` をレポート出力。
+  2. `--ekf-q-w 1e-6 --ekf-r-meas 0.08 --ekf-sh-beta 0.10` で連結リプレイ再実行（`R/Q=80000`）。
+  3. 新規レポート生成後、重複のコロン付き旧ファイルを削除。
+- Result:
+  - ✅ 新規レポート: `docs/experiments/ekf_external_force_estimation/reports/2026-04-16_13-20-16_ロバスト観測更新_Robust+SmoothM30_連結ログ直接リプレイ検証.md`
+  - ✅ `EstFreq p95 step`: `0.001200 -> 0.000900`（より滑らか）
+  - ✅ `EstFreq std`: `0.027916 -> 0.027857`（小幅改善）
+  - ✅ `12:07:07`（コロン付き）重複レポートを削除し、`12-07-07` 側へ統一。
+
 ### 2026-04-16 12:20: [AP_Observer/EKF Replay] 連結リプレイ報告を統合し、レポート時刻ファイル名を`HH-MM-SS`へ統一
 
 - Problem: 連結ログ直接リプレイのレポートが近接時刻で複数本に分散し、参照が重複していた。また一部ファイル名で時刻に `:` を使っており、命名規則が不統一だった。
