@@ -2,6 +2,21 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-19: [AP_Observer] RLS由来パラメータと残存コードの整理削除
+
+- Problem: EKF移行後もRLS由来のパラメータ名・コメント・互換コードが残存しており、設定項目と実装意図が不一致になっていた。
+- Investigation:
+  1. `AP_Observer.h/.cpp` を検索し、`RLS_LAMBDA`, `RLS_COV_INIT`, `_rls_*`, `RLS_*` 定数、RLSデバッグコメント残骸の位置を特定。
+  2. 実装上はRLS推定本体が未使用で、残存していたのはパラメータ定義と初期共分散参照、コメントブロックのみであることを確認。
+- Attempted:
+  1. `RLS_LAMBDA`, `RLS_COV_INIT`, `DIST_FREQ` のパラメータ定義と対応メンバを削除。
+  2. EKF初期共分散は `EKF_INIT_COVARIANCE` 定数へ置換し、RLS由来定数依存を解消。
+  3. `update()` 内のRLSデバッグコメントブロックと未使用カウンタを削除。
+  4. replay用初期化 `set_params_for_replay()` をEKF名義の周波数初期化に整理。
+- Result:
+  - ✅ RLS由来パラメータ・変数・コメントが `AP_Observer` 実装から除去され、EKF実装と公開設定の整合性を回復。
+  - ✅ 静的解析エラーなし（編集対象ファイル）。
+
 ### 2026-04-16 17:20: [AP_Observer/Documentation] 分岐条件・軸間干渉をREADMEへ実装準拠で詳細化
 
 - Problem: 実験結果（x2採用、周波数固定方針）が決まった後、`AP_Observer` READMEが概説中心で、分岐条件と軸間干渉の実装詳細まで追えない状態だった。

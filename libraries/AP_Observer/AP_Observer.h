@@ -48,7 +48,7 @@ public:
     // ログ記録関数
     void Write_Observer_Log();
     
-    // RLS周波数推定のリセット（アーム時に呼び出し）
+    // 周波数推定のリセット（アーム時に呼び出し）
     void reset_frequency_estimation();
 
 // #ifdef AP_OBSERVER_REPLAY_TEST
@@ -103,7 +103,6 @@ private:
 //    uint64_t get_current_time_us() const { return AP_HAL::micros64(); }
 // #endif
 
-    uint32_t    counter = 0;
     Vector3f    current_filtered_force = Vector3f();
     Quaternion  current_correction_quat = Quaternion(1,0,0,0); // 単位クォータニオンで初期化
     Vector3f    current_correction_euler = Vector3f(0,0,0);    // オイラー角形式の補正値(Roll,Pitch,Yaw)
@@ -177,10 +176,7 @@ private:
     AP_Float _ekf_shared_hard_nis_max;
     AP_Int8  _ekf_switch_gate_enable;
 
-    // Legacy parameters retained for compatibility during migration
-    AP_Float _rls_forgetting_factor;
-    AP_Float _rls_initial_covariance;
-    AP_Float _disturbance_freq;
+    // Estimator parameters
     AP_Float _prediction_time;
     
     // 予測用キャッシュ変数（計算量削減）
@@ -224,11 +220,7 @@ private:
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
     
-    // RLS関連定数（互換保持）
-    static constexpr float    RLS_MIN_LAMBDA        = 0.9f;
-    static constexpr float    RLS_MAX_LAMBDA        = 0.9999f;
-    static constexpr float    RLS_MIN_COVARIANCE    = 0.001f;
-    static constexpr float    RLS_MAX_COVARIANCE    = 1000.0f;
+    static constexpr float    EKF_INIT_COVARIANCE   = 100.0f;
     
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ

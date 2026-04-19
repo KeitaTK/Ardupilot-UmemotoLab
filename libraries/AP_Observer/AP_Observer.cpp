@@ -28,20 +28,6 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("FILT_CUTOFF", 1, AP_Observer, _filter_cutoff_freq, 20.0f),
     
-    // @Param: RLS_LAMBDA
-    // @DisplayName: RLS Forgetting Factor
-    // @Description: Forgetting factor for Recursive Least Squares parameter estimation
-    // @Range: 0.9 0.9999
-    // @User: Advanced
-    AP_GROUPINFO("RLS_LAMBDA", 2, AP_Observer, _rls_forgetting_factor, 0.98f),
-    
-    // @Param: RLS_COV_INIT
-    // @DisplayName: RLS Initial Covariance
-    // @Description: Initial covariance value for RLS algorithm
-    // @Range: 0.001 1000.0
-    // @User: Advanced
-    AP_GROUPINFO("RLS_COV_INIT", 3, AP_Observer, _rls_initial_covariance, 100.0f),
-
     // @Param: EKF_Q_D
     // @DisplayName: EKF Process Noise D
     // @Description: Process noise variance for disturbance state d
@@ -97,13 +83,6 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 1.0 20.0
     // @User: Advanced
     AP_GROUPINFO("EKF_W_MAX", 11, AP_Observer, _ekf_omega_max, 5.7180f),
-    
-    // @Param: DIST_FREQ
-    // @DisplayName: Disturbance Frequency
-    // @Description: Frequency of periodic disturbance for RLS estimation [Hz]. Constrained to 0.35-0.91Hz (pendulum length 0.3-2.0m)
-    // @Range: 0.35 0.91
-    // @User: Advanced
-    AP_GROUPINFO("DIST_FREQ", 12, AP_Observer, _disturbance_freq, 0.6f),
     
     // @Param: PRED_TIME
     // @DisplayName: Prediction Time
@@ -279,14 +258,14 @@ void AP_Observer::init() {
     _freq_estimation_switch_state = false;  // 初期状態はOFF
     _freq_estimation_active = false;
     _freq_estimation_prev_switch = false;
-    _freq_estimation_result = _disturbance_freq.get();
+    _freq_estimation_result = estimated_frequency;
 
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
 
 void AP_Observer::ekf_init() {
-    const float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
+    const float init_cov = EKF_INIT_COVARIANCE;
     const float init_omega = constrain_value(_ekf_omega_init.get(), _ekf_omega_min.get(), _ekf_omega_max.get());
 
     for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
@@ -853,7 +832,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         // 数値計算による発散を検出したら、軸状態を安全値にリセット。
         // omega は前フレーム値を維持（周波数推定は継続）し、他の状態は 0 化。
         // この堅牢性対策により、局所的な演算エラーから回復。
-        const float init_cov = constrain_value(_rls_initial_covariance.get(), RLS_MIN_COVARIANCE, RLS_MAX_COVARIANCE);
+        const float init_cov = EKF_INIT_COVARIANCE;
         x[0] = 0.0f;
         x[1] = 0.0f;
         x[2] = 0.0f;
@@ -970,60 +949,6 @@ void AP_Observer::update() {
     // ログをSDカードに記録（毎回記録）
     Write_Observer_Log();
     
-    // デバッグメッセージ - 簡潔な形式（10回に1回）- コメントアウト
-// #if HAL_GCS_ENABLED
-//     if ((++counter % 10) == 0) {
-//         // 経過時間 [秒]
-//         float t = (get_current_time_ms() - rls_start_time_ms) / 1000.0f;
-//         
-//         // タイムスタンプ付き元の外力
-//         gcs().send_text(MAV_SEVERITY_INFO,
-//             "t=%.2f PL: %.3f %.3f %.3f",
-//             t, _payload_filtered.x, _payload_filtered.y, _payload_filtered.z
-//         );
-//         
-//         // RLS推定パラメータ（XY軸のみ）
-//         #if HAL_GCS_ENABLED
-//         gcs().send_text(MAV_SEVERITY_INFO,
-//             "A: %.3f %.3f",
-//             rls_theta[0][0], rls_theta[1][0]
-//         );
-//         #endif
-//         #if HAL_GCS_ENABLED
-//         gcs().send_text(MAV_SEVERITY_INFO,
-//             "B: %.3f %.3f",
-//             rls_theta[0][1], rls_theta[1][1]
-//         );
-//         #endif
-//         #if HAL_GCS_ENABLED
-//         gcs().send_text(MAV_SEVERITY_INFO,
-//             "C: %.3f %.3f",
-//             rls_theta[0][2], rls_theta[1][2]
-//         );
-//         #endif
-//         
-//         // 予測外力
-//         Vector3f pred = get_predicted_force();
-//         #if HAL_GCS_ENABLED
-//         gcs().send_text(MAV_SEVERITY_INFO,
-//             "PRED: %.3f %.3f %.3f",
-//             pred.x, pred.y, pred.z
-//         );
-//         #endif
-//         
-//         // 共分散行列（コメントアウト）
-//         // gcs().send_text(MAV_SEVERITY_INFO,
-//         //     "P[0]: %.3f %.3f %.3f",
-//         //     rls_P[0][0][0], rls_P[0][1][1], rls_P[0][2][2]
-//         // );
-//         
-//         // RLS診断情報（コメントアウト）
-//         // gcs().send_text(MAV_SEVERITY_INFO,
-//         //     "RLS: init=%d samples=%lu ω=%.3f", 
-//         //     rls_initialized, (unsigned long)rls_sample_count, _omega_rad
-//         // );
-//     }
-// #endif
 }
     
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
@@ -1186,15 +1111,13 @@ void AP_Observer::force_frequency_estimation_update(const Vector3f& payload) {
 }
 
 void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
-    _disturbance_freq.set(freq);
     _filter_cutoff_freq.set(bw);
     _correction_gain.set(gain);
 
-    // Force EKF params (workaround for AP_Param failure in replay)
-    _rls_forgetting_factor.set(0.99f);
-    _rls_initial_covariance.set(100.0f);
-    // ここで推定周波数も初期化
-    estimated_frequency = freq;
+    // Reinitialize frequency state for replay runs.
+    const float omega = constrain_value(freq * 2.0f * float(M_PI), _ekf_omega_min.get(), _ekf_omega_max.get());
+    _ekf_omega_init.set(omega);
+    estimated_frequency = omega / (2.0f * M_PI);
 
     // Ensure EKF re-init usage of new params
     update_prediction_cache();
