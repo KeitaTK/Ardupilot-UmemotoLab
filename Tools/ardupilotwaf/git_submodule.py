@@ -31,7 +31,7 @@ post_mode should be set to POST_LAZY. Example::
         ...
 """
 
-from waflib import Context, Logs, Task, Utils
+from waflib import Context, Errors, Logs, Task, Utils
 from waflib.Configure import conf
 from waflib.TaskGen import before_method, feature, taskgen_method
 
@@ -71,7 +71,16 @@ class update_submodule(Task.Task):
     def runnable_status(self):
         e = self.env.get_flat
         cmd = e('GIT'), 'submodule', 'status', '--recursive', '--', e('SUBMODULE_PATH')
-        out = self.generator.bld.cmd_and_log(cmd, quiet=Context.BOTH, cwd=self.cwd)
+        try:
+            out = self.generator.bld.cmd_and_log(cmd, quiet=Context.BOTH, cwd=self.cwd)
+        except Errors.WafError:
+            # Some forks/vendor trees keep module sources in-place without a
+            # registered git submodule entry. In that layout, continue without
+            # trying to update the submodule.
+            if os.path.isdir(e('SUBMODULE_PATH')):
+                Logs.warn('Submodule %s is not registered; using existing directory' % self.submodule)
+                return Task.SKIP_ME
+            raise
 
         self.non_fast_forward = []
 

@@ -2,6 +2,21 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-20: [Build/Pixhawk6C] mavlinkサブモジュール不整合でのビルド失敗を修正
+
+- Problem: `./waf copter` (Pixhawk6C) 実行時に `git submodule status -- modules/mavlink` が失敗し、ビルドが停止した。
+- Investigation:
+  1. `modules/mavlink` が作業ツリーに存在せず、`.gitmodules` にも `mavlink` 定義がない状態を確認。
+  2. `wscript` は `GIT_SUBMODULES` に `mavlink` を追加しており、`Tools/ardupilotwaf/git_submodule.py` が未登録サブモジュールでも fatal になることを確認。
+  3. `.git/modules/modules/mavlink` に残っていた Git メタデータから `modules/mavlink` を復元できることを確認。
+- Attempted:
+  1. `modules/mavlink` を再生成し、`message_definitions/v1.0/all.xml` の存在を復旧。
+  2. `Tools/ardupilotwaf/git_submodule.py` に、対象パスがディレクトリとして存在する場合は submodule 未登録でも build 継続するフォールバックを追加。
+  3. `wscript`/`Tools/ardupilotwaf/mavgen.py` を `modules/mavlink` と `mavlink` の両レイアウトに対応するよう調整。
+- Result:
+  - ✅ `source venv/bin/activate && ./waf distclean && ./waf configure --board Pixhawk6C && ./waf copter` が成功。
+  - ✅ 生成物を確認: `build/Pixhawk6C/bin/arducopter`, `arducopter.apj`, `arducopter.bin`。
+
 ### 2026-04-19: [AP_Observer] RLS由来パラメータと残存コードの整理削除
 
 - Problem: EKF移行後もRLS由来のパラメータ名・コメント・互換コードが残存しており、設定項目と実装意図が不一致になっていた。

@@ -647,7 +647,12 @@ def configure(cfg):
     else:
         cfg.end_msg('disabled', color='YELLOW')
 
-    cfg.env.append_value('GIT_SUBMODULES', 'mavlink')
+    if cfg.srcnode.find_dir('modules/mavlink') is not None:
+        cfg.env.append_value('GIT_SUBMODULES', 'mavlink')
+    elif cfg.srcnode.find_dir('mavlink') is not None:
+        cfg.msg('MAVLink location', 'using in-tree mavlink directory')
+    else:
+        cfg.fatal('MAVLink directory not found (expected modules/mavlink or mavlink)')
 
     cfg.env.prepend_value('INCLUDES', [
         cfg.srcnode.abspath() + '/libraries/',
@@ -760,11 +765,20 @@ def _build_cmd_tweaks(bld):
             bld.fatal('check: gtest library is required')
         bld.options.clear_failed_tests = True
 
+def _mavlink_xml_source_path(ctx):
+    """Return MAVLink XML path for submodule and in-tree layouts, if available."""
+    if ctx.srcnode.find_node('modules/mavlink/message_definitions/v1.0/all.xml'):
+        return 'modules/mavlink/message_definitions/v1.0/all.xml'
+    if ctx.srcnode.find_node('mavlink/message_definitions/v1.0/all.xml'):
+        return 'mavlink/message_definitions/v1.0/all.xml'
+    return None
+
 def _build_dynamic_sources(bld):
-    if not bld.env.BOOTLOADER:
+    mavlink_xml = _mavlink_xml_source_path(bld)
+    if not bld.env.BOOTLOADER and mavlink_xml is not None:
         bld(
             features='mavgen',
-            source='modules/mavlink/message_definitions/v1.0/all.xml',
+            source=mavlink_xml,
             output_dir='libraries/GCS_MAVLink/include/mavlink/v2.0/',
             name='mavlink',
             # this below is not ideal, mavgen tool should set this, but that's not
