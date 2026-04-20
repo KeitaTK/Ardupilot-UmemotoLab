@@ -1,0 +1,60 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Pixhawk6C (Clean)",
+            "type": "shell",
+            "command": "${workspaceFolder}/build_pixhawk6c.sh",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": false,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^\\[1/4\\].*",
+                    "endsPattern": "^✅ Build successful!"
+                }
+            }
+        },
+        {
+            "label": "Build & Test Mandatory SITL",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source ${workspaceFolder}/venv/bin/activate && cd ${workspaceFolder} && ./waf configure --board sitl && ./waf copter && timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ModeLoiter || exit 1 && timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GCSFailsafe || exit 1"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": false
+        }
+    ]
+}
