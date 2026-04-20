@@ -2,6 +2,23 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-20: [Build/Pixhawk6C] 壊れたvenv起因のDroneCAN/MAVLink生成エラーを修正
+
+- Problem: `build_pixhawk6c.sh` 実行時、`dronecangen` で `em.ParseError: unknown markup sequence: @)` が発生し、続いて `future` / `dronecan.dsdl` / `pkg_resources` 不足でビルドが停止した。
+- Investigation:
+  1. 既存 `venv/bin/activate` の `VIRTUAL_ENV` が `/home/memoto/...` を指しており、存在しないパスを `PATH` 先頭へ追加していた。
+  2. その結果、ビルド時 Python が `venv` ではなく system Python (`/usr/bin/python3`) を使用し、`~/.local` の `empy 4.2.1` を誤読していた。
+  3. `venv` 再作成後は `dronecangen` が進むが、`future`・`dronecan` 系依存不足で追加エラーが発生することを確認。
+- Attempted:
+  1. `venv` を再作成 (`python3 -m venv venv`) し、`empy==3.3.4` と `pexpect` を導入。
+  2. `pymavlink` 生成依存として `modules/mavlink/modules/mavlink/pymavlink/requirements.txt` を導入。
+  3. `dronecan` 依存と `pkg_resources` のために `setuptools<81` と `dronecan` を導入。
+  4. その後 `Build Pixhawk6C (Clean)` を再実行。
+- Result:
+  - ✅ Pixhawk6C clean build が完走。
+  - ✅ 生成物確認: `build/Pixhawk6C/bin/arducopter.bin`, `build/Pixhawk6C/bin/arducopter.apj`, `build/Pixhawk6C/bin/arducopter.abin`。
+  - ✅ 問題だった `@)` / `future` / `dronecan.dsdl` / `pkg_resources` 系エラーは解消。
+
 ### 2026-04-21: [Build/Pixhawk6C] MAVLinkネストされたサブモジュール構造への対応
 
 - Problem: `./waf copter` (Pixhawk6C) で `include/mavlink/v2.0/all/version.h: No such file or directory` エラーが連続して発生。mavgenタスクが実行されず、MAVLinkヘッダが生成されていない状態だった。
