@@ -95,7 +95,10 @@ def configure(cfg):
     setup environment for mavlink header generator
     """
     env = cfg.env
-    mavlink_dir = cfg.srcnode.find_dir('modules/mavlink')
+    # Check nested submodule path first (modules/mavlink/modules/mavlink)
+    mavlink_dir = cfg.srcnode.find_dir('modules/mavlink/modules/mavlink')
+    if mavlink_dir is None:
+        mavlink_dir = cfg.srcnode.find_dir('modules/mavlink')
     if mavlink_dir is None:
         mavlink_dir = cfg.srcnode.find_dir('mavlink')
     if mavlink_dir is None:

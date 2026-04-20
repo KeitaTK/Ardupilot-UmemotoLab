@@ -44,4 +44,4 @@
 	url = https://github.com/ArduPilot/littlefs.git
 [submodule "modules/mavlink"]
 	path = modules/mavlink
-	url = https://github.com/KeitaTK/Ardupilot-UmemotoLab.git
+	url = https://github.com/ArduPilot/mavlink

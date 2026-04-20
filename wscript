@@ -767,10 +767,14 @@ def _build_cmd_tweaks(bld):
 
 def _mavlink_xml_source_path(ctx):
     """Return MAVLink XML path for submodule and in-tree layouts, if available."""
+    # Check standard paths first
     if ctx.srcnode.find_node('modules/mavlink/message_definitions/v1.0/all.xml'):
         return 'modules/mavlink/message_definitions/v1.0/all.xml'
     if ctx.srcnode.find_node('mavlink/message_definitions/v1.0/all.xml'):
         return 'mavlink/message_definitions/v1.0/all.xml'
+    # Check nested submodule path (when modules/mavlink is itself a repo)
+    if ctx.srcnode.find_node('modules/mavlink/modules/mavlink/message_definitions/v1.0/all.xml'):
+        return 'modules/mavlink/modules/mavlink/message_definitions/v1.0/all.xml'
     return None
 
 def _build_dynamic_sources(bld):

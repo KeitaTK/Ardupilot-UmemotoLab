@@ -2,6 +2,23 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-21: [Build/Pixhawk6C] MAVLinkネストされたサブモジュール構造への対応
+
+- Problem: `./waf copter` (Pixhawk6C) で `include/mavlink/v2.0/all/version.h: No such file or directory` エラーが連続して発生。mavgenタスクが実行されず、MAVLinkヘッダが生成されていない状態だった。
+- Investigation:
+  1. `modules/mavlink` のサブモジュールURLが誤って主リポジトリ自身を指していることを確認。
+  2. 実際のMAVLink XMLは `modules/mavlink/modules/mavlink/message_definitions/v1.0/all.xml` の深いネスト構造に存在。
+  3. 外形上の `.gitmodules` はArduPilot/mavlinkを指していたが、サブモジュールの取得後、入れ子構造が形成されていた事を確認。
+  4. `wscript` と `Tools/ardupilotwaf/mavgen.py` がこのネスト構造に未対応であることが根本原因。
+- Attempted:
+  1. `wscript` の `_mavlink_xml_source_path()` に、`modules/mavlink/modules/mavlink/message_definitions/v1.0/all.xml` 経路を追加。
+  2. `Tools/ardupilotwaf/mavgen.py` の `configure()` で、ネストされたmavlinkディレクトリを優先検索するよう順序を修正。
+  3. 修正後、`./waf distclean && ./waf configure --board Pixhawk6C && ./waf copter` を実行。
+- Result:
+  - ✅ ビルドが完全に成功。1234/1234ファイルのコンパイルが完了。
+  - ✅ `build/Pixhawk6C/bin/arducopter.bin` (1.6MB) と `arducopter.apj` (1.5MB) が生成され、フラッシュ利用状況も正常。
+  - ✅ MAVLinkヘッダが 17 message_definition セット分、正常に生成・配置されたことを確認。
+
 ### 2026-04-20: [Build/Pixhawk6C] mavlinkサブモジュール不整合でのビルド失敗を修正
 
 - Problem: `./waf copter` (Pixhawk6C) 実行時に `git submodule status -- modules/mavlink` が失敗し、ビルドが停止した。
@@ -18,6 +35,37 @@
   - ✅ 生成物を確認: `build/Pixhawk6C/bin/arducopter`, `arducopter.apj`, `arducopter.bin`。
 
 ### 2026-04-19: [AP_Observer] RLS由来パラメータと残存コードの整理削除
+
+- Problem: EKF移行後もRLS由来のパラメータ名・コメント・互換コードが残存しており、設定項目と実装意図が不一致になっていた。
+- Investigation:
+  1. `AP_Observer.h/.cpp` を検索し、`RLS_LAMBDA`, `RLS_COV_INIT`, `_rls_*`, `RLS_*` 定数、RLSデバッグコメント残骸の位置を特定。
+  2. 実装上はRLS推定本体が未使用で、残存していたのはパラメータ定義と初期共分散参照、コメントブロックのみであることを確認。
+- Attempted:
+  1. `RLS_LAMBDA`, `RLS_COV_INIT`, `DIST_FREQ` のパラメータ定義と対応メンバを削除。
+  2. EKF初期共分散は `EKF_INIT_COVARIANCE` 定数へ置換し、RLS由来定数依存を解消。
+  3. `update()` 内のRLSデバッグコメントブロックと未使用カウンタを削除。
+  4. replay用初期化 `set_params_for_replay()` をEKF名義の周波数初期化に整理。
+- Result:
+  - ✅ RLS由来パラメータ・変数・コメントが `AP_Observer` 実装から除去され、EKF実装と公開設定の整合性を回復。
+  - ✅ 静的解析エラーなし（編集対象ファイル）。
+
+### 2026-04-16 17:20: [AP_Observer/Documentation] 分岐条件・軸間干渉をREADMEへ実装準拠で詳細化
+
+- Problem: 実験結果（x2採用、周波数固定方針）が決まった後、`AP_Observer` READMEが概説中心で、分岐条件と軸間干渉の実装詳細まで追えない状態だった。
+- Investigation:
+  1. `AP_Observer.cpp` の `ekf_update_axis()` と `ekf_update()` を再確認し、実際の条件分岐（hold/reject/robust/shared injection）を抽出。
+  2. 実験レポート側に最終採用値（周波数系固定 + 非周波数系x2）を明示する追記余地を確認。
+- Attempted:
+  1. `libraries/AP_Observer/README.md` を全面更新し、以下を明文化。
+     - グローバルAPパラメータが全軸共通で適用される事実
+     - `ekf_update_axis()` の条件分岐順序（predict-only, force reject, zero-injection, robust reject, finite reset）
+     - XY共有周波数融合（trust/weight/donor/hard-mode）と低信頼・凍結軸への注入条件
+     - `stateqr_x2` 採用、`x4/x8` 不採用の運用判断
+  2. `2026-04-16_13-20-16_...md` に最終決定セクションを追加し、採用パラメータと参照ドキュメントを追記。
+- Result:
+  - ✅ README単体で、分岐条件と軸間干渉の実装意図を追跡可能になった。
+  - ✅ 主レポートから最終採用値と詳細設計資料への導線を明確化できた。
+
 
 - Problem: EKF移行後もRLS由来のパラメータ名・コメント・互換コードが残存しており、設定項目と実装意図が不一致になっていた。
 - Investigation:
