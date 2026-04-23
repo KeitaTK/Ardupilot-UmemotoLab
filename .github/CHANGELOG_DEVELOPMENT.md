@@ -2,6 +2,22 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-23: [AP_Observer/Logging] OBSVの重複FMT定義を解消し、SD保存の安定性を修正
+
+- Problem: OBSV系ログがSDカードに安定して保存されず、解析時にOBSVの解釈が不安定になる事象があった。
+- Investigation:
+  1. `libraries/AP_Observer/AP_Observer.cpp` 側で `logger->Write("OBSV", ...)` による動的ログ（動的msgid）が使われていることを確認。
+  2. 同時に `ArduCopter/Log.cpp` 側に静的 `OBSV` LogStructure（`LOG_OBSERVER_MSG`）が存在し、同一名 `OBSV` の FMT が二重登録される構成になっていた。
+  3. SITL実行ログ（`logs/00000002.BIN` 修正前）で `OBSV` FMT が Type 13 と Type 250 の2本出力され、実データは Type 250 側にのみ記録されることを確認。
+- Attempted:
+  1. `ArduCopter/Log.cpp` から未使用の `log_Observer` 構造体と静的 `OBSV` LogStructure定義を削除。
+  2. `OBSV` は `AP_Observer` 側の動的 `logger->Write()` の単一路に統一。
+  3. `./waf copter` でビルド確認後、`timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ModeLoiter` を実行して再検証。
+- Result:
+  - ✅ 修正後ログ（`logs/00000001.BIN`）で `OBSV` FMT は Type 250 の1本のみになり、重複定義が解消。
+  - ✅ `OBSV` 実データは 16270 サンプル保存され、`OBSV by msgid: {250: 16270}` を確認。
+  - ✅ `ModeLoiter` autotest は PASS。
+
 ### 2026-04-20: [Build/Pixhawk6C] 壊れたvenv起因のDroneCAN/MAVLink生成エラーを修正
 
 - Problem: `build_pixhawk6c.sh` 実行時、`dronecangen` で `em.ParseError: unknown markup sequence: @)` が発生し、続いて `future` / `dronecan.dsdl` / `pkg_resources` 不足でビルドが停止した。
