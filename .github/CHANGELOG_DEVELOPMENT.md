@@ -2,6 +2,34 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-27: [Analysis/AP_Observer EKF] 実機BIN評価基盤の新設と00000074実ログ評価
+
+- Problem: 実機DataFlash BINを入力してAP_Observer EKFの挙動を定量評価し、既存リプレイ評価と分離された運用可能なレポート基盤が不足していた。
+- Investigation:
+  1. 既存の解析資産は `analysis/replay/` 配下に集中しており、BIN→OBSV CSV抽出、リプレイ結果可視化、比較レポート生成機能は存在していた。
+  2. 指定ログ `00000074.BIN` の `OBSV` を確認すると、`TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, F, SW` を記録していた。
+  3. 実機ログ一次統計では `SW=0` 固定、`DZ/VZ` が極端なスケール、`CY` 固定の兆候を確認した。
+- Attempted:
+  1. 新規構造 `analysis/ekf_eval/{common,flight,replay}` を作成し、実機評価とリプレイ評価を分離。
+  2. 既存資産の整理として `analysis/replay/bin_to_replay_csv.py` を `analysis/ekf_eval/common/bin_to_obsv_csv.py` へ移設、`analysis/replay/plot_replay_results.py` を `analysis/ekf_eval/replay/plot_replay_results.py` へ移設し、旧パスに互換ラッパーを追加。
+  3. 既存レポート `analysis/replay/results/REPLAY_VALIDATION_2026-04-04.md` を `analysis/ekf_eval/replay/reports/archive/` へ移動。
+  4. 新規 `analysis/ekf_eval/flight/evaluate_obsv_bin.py` を実装し、BIN取り込み・CSV抽出・指標算出・異常検出・Markdown/JSON/図生成を自動化。
+  5. 新規 `analysis/ekf_eval/replay/evaluate_replay_csv.py` を実装し、リプレイCSVの独立評価系を追加。
+  6. `python analysis/ekf_eval/flight/evaluate_obsv_bin.py --input-bin /mnt/c/Users/Umemoto/Documents/Taki_Local/BIN/1/00000074.BIN --copy-to-data` を実行して実機評価を生成。
+- Result:
+  - ✅ 実機評価成果物を生成:
+    - `analysis/ekf_eval/flight/reports/00000074_20260427_131945/FLIGHT_EKF_EVALUATION.md`
+    - `analysis/ekf_eval/flight/reports/00000074_20260427_131945/summary.json`
+    - `analysis/ekf_eval/flight/reports/00000074_20260427_131945/overview.png`
+    - `analysis/ekf_eval/flight/data/csv/00000074_obsv.csv`
+  - ✅ 実機評価で以下を検出:
+    - `SW active ratio = 0.0`（全期間OFF）
+    - `DZ_max = 1.717e+23`, `VZ_max = 8.836e+23`（Z系状態量異常スケール）
+    - `CY_std = 0.0`（固定）
+  - ✅ 既存リプレイ基準（00000443/00000444）との比較で、実機側のみSW遷移欠如を確認。
+  - ✅ リプレイ側の分離評価も確認:
+    - `analysis/ekf_eval/replay/reports/00000444_bin_20260427_131954/REPLAY_EVALUATION.md`
+
 ### 2026-04-23: [AP_Observer/Logging] OBSVの重複FMT定義を解消し、SD保存の安定性を修正
 
 - Problem: OBSV系ログがSDカードに安定して保存されず、解析時にOBSVの解釈が不安定になる事象があった。
