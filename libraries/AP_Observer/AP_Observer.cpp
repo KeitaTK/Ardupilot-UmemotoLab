@@ -397,6 +397,9 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
     _energy_band_proxy = energy_fast - energy_slow;
 
     for (uint8_t axis = 0; axis < EKF_NUM_AXES; axis++) {
+        if (axis == 2) {
+            continue; // Skip Z-axis entirely to save CPU and prevent divergence
+        }
         float measurement = 0.0f;
         switch (axis) {
             case 0: measurement = y_output.x; break;
@@ -1051,10 +1054,10 @@ void AP_Observer::Write_Observer_Log() {
     }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, F, SW
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,F,SW",
-                  "s--------------", "F--------------",
-                  "QfffffffffffffB",
+    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, F, FX, FY, SW
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,F,FX,FY,SW",
+                  "s----------------", "F----------------",
+                  "QffffffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -1069,6 +1072,8 @@ void AP_Observer::Write_Observer_Log() {
                   ekf_state[1][2],      // c Y軸
                   ekf_state[2][2],      // c Z軸
                   estimated_frequency,
+                  ekf_state[0][3] / (2.0f * M_PI), // FX
+                  ekf_state[1][3] / (2.0f * M_PI), // FY
                   (uint8_t)(_freq_estimation_switch_state ? 1 : 0));  // SW: スイッチ状態
 #endif
 }

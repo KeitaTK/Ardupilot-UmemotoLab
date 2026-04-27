@@ -1,115 +1,127 @@
-# AP_Observer EKF Flight BIN Evaluation: 00000074
 
-## Input
-- Source BIN: analysis/ekf_eval/flight/data/bin/00000074.BIN
-- Samples: 8781
-- Duration: 87.80 s
-- Mean sample rate: 100.00 Hz
+# AP_Observer EKF 実機BIN評価: 00000074
 
-## State Variable Definitions
-- **D (DX, DY, DZ)**: EKF-estimated external force (prediction time = 0). Each axis represents estimated payload force [N].
-- **V (VX, VY, VZ)**: Rate of estimated force (time derivative of D). Represents force change rate [N/s].
-- **C (CX, CY, CZ)**: DC offset component. Represents static external force component [N].
-- **F**: Fused frequency estimate [Hz]. Integrated result of per-axis frequency estimates.
 
-## Key Metrics
-- sw_active_ratio: 0.0 (Switch always OFF - **NORMAL for this test condition**)
+## 入力情報
+- 元BIN: analysis/ekf_eval/flight/data/bin/00000074.BIN
+- サンプル数: 8781
+- 記録時間: 87.80秒
+- サンプリングレート: 100.00 Hz
+
+
+## 状態変数の定義
+- **D (DX, DY, DZ)**: EKFが推定した外力（予測時刻=0）。各軸ごとの推定ペイロード力 [N]
+- **V (VX, VY, VZ)**: 推定外力の変化率（Dの時間微分）[N/s]
+- **C (CX, CY, CZ)**: DCオフセット成分 [N]
+- **F**: 融合周波数推定値 [Hz]（各軸の周波数推定を統合したもの）
+
+
+## 主要指標
+- sw_active_ratio: 0.0（SW常時OFF・本テスト条件で正常）
 - sw_transitions: 0
-- F_mean: 0.4315349396781472 Hz
-- F_std: 0.1199334154585437 Hz
-- F_min: 0.01591549441218376 Hz
-- F_max: 1.5915493965148926 Hz
-- freq_p95_step_hz: 0.03003531694412229 Hz/s
-- plx_dom_freq_hz: 0.4783026212018864 Hz
-- ply_dom_freq_hz: 0.46691446355422245 Hz
-- freq_mean_vs_dom_abs_err_hz: 0.04676768152373917 Hz
-- DZ_max: 1.7170535628583512e+23 (⚠️ Anomalous)
-- VZ_max: 8.836841411492463e+23 (⚠️ Anomalous)
-- CY_std: 0.0 (⚠️ No variation)
+- F_mean: 0.4315 Hz
+- F_std: 0.1199 Hz
+- F_min: 0.0159 Hz
+- F_max: 1.5915 Hz
+- freq_p95_step_hz: 0.0300 Hz/s
+- plx_dom_freq_hz: 0.4783 Hz
+- ply_dom_freq_hz: 0.4669 Hz
+- freq_mean_vs_dom_abs_err_hz: 0.0468 Hz
+- DZ_max: 1.717e+23（⚠️異常）
+- VZ_max: 8.836e+23（⚠️異常）
+- CY_std: 0.0（⚠️変動なし）
 
-## Detailed Analysis Results
 
-### Estimated Force Tracking (Prediction Time = 0s)
-- **DX**: Normal tracking with mean ~0.18 N, std ~0.88 N
-- **DY**: Minimal activity, consistent with measured PLY range
-- **DZ**: DIVERGED to extreme scale (1e23), indicating Z-axis state breakdown
+## 詳細解析結果
 
-See figures:
-- `estimated_force_per_axis.png`: Per-axis force estimates
-- `estimated_force_combined.png`: All axes overlaid
+### 推定外力の時系列（予測時刻=0s）
+- **DX**: 平均約0.18N、標準偏差約0.88Nで正常に追従（PLXとの重ね合わせ表示）
+- **DY**: 変動小（本図ではPLZとの重ね合わせ表示）
+- **DZ**: 1e23オーダーまで発散（Z軸状態破綻）
 
-### Frequency Estimation Analysis
+#### 図: 推定外力
+![推定外力（各軸）](estimated_force_per_axis.png)
+![推定外力（全軸重ね合わせ）](estimated_force_combined.png)
 
-#### Per-Axis Frequency (in F field)
-- Frequency mean: 0.431 Hz (target ~0.45 Hz, reasonable)
-- Frequency std: 0.120 Hz
-- P95 step: 0.030 Hz/s (low jitter, good smoothness)
 
-See figures:
-- `frequency_per_axis_xy.png`: F field over time (per-axis breakdown not in OBSV log)
-- `frequency_fused.png`: Fused frequency estimate
+### 周波数推定の解析
 
-#### Startup Anomaly (~30-40s)
-Window analysis (30s - 40s):
-- Frequency mean in window: 0.373 Hz
-- Frequency std in window: 0.285 Hz
-- Max rate of change: 159 Hz/s (**VERY HIGH** - indicates estimation instability)
+#### F値（融合周波数）の推移
+- 平均: 0.431 Hz（目標0.45Hzに近い）
+- 標準偏差: 0.120 Hz
+- p95ステップ: 0.030 Hz/s（ジッター小、平滑）
 
-Likely causes:
-1. **Energy gate hysteresis**: RMS measurement oscillates around threshold boundary, toggling gate on/off repeatedly
-2. **Initialization phase noise**: Early EKF estimates lack sufficient observational history; small input variations cause large frequency swings
-3. **Per-axis fusion timing mismatch**: X/Y axis inclusion/exclusion decisions update asynchronously, causing vibration in fused result
+※OBSVログでは軸別周波数（X/Y別）は記録されておらず、融合周波数 `F` のみが記録されています。
 
-See figure: `frequency_startup_anomaly.png` (zoomed view with rate-of-change analysis)
+![融合周波数（OBSV:F）](frequency_fused.png)
 
-### State Variable Evolution
-Z-axis divergence visible in `state_evolution.png`:
-- DZ grows to 1e23 scale (uncontrolled)
-- VZ similarly diverges
-- CZ remains fixed at -163.6
+#### 起動時異常（30-40秒）
+ウィンドウ解析（30s-40s）:
+- 平均: 0.373 Hz
+- 標準偏差: 0.285 Hz
+- 最大変化率: 159 Hz/s（非常に大きい・推定不安定）
 
-XY-axes remain bounded and reasonable.
+主な要因:
+1. **エネルギーゲートのヒステリシス**: RMSが閾値付近で振動しON/OFFを繰り返す
+2. **初期化ノイズ**: 観測履歴が不足し小さな入力変動で大きく振れる
+3. **軸ごとのゲートタイミング不一致**: X/Y軸の判定タイミングがずれ、融合値が振動
 
-**Root cause hypothesis**: Z-axis EKF state never properly initialized, or axis mask configuration prevents Z-axis updates while allowing divergent prediction to accumulate unchecked.
+![起動時異常（ズーム・変化率付き）](frequency_startup_anomaly.png)
 
-## Replay Baseline Comparison (existing reports)
+
+### 状態変数の推移
+Z軸の発散は下記図で明確:
+- DZが1e23まで発散
+- VZも同様に発散
+- CZは-163.6で固定
+
+XY軸は有界で正常
+
+**原因仮説**: Z軸EKF状態が初期化されていない、または軸マスク設定によりZ軸のみ更新されず発散した可能性
+
+![状態変数の推移（D, V, C）](state_evolution.png)
+
+
+## リプレイベースライン比較（既存レポート）
 | source | sw_active_ratio | sw_transitions | freq_mean_hz | freq_std_hz |
 | --- | --- | --- | --- | --- |
 | analysis/replay/results/runs/00000443/00000443_bin_result.csv | 0.4878 | 2 | 0.5392 | 0.0645 |
 | analysis/replay/results/runs/00000444/00000444_bin_result.csv | 0.3554 | 2 | 0.5435 | 0.0819 |
 
-**Note**: Replay logs have SW transitions (on/off cycling), whereas this flight log has SW always OFF. This is **expected and correct** for the current test condition (SW OFF = no external force estimation enabled).
+※リプレイログはSWのON/OFF遷移あり。本実機ログはSW常時OFF（本テスト条件で正常）。
 
-## Findings
-- [INFO] **SW always OFF is correct**: SW=0 throughout log is the expected test condition.
-- [MEDIUM] **Frequency estimation performs adequately when SW is OFF**: Mean frequency 0.43 Hz is close to expected 0.45 Hz target; low jitter (p95 step = 0.030 Hz/s).
-- [HIGH] **Startup anomaly (35s region)**: Frequency estimate shows high rate-of-change (159 Hz/s max). Likely due to energy gate boundary effects and initialization phase turbulence.
-- [CRITICAL] **Z-axis state divergence**: DZ, VZ grow to extreme scales (1e23). This indicates EKF state breakdown on Z-axis, unrelated to SW control.
-- [MEDIUM] **CY remains fixed at 0**: No variation in Y-axis DC offset estimate.
 
-## Assessment
-✅ **Estimation Works Normally on XY Axes**:
-- D, V, C states remain bounded and reasonable for X and Y axes
-- Frequency estimate is stable with acceptable jitter
+## 主な所見
+- [情報] **SW常時OFFは正常**: SW=0が全期間で正しいテスト条件
+- [中] **SW OFF時も周波数推定は良好**: 平均0.43Hz（目標0.45Hz）、ジッター小
+- [高] **起動時異常（35秒付近）**: 最大変化率159Hz/s。エネルギーゲート境界や初期化ノイズが主因
+- [重大] **Z軸状態発散**: DZ, VZが1e23まで発散。SW制御とは無関係にZ軸EKFが破綻
+- [中] **CYが0で固定**: Y軸DCオフセットに変動なし
 
-⚠️ **Z-Axis State Breakdown**:
-- Z-axis EKF state not properly initialized or updated
-- Divergence appears independent of SW control
-- Check AP_Observer initialization and axis-specific update logic
 
-⚠️ **Startup Transient at ~35s**:
-- Energy gate hysteresis may cause frequency oscillation during initialization
-- Consider smoothing energy gate response or increasing hysteresis window
+## 総合評価
+✅ **XY軸は正常に推定**
+- D, V, C状態はX/Y軸で有界かつ妥当
+- 周波数推定もジッター小で安定
 
-## Artifacts
-- `analysis_summary.json`: Startup anomaly metrics
-- `DETAILED_ANALYSIS.md`: Comprehensive state analysis
-- `estimated_force_per_axis.png`: D state (force) per axis
-- `estimated_force_combined.png`: D state all axes
-- `frequency_per_axis_xy.png`: F field (frequency) over time
-- `frequency_fused.png`: Fused frequency
-- `frequency_startup_anomaly.png`: Zoomed startup analysis with rate-of-change
-- `state_evolution.png`: D, V, C state evolution (reveals divergence)
+⚠️ **Z軸状態破綻**
+- Z軸EKF状態が初期化・更新されていない可能性
+- SW制御とは無関係に発散
+- AP_Observerの初期化・軸別ロジック要確認
+
+⚠️ **起動時トランジェント（35秒付近）**
+- エネルギーゲートのヒステリシスで周波数が振動
+- ヒステリシス幅の拡大や応答平滑化を検討
+
+
+## 付属ファイル
+- `analysis_summary.json`: 起動時異常の指標
+- `DETAILED_ANALYSIS.md`: 詳細状態解析
+- `estimated_force_per_axis.png`: D状態（外力）各軸
+- `estimated_force_combined.png`: D状態（外力）全軸
+- `frequency_fused.png`: 融合周波数（OBSV:F）
+- `frequency_startup_anomaly.png`: 起動時異常（ズーム・変化率）
+- `state_evolution.png`: D, V, C状態の推移（発散可視化）
 - `obsv_csv`: analysis/ekf_eval/flight/data/csv/00000074_obsv.csv
 - `overview_png`: analysis/ekf_eval/flight/reports/00000074_20260427_131945/overview.png
 - `summary_json`: analysis/ekf_eval/flight/reports/00000074_20260427_131945/summary.json

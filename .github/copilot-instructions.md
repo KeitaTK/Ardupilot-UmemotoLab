@@ -340,4 +340,18 @@ source venv/bin/activate
 
 ---
 
-*Last updated: 2026-02-12*
+## EKF Tuning Policy (AP_Observer)
+
+**Q/R Parameter Guidelines for Smooth Force Estimation (DX/DY)**:
+- **Problem**: If `Q` (process noise) is too large (e.g. `0.01`) and `R` (measurement noise) is too small (e.g. `0.5`), the EKF will overfit to high-frequency sensor noise, resulting in jagged, noisy `DX`/`DY` outputs.
+- **Solution**: To act as a strict narrow-bandpass filter, EKF process noise must be extremely small.
+  - `OBS_EKF_Q_D` and `Q_DD` should be on the order of `1e-11` to `1e-12`.
+  - `OBS_EKF_R_MEAS` should be large (e.g., `40.0` to `50.0`).
+- **Axis Gating & Sharing**:
+  - To prevent hysteresis (gating on/off chatter), set `OBS_EKF_EN_TAU` to a longer duration (e.g., `4.0s`).
+  - Keep `OBS_EKF_SH_BETA` at `0.5` to allow axes (X/Y) to share frequency estimates and stabilize each other when one axis gates off.
+  - Z-axis is currently excluded from fusion (`OBS_EKF_AX_MASK = 3`).
+
+---
+
+*Last updated: 2026-04-27*

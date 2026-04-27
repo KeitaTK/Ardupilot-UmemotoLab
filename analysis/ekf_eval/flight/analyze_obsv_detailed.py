@@ -7,7 +7,7 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -22,70 +22,85 @@ def read_obsv_csv(csv_path: Path) -> pd.DataFrame:
 
 
 def plot_estimated_force_all_axes(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot estimated force (D state) for each axis."""
+    """Plot requested overlays: DX with PLX, and DY with PLZ."""
     t = df["Time_s"].to_numpy(dtype=float)
-    
-    fig, axes = plt.subplots(3, 1, figsize=(14, 10), sharex=True)
-    
-    for idx, key in enumerate(["DX", "DY", "DZ"]):
-        if key in df.columns:
-            axes[idx].plot(t, df[key].to_numpy(dtype=float), linewidth=1.2, label=key, color=["tab:red", "tab:green", "tab:blue"][idx])
-            axes[idx].axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
-        axes[idx].set_ylabel(f"{key} [N]")
-        axes[idx].set_title(f"{title} - Estimated Force: {key} (先読み 0秒)")
-        axes[idx].grid(True, alpha=0.3)
-        axes[idx].legend(loc="best")
-    
-    axes[2].set_xlabel("Time [s]")
+
+    fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+
+    if "DX" in df.columns:
+        axes[0].plot(t, df["DX"].to_numpy(dtype=float), linewidth=1.2, label="DX (estimated)", color="tab:red")
+    if "PLX" in df.columns:
+        axes[0].plot(t, df["PLX"].to_numpy(dtype=float), linewidth=1.0, label="PLX (measured)", color="tab:orange", alpha=0.85)
+    axes[0].axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
+    axes[0].set_ylabel("Force [N]")
+    axes[0].set_title(f"{title} - Force Overlay: DX and PLX")
+    axes[0].grid(True, alpha=0.3)
+    axes[0].legend(loc="best")
+
+    if "DY" in df.columns:
+        axes[1].plot(t, df["DY"].to_numpy(dtype=float), linewidth=1.2, label="DY (estimated)", color="tab:green")
+    if "PLZ" in df.columns:
+        axes[1].plot(t, df["PLZ"].to_numpy(dtype=float), linewidth=1.0, label="PLZ (measured)", color="tab:blue", alpha=0.85)
+    axes[1].axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
+    axes[1].set_ylabel("Force [N]")
+    axes[1].set_title(f"{title} - Force Overlay: DY and PLZ")
+    axes[1].grid(True, alpha=0.3)
+    axes[1].legend(loc="best")
+
+    axes[1].set_xlabel("Time [s]")
     fig.tight_layout()
     fig.savefig(outdir / "estimated_force_per_axis.png", dpi=170)
     plt.close(fig)
 
 
 def plot_estimated_force_combined(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot estimated force from all axes combined."""
+    """Plot combined force view without DZ to avoid scale domination by divergence."""
     t = df["Time_s"].to_numpy(dtype=float)
-    
+
     fig, ax = plt.subplots(figsize=(14, 6))
-    
-    for key, color in [("DX", "tab:red"), ("DY", "tab:green"), ("DZ", "tab:blue")]:
+
+    for key, color in [("DX", "tab:red"), ("DY", "tab:green")]:
         if key in df.columns:
-            ax.plot(t, df[key].to_numpy(dtype=float), linewidth=1.2, label=key, color=color)
-    
+            ax.plot(t, df[key].to_numpy(dtype=float), linewidth=1.2, label=f"{key} (estimated)", color=color)
+    if "PLX" in df.columns:
+        ax.plot(t, df["PLX"].to_numpy(dtype=float), linewidth=1.0, label="PLX (measured)", color="tab:orange", alpha=0.8)
+    if "PLZ" in df.columns:
+        ax.plot(t, df["PLZ"].to_numpy(dtype=float), linewidth=1.0, label="PLZ (measured)", color="tab:blue", alpha=0.8)
+
     ax.axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
-    ax.set_ylabel("Estimated Force [N]")
+    ax.set_ylabel("Force [N]")
     ax.set_xlabel("Time [s]")
-    ax.set_title(f"{title} - Estimated Force (先読み 0秒, 全軸重ね合わせ)")
+    ax.set_title(f"{title} - Combined Force Overlay (DX, DY, PLX, PLZ)")
     ax.grid(True, alpha=0.3)
-    ax.legend(loc="best", ncol=3)
-    
+    ax.legend(loc="best", ncol=2)
+
     fig.tight_layout()
     fig.savefig(outdir / "estimated_force_combined.png", dpi=170)
     plt.close(fig)
 
 
 def plot_frequency_per_axis(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot estimated frequency for X and Y axes separately."""
+    """Plot per-axis frequency only when explicitly logged in the input CSV."""
     t = df["Time_s"].to_numpy(dtype=float)
-    
-    # Check available frequency columns
-    freq_cols = [col for col in df.columns if "EstFreq" in col or col == "F"]
-    if not freq_cols or "F" not in df.columns:
-        return  # Skip if no frequency data
-    
-    # Use F column if per-axis columns not available
+
+    x_col = "EstFreq_X_Hz" if "EstFreq_X_Hz" in df.columns else None
+    y_col = "EstFreq_Y_Hz" if "EstFreq_Y_Hz" in df.columns else None
+    if x_col is None and y_col is None:
+        return
+
     fig, ax = plt.subplots(figsize=(14, 6))
-    if "F" in df.columns:
-        ax.plot(t, df["F"].to_numpy(dtype=float), linewidth=1.2, label="F (stored in OBSV)", color="tab:purple")
-    
-    ax.axhline(0.45, color="green", linestyle="--", linewidth=1.0, alpha=0.7, label="Target 0.45Hz")
+    if x_col is not None:
+        ax.plot(t, df[x_col].to_numpy(dtype=float), linewidth=1.3, label="X-axis estimate", color="tab:red")
+    if y_col is not None:
+        ax.plot(t, df[y_col].to_numpy(dtype=float), linewidth=1.3, label="Y-axis estimate", color="tab:green")
+    ax.axhline(0.45, color="black", linestyle="--", linewidth=1.0, alpha=0.7, label="Target 0.45 Hz")
     ax.set_ylabel("Frequency [Hz]")
     ax.set_xlabel("Time [s]")
-    ax.set_title(f"{title} - Frequency Data (Note: Per-axis breakdown not in OBSV log)")
+    ax.set_title(f"{title} - Per-axis Frequency Estimates (logged)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best")
-    ax.set_ylim(0.0, 1.0)
-    
+    ax.set_ylim(0.0, 1.2)
+
     fig.tight_layout()
     fig.savefig(outdir / "frequency_per_axis_xy.png", dpi=170)
     plt.close(fig)
@@ -240,7 +255,8 @@ def generate_analysis_report(outdir: Path, csv_path: Path, metrics: Dict[str, fl
     report.append(f"## Artifacts\n")
     report.append(f"- `estimated_force_per_axis.png`: Estimated force per axis\n")
     report.append(f"- `estimated_force_combined.png`: Estimated force combined\n")
-    report.append(f"- `frequency_per_axis_xy.png`: Frequency estimates X/Y (separate)\n")
+    if (outdir / "frequency_per_axis_xy.png").exists():
+        report.append(f"- `frequency_per_axis_xy.png`: Per-axis frequency estimates (logged fields)\n")
     report.append(f"- `frequency_fused.png`: Fused frequency estimate\n")
     report.append(f"- `frequency_startup_anomaly.png`: Startup anomaly detail (zoomed)\n")
     report.append(f"- `state_evolution.png`: State variable evolution (D, V, C)\n")
@@ -280,7 +296,8 @@ def main() -> int:
     print(f"Generated figures:")
     print(f"  - estimated_force_per_axis.png")
     print(f"  - estimated_force_combined.png")
-    print(f"  - frequency_per_axis_xy.png")
+    if (outdir / "frequency_per_axis_xy.png").exists():
+        print(f"  - frequency_per_axis_xy.png")
     print(f"  - frequency_fused.png")
     print(f"  - frequency_startup_anomaly.png")
     print(f"  - state_evolution.png")

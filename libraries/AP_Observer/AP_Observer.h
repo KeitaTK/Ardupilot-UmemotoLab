@@ -220,7 +220,7 @@ private:
     static constexpr float    THRUST_OFFSET         = -0.9995f;
     static constexpr float    UAV_mass              = 1.4f;
     
-    static constexpr float    EKF_INIT_COVARIANCE   = 100.0f;
+    static constexpr float    EKF_INIT_COVARIANCE   = 10.0f;
     
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ

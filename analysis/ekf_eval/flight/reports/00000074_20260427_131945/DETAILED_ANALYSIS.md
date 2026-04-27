@@ -4,7 +4,7 @@
 
 - CSV: analysis/ekf_eval/flight/data/csv/00000074_obsv.csv
 
-- Generated: 2026-04-27T13:32:37.649757
+- Generated: 2026-04-27T14:21:33.498731
 
 
 ## State Variable Explanation
@@ -64,8 +64,6 @@ Likely causes of frequency noise:
 - `estimated_force_per_axis.png`: Estimated force per axis
 
 - `estimated_force_combined.png`: Estimated force combined
-
-- `frequency_per_axis_xy.png`: Frequency estimates X/Y (separate)
 
 - `frequency_fused.png`: Fused frequency estimate
 
