@@ -7681,7 +7681,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 obsv_count += 1
 
                 # Check required fields
-                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'DX', 'DY', 'DZ',
+                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'DX', 'DY',
                               'VX', 'VY', 'VZ', 'CX', 'CY', 'CZ', 'F', 'FX', 'FY', 'SW']:
                     if hasattr(m, field):
                         fields_found.add(field)

@@ -19,7 +19,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Gain for attitude correction based on external force estimation
     // @Range: 0.0 1.0
     // @User: Advanced
-    AP_GROUPINFO("CORR_GAIN", 0, AP_Observer, _correction_gain, 0.004f),
+    AP_GROUPINFO("CORR_GAIN", 0, AP_Observer, _correction_gain, 0.0f),
     
     // @Param: FILT_CUTOFF
     // @DisplayName: Observer Filter Cutoff Frequency
@@ -138,7 +138,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: EMA time constant used to estimate RMS energy [s]
     // @Range: 0.1 20.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_EN_TAU", 29, AP_Observer, _ekf_energy_tau_sec, 2.0f),
+    AP_GROUPINFO("EKF_EN_TAU", 29, AP_Observer, _ekf_energy_tau_sec, 4.0f),
 
     // @Param: EKF_FHOLD
     // @DisplayName: EKF Force Hold Threshold
@@ -201,7 +201,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Blend factor for injecting shared XY omega into each XY axis when not in hard mode
     // @Range: 0.0 1.0
     // @User: Advanced
-    AP_GROUPINFO("EKF_SH_BETA", 38, AP_Observer, _ekf_shared_blend_beta, 0.0f),
+    AP_GROUPINFO("EKF_SH_BETA", 38, AP_Observer, _ekf_shared_blend_beta, 0.5f),
 
     // @Param: EKF_SH_HWM
     // @DisplayName: EKF Shared Omega Hard-Mode Weight Min
@@ -1054,9 +1054,9 @@ void AP_Observer::Write_Observer_Log() {
     }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, DZ, VX, VY, VZ, CX, CY, CZ, F, FX, FY, SW
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,DZ,VX,VY,VZ,CX,CY,CZ,F,FX,FY,SW",
-                  "s----------------", "F----------------",
+    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, VX, VY, VZ, CX, CY, CZ, F, FX, FY, SW
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,VX,VY,VZ,CX,CY,CZ,F,FX,FY,SW",
+                  "s---------------", "F---------------",
                   "QffffffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
@@ -1064,7 +1064,6 @@ void AP_Observer::Write_Observer_Log() {
                   _payload_filtered.z,
                   ekf_state[0][0],      // d X軸
                   ekf_state[1][0],      // d Y軸
-                  ekf_state[2][0],      // d Z軸
                   ekf_state[0][1],      // d_dot X軸
                   ekf_state[1][1],      // d_dot Y軸
                   ekf_state[2][1],      // d_dot Z軸
