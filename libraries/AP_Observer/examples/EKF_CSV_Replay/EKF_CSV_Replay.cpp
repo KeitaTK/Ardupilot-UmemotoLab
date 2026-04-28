@@ -677,10 +677,7 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     observer.set_ekf_r_meas_for_replay(cfg.has_ekf_r_meas ? cfg.ekf_r_meas : 46.0f);
 
     // Keep replay behavior deterministic and aligned with historical baseline unless CLI overrides are added.
-    observer.set_ekf_switch_gate_enable_for_replay(true);
     observer.set_ekf_shared_blend_beta_for_replay(cfg.has_ekf_sh_beta ? cfg.ekf_sh_beta : 0.0f);
-    observer.set_ekf_reset_on_switch_for_replay(cfg.has_ekf_reset_on_switch ? (cfg.ekf_reset_on_switch != 0) : false);
-    observer.set_ekf_hold_omega_when_off_for_replay(cfg.has_ekf_hold_omega_when_off ? (cfg.ekf_hold_omega_when_off != 0) : false);
     observer.set_ekf_axis_mask_for_replay((uint8_t)MAX(0, cfg.has_ekf_axis_mask ? cfg.ekf_axis_mask : 3));
     observer.set_ekf_energy_gate_for_replay(
         cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true,
@@ -738,27 +735,22 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         
         const bool real_sw = (d.sw != 0);
         bool current_sw = real_sw;
-        bool estimation_sw = real_sw;
         if (cfg.sw_mode == "always-on") {
             current_sw = true;
-            estimation_sw = true;
         } else if (cfg.sw_mode == "always-off") {
             current_sw = false;
-            estimation_sw = false;
         }
         if (force_window) {
             const float switch_on_s = 20.0f;
             const float settle_delay_s = 10.0f;
             const float window_s = 10.0f;
             const float sample_catchup_s = 0.5f;
-            const float window_start_s = switch_on_s + settle_delay_s;
-            const float window_end_s = window_start_s + window_s + sample_catchup_s;
+            const float window_end_s = switch_on_s + settle_delay_s + window_s + sample_catchup_s;
 
             current_sw = (rel_time_s >= switch_on_s) && (rel_time_s < window_end_s);
-            estimation_sw = (rel_time_s >= window_start_s) && (rel_time_s < window_end_s);
         }
 
-        observer.set_freq_estimation_active(estimation_sw);
+
         
         Vector3f payload(d.plx, d.ply, d.plz);
         observer.force_frequency_estimation_update(payload);

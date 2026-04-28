@@ -154,26 +154,12 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_FREJ", 31, AP_Observer, _ekf_force_reject_min, 5.0f),
 
-    // @Param: EKF_SW_RST
-    // @DisplayName: EKF Reset On Switch Edge
-    // @Description: Reset frequency estimator when switch toggles OFF->ON
-    // @Values: 0:NoReset,1:Reset
-    // @User: Advanced
-    AP_GROUPINFO("EKF_SW_RST", 32, AP_Observer, _ekf_reset_on_switch, 0),
-
     // @Param: EKF_AX_MASK
     // @DisplayName: EKF Axis Fusion Mask
     // @Description: Bitmask for axes included in fused frequency estimate (bit0=X, bit1=Y, bit2=Z)
     // @Range: 0 7
     // @User: Advanced
     AP_GROUPINFO("EKF_AX_MASK", 33, AP_Observer, _ekf_axis_mask, 3),
-
-    // @Param: EKF_SW_HOLD
-    // @DisplayName: EKF Hold Omega When Switch Off
-    // @Description: Hold omega state when frequency estimation switch is OFF
-    // @Values: 0:Disabled,1:Enabled
-    // @User: Advanced
-    AP_GROUPINFO("EKF_SW_HOLD", 34, AP_Observer, _ekf_hold_omega_when_off, 0),
 
     // @Param: EKF_RB_EN
     // @DisplayName: EKF Robust Update Enable
@@ -209,13 +195,6 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 2.0
     // @User: Advanced
     AP_GROUPINFO("EKF_SH_HWM", 39, AP_Observer, _ekf_shared_hard_weight_min, 1.8f),
-
-    // @Param: EKF_SW_GATE
-    // @DisplayName: EKF Switch Gate Enable
-    // @Description: Enable switch gating for frequency estimation (0=always on, 1=use switch)
-    // @Values: 0:AlwaysOn,1:UseSwitch
-    // @User: Advanced
-    AP_GROUPINFO("EKF_SW_GATE", 41, AP_Observer, _ekf_switch_gate_enable, 1),
 
     // @Param: EKF_SH_NIS
     // @DisplayName: EKF Shared Omega Hard-Mode NIS Max
@@ -254,10 +233,6 @@ void AP_Observer::init() {
     // 離陸検知フラグ初期化
     _has_taken_off = false;
     
-    // 周波数推定制御初期化（RC Aux Function方式）
-    _freq_estimation_switch_state = false;  // 初期状態はOFF
-    _freq_estimation_active = false;
-    _freq_estimation_prev_switch = false;
     _freq_estimation_result = estimated_frequency;
 
     // 初期化完了メッセージは一旦コメントアウト
@@ -509,11 +484,10 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
                            (trusted_xy_count >= 2U) &&
                            (updated_xy_count >= 2U) &&
                            has_trusted_donor &&
-                           (max_nis_xy <= hard_nis_max) &&
-                           _freq_estimation_active;
+                           (max_nis_xy <= hard_nis_max);
     ekf_shared_hard_mode = hard_mode ? 1U : 0U;
 
-    const bool allow_shared_injection = shared_injection_enabled && _freq_estimation_active && has_trusted_donor;
+    const bool allow_shared_injection = shared_injection_enabled && has_trusted_donor;
     for (uint8_t axis = 0; axis < 2; axis++) {
         if (!is_axis_enabled_in_fusion(axis)) {
             continue;
@@ -587,18 +561,19 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     // 条件1: force_hold_omega - 低振幅時（omega固定）
     const bool force_hold_omega = force_abs <= force_hold_max;
     
-    // 条件2: switch_hold_omega - スイッチ OFF 時（predict-only）
-    const bool switch_hold_omega = (!_freq_estimation_active && _ekf_hold_omega_when_off.get() != 0);
-    
-    // 条件3: energy_hold_omega - エネルギーゲート OFF 時（predict-only）
+    // 条件2: energy_hold_omega - エネルギーゲート OFF 時
     const bool energy_hold_omega = !energy_gate_enabled;
     
     // 統合判定
-    const bool hold_omega = force_hold_omega || switch_hold_omega || energy_hold_omega;  // omega を固定
+    const bool hold_omega = force_hold_omega || energy_hold_omega;  // omega を固定
     ekf_axis_hold_omega[axis] = hold_omega ? 1U : 0U;
     ekf_axis_omega_updated[axis] = 0U;
-    // ゼロ注入で収束させるため、predict-only はスイッチOFF時に限定する。
-    const bool predict_only_hold = switch_hold_omega;  // 予測のみ（観測更新スキップ）
+
+    // ※以前はスイッチOFF時に predict-only (観測更新スキップ) を行っていましたが、
+    // 前進オイラー法による数値発散（1e5~1e6オーダーへの発散）の原因となるため廃止しました。
+    // また、観測スキップにより「エネルギーゲートOFF時に0を注入して収束させる」仕組みが
+    // バイパスされてしまう不具合もこれで解消されます。
+    const bool predict_only_hold = false;
     
     // 追加判定: force_reject - 高振幅時の周波数推定拒否
     //   トリガ：|force| >= force_reject_min（例：5.0 N）
@@ -611,8 +586,10 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float c = x[2];
 
     float x_pred[EKF_STATE_SIZE];
-    x_pred[0] = d + dt * d_dot;
+    // シンプレクティック・オイラー法（Symplectic Euler）を用いてエネルギー保存則を満たし、
+    // 長期的な予測での数値発散（前進オイラー法特有の爆発）を防ぐ。
     x_pred[1] = d_dot + dt * (-(omega * omega) * d);
+    x_pred[0] = d + dt * x_pred[1];
     x_pred[2] = c;
     x_pred[3] = omega;
 
@@ -650,10 +627,10 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float q_d = _ekf_q_d.get();
     const float q_ddot = _ekf_q_d_dot.get();
     const float q_c = _ekf_q_c.get();
-    const float q_omega_base = _freq_estimation_active ? _ekf_q_omega.get() : 0.0f;
-    const float q_omega = (_freq_estimation_active && !hold_omega && !force_reject)
+    const float q_omega_base = _ekf_q_omega.get();
+    const float q_omega = (!hold_omega && !force_reject)
         ? q_omega_base
-        : ((_freq_estimation_active && (hold_omega || force_reject)) ? MAX(q_omega_base, 1.0e-6f) : 0.0f);
+        : ((hold_omega || force_reject) ? MAX(q_omega_base, 1.0e-6f) : 0.0f);
     P_pred[0][0] += q_d;
     P_pred[1][1] += q_ddot;
     P_pred[2][2] += q_c;
@@ -901,35 +878,6 @@ void AP_Observer::update() {
         gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Takeoff detected, starting frequency estimation");
 #endif
     }
-    
-    const bool current_switch = _freq_estimation_switch_state;
-    const bool switch_gate_enabled = (_ekf_switch_gate_enable.get() != 0);
-
-    if (!switch_gate_enabled) {
-        _freq_estimation_active = true;
-        _freq_estimation_prev_switch = true;
-    } else {
-        if (current_switch && !_freq_estimation_prev_switch) {
-            _freq_estimation_active = true;
-            if (_ekf_reset_on_switch.get() == 1) {
-                reset_frequency_estimation();
-#if HAL_GCS_ENABLED
-                gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (Reset to %.3fHz)", (double)estimated_frequency);
-#endif
-            } else {
-                _freq_estimation_result = estimated_frequency;
-#if HAL_GCS_ENABLED
-                gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: ON (No reset, %.3fHz)", (double)estimated_frequency);
-#endif
-            }
-        } else if (!current_switch && _freq_estimation_prev_switch) {
-            _freq_estimation_active = false;
-#if HAL_GCS_ENABLED
-            gcs().send_text(MAV_SEVERITY_INFO, "EKF Freq Est: OFF (Holding %.3fHz)", (double)estimated_frequency);
-#endif
-        }
-        _freq_estimation_prev_switch = current_switch;
-    }
 
     const uint32_t now_ms = get_current_time_ms();
     float dt = 0.01f;
@@ -1073,35 +1021,10 @@ void AP_Observer::Write_Observer_Log() {
                   estimated_frequency,
                   ekf_state[0][3] / (2.0f * M_PI), // FX
                   ekf_state[1][3] / (2.0f * M_PI), // FY
-                  (uint8_t)(_freq_estimation_switch_state ? 1 : 0));  // SW: スイッチ状態
+                  (uint8_t)1);  // SW: 常にON
 #endif
 }
 
-// RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
-// RC8_OPTION=316 を推奨（デフォルト設定）
-void AP_Observer::set_freq_estimation_switch(bool enabled) {
-    _freq_estimation_switch_state = enabled;
-}
-
-void AP_Observer::set_freq_estimation_active(bool active) {
-    if (_ekf_switch_gate_enable.get() == 0) {
-        active = true;
-    }
-
-    if (active && !_freq_estimation_prev_switch) {
-        if (_ekf_reset_on_switch.get() == 1) {
-            reset_frequency_estimation();
-        } else {
-            _freq_estimation_result = estimated_frequency;
-        }
-    } else if (!active && _freq_estimation_prev_switch) {
-        _freq_estimation_result = estimated_frequency;
-    }
-
-    _freq_estimation_active = active;
-    _freq_estimation_switch_state = active;
-    _freq_estimation_prev_switch = active;
-}
 
 
 #ifdef AP_OBSERVER_REPLAY_TEST
@@ -1178,20 +1101,8 @@ void AP_Observer::set_ekf_force_thresholds_for_replay(float hold_max,
     _ekf_force_reject_min.set(MAX(_ekf_force_hold_max.get() + 1.0e-3f, reject_min));
 }
 
-void AP_Observer::set_ekf_reset_on_switch_for_replay(bool enabled) {
-    _ekf_reset_on_switch.set(enabled ? 1 : 0);
-}
-
 void AP_Observer::set_ekf_axis_mask_for_replay(uint8_t mask) {
     _ekf_axis_mask.set((int8_t)mask);
-}
-
-void AP_Observer::set_ekf_hold_omega_when_off_for_replay(bool enabled) {
-    _ekf_hold_omega_when_off.set(enabled ? 1 : 0);
-}
-
-void AP_Observer::set_ekf_switch_gate_enable_for_replay(bool enabled) {
-    _ekf_switch_gate_enable.set(enabled ? 1 : 0);
 }
 
 void AP_Observer::set_ekf_shared_blend_beta_for_replay(float beta) {

@@ -304,10 +304,8 @@ public:
         SCRIPTING_14 =       313,
         SCRIPTING_15 =       314,
         SCRIPTING_16 =       315,
-        OBSERVER_FREQ_EST =  316, // Observer frequency estimation ON/OFF
-
         // this must be higher than any aux function above
-        AUX_FUNCTION_MAX =   317,
+        AUX_FUNCTION_MAX =   316,
     };
 
     // auxiliary switch handling (n.b.: we store this as 2-bits!):

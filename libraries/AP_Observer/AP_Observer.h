@@ -32,12 +32,6 @@ public:
         return AP_HAL::millis() - last_update_ms;
     }
     
-    // RCスイッチ状態の設定（RC Aux Function経由で呼び出される）
-    void set_freq_estimation_switch(bool enabled);
-    
-    // RCチャンネル読み取り（旧方式・互換性のため）
-    bool read_freq_estimation_switch();
-
     // 状態ゲッター関数
     Vector3f get_harmonic_sin_coeff() const;
     Vector3f get_harmonic_cos_coeff() const;
@@ -54,7 +48,6 @@ public:
 // #ifdef AP_OBSERVER_REPLAY_TEST
     // リプレイテスト用
     void set_replay_time_ms(uint32_t ms) { _test_current_ms = ms; _replay_active = true; }
-    void set_freq_estimation_active(bool active);
     void force_frequency_estimation_update(const Vector3f& payload);
     void set_params_for_replay(float freq, float bw, float gain);
     void set_ekf_w_init_hz_for_replay(float freq_hz);
@@ -72,10 +65,7 @@ public:
                                         float tau_sec);
     void set_ekf_force_thresholds_for_replay(float hold_max,
                                              float reject_min);
-    void set_ekf_reset_on_switch_for_replay(bool enabled);
     void set_ekf_axis_mask_for_replay(uint8_t mask);
-    void set_ekf_hold_omega_when_off_for_replay(bool enabled);
-    void set_ekf_switch_gate_enable_for_replay(bool enabled);
     void set_ekf_shared_blend_beta_for_replay(float beta);
     void set_ekf_robust_update_for_replay(bool enabled,
                                           float nis_reject_scale);
@@ -165,16 +155,13 @@ private:
     AP_Float _ekf_energy_tau_sec;
     AP_Float _ekf_force_hold_max;
     AP_Float _ekf_force_reject_min;
-    AP_Int8  _ekf_reset_on_switch;
     AP_Int8  _ekf_axis_mask;
-    AP_Int8  _ekf_hold_omega_when_off;
     AP_Int8  _ekf_robust_update_enable;
     AP_Float _ekf_robust_nis_reject_scale;
     AP_Float _ekf_hold_weight;
     AP_Float _ekf_shared_blend_beta;
     AP_Float _ekf_shared_hard_weight_min;
     AP_Float _ekf_shared_hard_nis_max;
-    AP_Int8  _ekf_switch_gate_enable;
 
     // Estimator parameters
     AP_Float _prediction_time;
@@ -182,11 +169,6 @@ private:
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
     
-    // 周波数推定制御用（両方式サポート）
-    AP_Int8  _freq_estimation_rc_channel;  // 旧方式：チャンネル番号指定（0=無効、1-16=RC1-RC16）
-    volatile bool _freq_estimation_switch_state;     // 新方式：RC Aux Function経由
-    bool _combined_freq_est_switch;         // 統合されたスイッチ状態（新方式 OR 旧方式）
-
     float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
     // EKF関数
@@ -225,9 +207,6 @@ private:
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ
     
-    // 周波数推定制御用の変数
-    bool _freq_estimation_active = false;    // 現在推定中かどうか
-    bool _freq_estimation_prev_switch = false; // 前回のスイッチ状態
     float _freq_estimation_result = 0.0f;    // 推定周波数結果 [Hz]
 
     // ヘルパー関数

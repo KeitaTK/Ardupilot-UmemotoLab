@@ -7601,7 +7601,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_EKF_Q_W': 0.0005,
             'OBS_EKF_R_MEAS': 46.0,
             'OBS_EKF_EN_GAT': 1,
-            'OBS_EKF_SW_GATE': 1,
             'OBS_EKF_AX_MASK': 3,
             'OBS_EKF_RB_EN': 1,
         }
@@ -7647,7 +7646,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         try:
             self.set_parameters({
                 'LOG_DISARMED': 1,
-                'OBS_EKF_SW_GATE': 0,  # Always-on mode (no switch needed)
+                'LOG_DISARMED': 1,
             })
             self.reboot_sitl()
 
@@ -7730,114 +7729,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         finally:
             self.context_pop()
 
-    def TestObserverRCSwitchControl(self):
-        '''Test RC Aux Function 316 (OBSERVER_FREQ_EST) switch control'''
-        self.context_push()
-        try:
-            import numpy
 
-            self.set_parameters({
-                'RC8_OPTION': 316,
-                'OBS_EKF_SW_GATE': 1,  # Use switch
-                'LOG_DISARMED': 1,
-            })
-            self.set_rc(8, 1000)
-            self.reboot_sitl()
-
-            # Verify RC8_OPTION
-            rc8_option = self.get_parameter('RC8_OPTION')
-            if rc8_option != 316:
-                raise NotAchievedException(f"RC8_OPTION not set: {rc8_option}")
-
-            self.delay_sim_time(2)
-            self.set_rc(8, 1000)
-            self.delay_sim_time(1)
-
-            # Takeoff
-            self.progress("Taking off to 10m")
-            self.takeoff(10, mode='ALT_HOLD')
-            self.delay_sim_time(5)
-            self.set_rc(8, 1000)
-            self.delay_sim_time(3)
-
-            # Phase 1: RC8 OFF for 10s
-            self.progress("Phase 1: RC8 OFF for 10 seconds")
-            t1_start = self.get_sim_time()
-            self.delay_sim_time(10)
-            t1_end = self.get_sim_time()
-
-            # Phase 2: RC8 ON for 10s
-            self.progress("Phase 2: RC8 ON for 10 seconds")
-            self.set_rc(8, 2000)
-            self.delay_sim_time(2)
-            t2_start = self.get_sim_time()
-            self.delay_sim_time(10)
-            t2_end = self.get_sim_time()
-
-            # Phase 3: RC8 OFF for 10s
-            self.progress("Phase 3: RC8 OFF for 10 seconds")
-            self.set_rc(8, 1000)
-            self.delay_sim_time(2)
-            t3_start = self.get_sim_time()
-            self.delay_sim_time(10)
-            t3_end = self.get_sim_time()
-
-            # Land
-            self.do_RTL()
-            self.wait_disarmed()
-
-            # Analyze logs
-            self.progress("Analyzing OBSV SW field across phases...")
-
-            def get_sw_values(t_start, t_end):
-                ml = self.dfreader_for_current_onboard_log()
-                sw_vals = []
-                while True:
-                    m = ml.recv_match(
-                        type='OBSV', blocking=False,
-                        condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (
-                            t_start * 1.0e6, t_end * 1.0e6))
-                    if m is None:
-                        break
-                    if hasattr(m, 'SW'):
-                        sw_vals.append(m.SW)
-                return sw_vals
-
-            p1_sw = get_sw_values(t1_start, t1_end)
-            p2_sw = get_sw_values(t2_start, t2_end)
-            p3_sw = get_sw_values(t3_start, t3_end)
-
-            self.progress(f"Phase 1: {len(p1_sw)} samples, Phase 2: {len(p2_sw)} samples, Phase 3: {len(p3_sw)} samples")
-
-            # Phase 1: SW should be 0
-            if len(p1_sw) > 0:
-                sw1 = numpy.median(numpy.asarray(p1_sw))
-                self.progress(f"Phase 1 SW median: {sw1} (expected 0)")
-                if sw1 > 0.5:
-                    raise NotAchievedException("Phase 1: Switch should be OFF")
-            else:
-                self.progress("Warning: No OBSV in Phase 1")
-
-            # Phase 2: SW should be 1
-            if len(p2_sw) > 0:
-                sw2 = numpy.median(numpy.asarray(p2_sw))
-                self.progress(f"Phase 2 SW median: {sw2} (expected 1)")
-                if sw2 < 0.5:
-                    raise NotAchievedException("Phase 2: Switch should be ON")
-            else:
-                raise NotAchievedException("No OBSV messages in Phase 2")
-
-            # Phase 3: SW should be 0
-            if len(p3_sw) > 0:
-                sw3 = numpy.median(numpy.asarray(p3_sw))
-                self.progress(f"Phase 3 SW median: {sw3} (expected 0)")
-                if sw3 > 0.5:
-                    raise NotAchievedException("Phase 3: Switch should be OFF")
-
-            self.progress("PASS: ALL RC SWITCH CONTROL TESTS PASSED")
-        finally:
-            self.set_rc(8, 1000)
-            self.context_pop()
 
     def TestObserverEKFOperation(self):
         '''Test AP_Observer EKF operates correctly during flight'''
@@ -7846,7 +7738,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             import numpy
 
             self.set_parameters({
-                'OBS_EKF_SW_GATE': 0,  # Always-on
                 'LOG_DISARMED': 1,
             })
             self.reboot_sitl()
@@ -7912,113 +7803,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         finally:
             self.context_pop()
 
-    def TestObserverSwitchGate(self):
-        '''Test OBS_EKF_SW_GATE parameter: 0=always-on, 1=use switch'''
-        self.context_push()
-        try:
-            import numpy
 
-            # Test 1: SW_GATE=0 -> estimation should always be active (SW ignored)
-            self.progress("Test 1: SW_GATE=0 (always-on mode)")
-            self.set_parameters({
-                'OBS_EKF_SW_GATE': 0,
-                'RC8_OPTION': 316,
-                'LOG_DISARMED': 1,
-            })
-            self.set_rc(8, 1000)  # RC8 OFF
-            self.reboot_sitl()
-            self.delay_sim_time(2)
-            self.set_rc(8, 1000)  # Keep OFF
-
-            self.takeoff(10, mode='ALT_HOLD')
-            self.delay_sim_time(5)
-
-            t_start = self.get_sim_time()
-            self.delay_sim_time(10)
-            t_end = self.get_sim_time()
-
-            self.do_RTL()
-            self.wait_disarmed()
-
-            # In always-on mode, OBSV should be logged even with RC8 OFF
-            mlog = self.dfreader_for_current_onboard_log()
-            obsv_count = 0
-            while True:
-                m = mlog.recv_match(
-                    type='OBSV', blocking=False,
-                    condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (
-                        t_start * 1.0e6, t_end * 1.0e6))
-                if m is None:
-                    break
-                obsv_count += 1
-
-            self.progress(f"SW_GATE=0: Found {obsv_count} OBSV messages with RC8 OFF")
-            if obsv_count == 0:
-                raise NotAchievedException("SW_GATE=0: No OBSV messages - observer not running")
-
-            self.progress("PASS: SW_GATE=0 always-on mode works")
-
-            # Test 2: SW_GATE=1 -> verify switch control is respected
-            self.progress("Test 2: SW_GATE=1 (switch mode)")
-            self.set_parameters({
-                'OBS_EKF_SW_GATE': 1,
-            })
-            self.reboot_sitl()
-            self.delay_sim_time(2)
-            self.set_rc(8, 1000)
-
-            self.takeoff(10, mode='ALT_HOLD')
-            self.delay_sim_time(5)
-
-            # RC8 OFF phase
-            self.set_rc(8, 1000)
-            self.delay_sim_time(2)
-            t_off_start = self.get_sim_time()
-            self.delay_sim_time(8)
-            t_off_end = self.get_sim_time()
-
-            # RC8 ON phase
-            self.set_rc(8, 2000)
-            self.delay_sim_time(2)
-            t_on_start = self.get_sim_time()
-            self.delay_sim_time(8)
-            t_on_end = self.get_sim_time()
-
-            self.set_rc(8, 1000)
-            self.do_RTL()
-            self.wait_disarmed()
-
-            # Check SW field in both phases
-            def get_sw_median(ts, te):
-                ml = self.dfreader_for_current_onboard_log()
-                sw = []
-                while True:
-                    m = ml.recv_match(
-                        type='OBSV', blocking=False,
-                        condition="OBSV.TimeUS>%u and OBSV.TimeUS<%u" % (
-                            ts * 1.0e6, te * 1.0e6))
-                    if m is None:
-                        break
-                    if hasattr(m, 'SW'):
-                        sw.append(m.SW)
-                if len(sw) == 0:
-                    return None
-                return float(numpy.median(numpy.asarray(sw)))
-
-            sw_off = get_sw_median(t_off_start, t_off_end)
-            sw_on = get_sw_median(t_on_start, t_on_end)
-
-            self.progress(f"SW_GATE=1: OFF phase SW={sw_off}, ON phase SW={sw_on}")
-
-            if sw_off is not None and sw_off > 0.5:
-                raise NotAchievedException("SW_GATE=1: SW should be 0 when RC8 OFF")
-            if sw_on is not None and sw_on < 0.5:
-                raise NotAchievedException("SW_GATE=1: SW should be 1 when RC8 ON")
-
-            self.progress("PASS: ALL SWITCH GATE TESTS PASSED")
-        finally:
-            self.set_rc(8, 1000)
-            self.context_pop()
 
     def ParameterChecks(self):
         '''Test Arming Parameter Checks'''
@@ -14058,9 +13843,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         ret = ([
             self.TestObserverParameters,
             self.TestObserverLogging,
-            self.TestObserverRCSwitchControl,
             self.TestObserverEKFOperation,
-            self.TestObserverSwitchGate,
             self.MotorVibration,
             Test(self.DynamicNotches, attempts=4),
 

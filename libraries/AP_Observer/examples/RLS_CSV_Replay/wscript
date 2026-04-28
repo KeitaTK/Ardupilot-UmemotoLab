@@ -1,6 +1,6 @@
 def build(bld):
     bld.ap_example(
-        source='EKF_CSV_Replay.cpp',
+        source='RLS_CSV_Replay.cpp',
         use=[
             'ap',
             'AP_Observer',
