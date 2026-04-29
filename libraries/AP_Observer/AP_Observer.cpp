@@ -630,7 +630,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float q_omega_base = _ekf_q_omega.get();
     const float q_omega = (!hold_omega && !force_reject)
         ? q_omega_base
-        : ((hold_omega || force_reject) ? MAX(q_omega_base, 1.0e-6f) : 0.0f);
+        : 0.0f;
     P_pred[0][0] += q_d;
     P_pred[1][1] += q_ddot;
     P_pred[2][2] += q_c;
