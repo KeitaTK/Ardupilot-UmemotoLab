@@ -2,6 +2,53 @@
 
 最終更新: 2026-04
 
+## 0. カルマンフィルタ（KF）の概要
+
+本ドキュメントで用いる拡張カルマンフィルタ（EKF）を理解するために、まず線形カルマンフィルタの基本を説明する。
+
+### 0.1 状態空間モデル
+
+時刻 $k$ における状態ベクトル $\mathbf{x}_k$ は以下の線形システムに従う。
+
+$$
+\mathbf{x}_k = \mathbf{F}_k \mathbf{x}_{k-1} + \mathbf{B}_k \mathbf{u}_k + \mathbf{w}_k, \quad \mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_k)
+$$
+
+観測値 $\mathbf{z}_k$ は
+
+$$
+\mathbf{z}_k = \mathbf{H}_k \mathbf{x}_k + \mathbf{v}_k, \quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_k)
+$$
+
+### 0.2 予測ステップ（Time Update）
+
+事前状態推定と共分散を計算する。
+
+$$
+\hat{\mathbf{x}}_{k|k-1} = \mathbf{F}_k \hat{\mathbf{x}}_{k-1|k-1} + \mathbf{B}_k \mathbf{u}_k
+$$
+$$
+\mathbf{P}_{k|k-1} = \mathbf{F}_k \mathbf{P}_{k-1|k-1} \mathbf{F}_k^\top + \mathbf{Q}_k
+$$
+
+### 0.3 観測更新ステップ（Measurement Update）
+
+カルマンゲイン $\mathbf{K}_k$ を計算し、観測値で状態を補正する。
+
+$$
+\mathbf{K}_k = \mathbf{P}_{k|k-1} \mathbf{H}_k^\top (\mathbf{H}_k \mathbf{P}_{k|k-1} \mathbf{H}_k^\top + \mathbf{R}_k)^{-1}
+$$
+$$
+\hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k (\mathbf{z}_k - \mathbf{H}_k \hat{\mathbf{x}}_{k|k-1})
+$$
+$$
+\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}_k) \mathbf{P}_{k|k-1}
+$$
+
+### 0.4 拡張カルマンフィルタ（EKF）
+
+非線形システム $f(\cdot)$ および $h(\cdot)$ に対しては、ヤコビアン $\mathbf{F}_k = \partial f / \partial \mathbf{x}$ と $\mathbf{H}_k = \partial h / \partial \mathbf{x}$ を用いて上記の枠組みを適用する。本推定器ではシンプレクティック積分を用いた非線形状態方程式と線形観測モデルを持つEKFを実装している。
+
 ## 1. 目的
 
 本書は、AP_Observer の処理をプログラム実行順に従って、数式中心で記述する。
