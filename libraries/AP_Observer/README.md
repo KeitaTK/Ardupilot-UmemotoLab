@@ -4,25 +4,41 @@
 
 ## 0. カルマンフィルタ（KF）の概要
 
-本ドキュメントで用いる拡張カルマンフィルタ（EKF）を理解するために、まず線形カルマンフィルタの基本を説明する。
+本ドキュメントで用いる拡張カルマンフィルタ（EKF）を理解するために、まず線形カルマンフィルタの基本を説明する。  
+カルマンフィルタは、**予測モデル**と**観測**を逐次的に組み合わせて、ノイズの影響を抑えながらシステムの内部状態を推定する手法である。
 
 ### 0.1 状態空間モデル
 
-時刻 $k$ における状態ベクトル $\mathbf{x}_k$ は以下の線形システムに従う。
+システムは以下の２式で記述される。
+
+**状態方程式**（システムの時間発展を表す）：
 
 $$
 \mathbf{x}_k = \mathbf{F}_k \mathbf{x}_{k-1} + \mathbf{B}_k \mathbf{u}_k + \mathbf{w}_k, \quad \mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_k)
 $$
 
-観測値 $\mathbf{z}_k$ は
+**観測方程式**（状態から観測値への写像）：
 
 $$
 \mathbf{z}_k = \mathbf{H}_k \mathbf{x}_k + \mathbf{v}_k, \quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_k)
 $$
 
+各記号の意味：
+
+- $\mathbf{x}_k$ : 時刻 $k$ における**状態ベクトル**（例：位置・速度・バイアスなど）
+- $\mathbf{F}_k$ : **状態遷移行列**（前時刻の状態から現在の状態を予測する線形写像）
+- $\mathbf{B}_k$ : **制御入力行列**（制御入力 $\mathbf{u}_k$ の状態への影響を表す）
+- $\mathbf{u}_k$ : **制御入力**（既知の操作量）
+- $\mathbf{w}_k$ : **プロセスノイズ**（モデル化誤差や外乱、平均ゼロ・共分散 $\mathbf{Q}_k$ のガウス分布に従うと仮定）
+- $\mathbf{z}_k$ : **観測値ベクトル**（センサなどで得られる測定値）
+- $\mathbf{H}_k$ : **観測行列**（状態から観測空間への線形写像）
+- $\mathbf{v}_k$ : **観測ノイズ**（センサノイズ、平均ゼロ・共分散 $\mathbf{R}_k$ のガウス分布）
+
+ここで「$ \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_k)$」は「平均がゼロベクトル、共分散行列が $\mathbf{Q}_k$ の多変量正規分布に従う」ことを意味する。
+
 ### 0.2 予測ステップ（Time Update）
 
-事前状態推定と共分散を計算する。
+**Predict（予測）**：前の時刻の推定値を使って、現在の状態を「とりあえず」予測する。
 
 $$
 \hat{\mathbf{x}}_{k|k-1} = \mathbf{F}_k \hat{\mathbf{x}}_{k-1|k-1} + \mathbf{B}_k \mathbf{u}_k
@@ -31,23 +47,51 @@ $$
 \mathbf{P}_{k|k-1} = \mathbf{F}_k \mathbf{P}_{k-1|k-1} \mathbf{F}_k^\top + \mathbf{Q}_k
 $$
 
+記号の意味：
+
+- $\hat{\mathbf{x}}_{k|k-1}$ : 時刻 $k$ における**事前状態推定値**（まだ観測を使っていない）
+- $\mathbf{P}_{k|k-1}$ : **事前共分散行列**（推定の不確かさを表す）
+- $\mathbf{Q}_k$ : **プロセスノイズ共分散行列**（予測モデルの不確かさ）
+
 ### 0.3 観測更新ステップ（Measurement Update）
 
-カルマンゲイン $\mathbf{K}_k$ を計算し、観測値で状態を補正する。
+**Update（更新）**：実際の観測値を使って予測を修正する。
+
+まず、**カルマンゲイン** $\mathbf{K}_k$ を計算する。これは「予測と観測のどちらをどれだけ信頼するか」の重みを表す。
 
 $$
 \mathbf{K}_k = \mathbf{P}_{k|k-1} \mathbf{H}_k^\top (\mathbf{H}_k \mathbf{P}_{k|k-1} \mathbf{H}_k^\top + \mathbf{R}_k)^{-1}
 $$
+
+次に、観測値 $\mathbf{z}_k$ を使って状態を補正する。
+
 $$
 \hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k (\mathbf{z}_k - \mathbf{H}_k \hat{\mathbf{x}}_{k|k-1})
 $$
+
+最後に、共分散も更新する。
+
 $$
 \mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}_k) \mathbf{P}_{k|k-1}
 $$
 
+記号の意味：
+
+- $\mathbf{K}_k$ : **カルマンゲイン行列**（予測と観測の混合比率）
+- $(\mathbf{z}_k - \mathbf{H}_k \hat{\mathbf{x}}_{k|k-1})$ : **イノベーション**（「予測と実際の差」＝新しい情報）
+- $\hat{\mathbf{x}}_{k|k}$ : **事後状態推定値**（観測で修正後の状態）
+- $\mathbf{P}_{k|k}$ : **事後共分散行列**（更新後の不確かさ）
+
 ### 0.4 拡張カルマンフィルタ（EKF）
 
-非線形システム $f(\cdot)$ および $h(\cdot)$ に対しては、ヤコビアン $\mathbf{F}_k = \partial f / \partial \mathbf{x}$ と $\mathbf{H}_k = \partial h / \partial \mathbf{x}$ を用いて上記の枠組みを適用する。本推定器ではシンプレクティック積分を用いた非線形状態方程式と線形観測モデルを持つEKFを実装している。
+現実のシステムは多くの場合、**非線形**である。非線形システム $f(\cdot)$ および $h(\cdot)$ に対しては、**ヤコビアン**（偏微分行列）を使って線形近似を行う。
+
+$$
+\mathbf{F}_k = \frac{\partial f}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}_{k-1|k-1}}, \quad
+\mathbf{H}_k = \frac{\partial h}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}_{k|k-1}}
+$$
+
+これらを上記の線形カルマンフィルタの式にそのまま代入することで、非線形状態推定を実現する。本推定器ではシンプレクティック積分を用いた非線形状態方程式と線形観測モデルを持つEKFを実装している。
 
 ## 1. 目的
 
