@@ -2,6 +2,21 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-04-29: [Analysis/OBSV Report] 実機OBSVと replay の列混同を解消
+
+- Problem: 00000091 のレポートで、実機 OBSV の `PLX/PLY` と EKF 状態 `DX/DY` を比較すべきところを、replay 由来の `PRX/PRY` や `EstFreq_Hz` を前半に混ぜてしまい、MP の表示とも齟齬が出ていた。
+- Investigation:
+  1. `AP_Observer::Write_Observer_Log()` が `OBSV` に記録しているのは `PLX/PLY/PLZ`, `DX/DY/VX/VY/VZ`, `CX/CY/CZ`, `F`, `FX/FY`, `SW` であることを確認。
+  2. `analysis/ekf_eval/common/bin_to_obsv_csv.py` は replay-ready の最小列だけを抽出するため、`DX/DY` や `FX/FY` を前半評価に使うには不適切だった。
+  3. 実機 BIN を `DFReader` で直接展開すると、`DX/DY` と `F/FX/FY` が取得できることを確認した。
+- Attempted:
+  1. 00000091 のレポートを実機 OBSV 用の前半と replay 用の後半に完全分離。
+  2. `analysis/ekf_eval/flight/analyze_obsv_detailed.py` と `.github/FREQUENCY_FUSION_ANALYSIS.md` を修正し、前半は `PLX/PLY` 対 `DX/DY`、周波数は `F/FX/FY` を使うように明記。
+  3. `00000091` の report 図を実機 OBSV ベースで再生成。
+- Result:
+  - ✅ 前半レポートは実機 OBSV のみで構成され、replay 値は混入しなくなった。
+  - ✅ `DX` は force state、`F` は fused frequency であることを明示し、`PRX` を誤用しない運用に修正した。
+
 ### 2026-04-27: [Analysis/AP_Observer EKF] 実機BIN評価基盤の新設と00000074実ログ評価
 
 - Problem: 実機DataFlash BINを入力してAP_Observer EKFの挙動を定量評価し、既存リプレイ評価と分離された運用可能なレポート基盤が不足していた。

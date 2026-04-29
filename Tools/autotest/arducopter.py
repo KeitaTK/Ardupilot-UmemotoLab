@@ -7594,7 +7594,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
 
         # Verify key parameter defaults
         expected_defaults = {
-            'OBS_CORR_GAIN': 0.004,
+            'OBS_CORR_GAIN': 0.0,
             'OBS_FILT_CUTOFF': 20.0,
             'OBS_MAX_CORR_ANG': 0.5,
             'OBS_PRED_TIME': 0.01,
@@ -7680,8 +7680,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 obsv_count += 1
 
                 # Check required fields
-                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'DX', 'DY',
-                              'VX', 'VY', 'VZ', 'CX', 'CY', 'CZ', 'F', 'FX', 'FY', 'SW']:
+                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'PFY', 'PFZ', 'F', 'FX', 'FY', 'SW']:
                     if hasattr(m, field):
                         fields_found.add(field)
                         val = getattr(m, field)
@@ -7703,7 +7702,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 )
 
             # Check all expected fields exist
-            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'DX', 'F', 'FX', 'FY', 'SW'}
+            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'F', 'FX', 'FY', 'SW'}
             missing = expected_fields - fields_found
             if missing:
                 raise NotAchievedException(f"Missing OBSV fields: {missing}")
@@ -7758,7 +7757,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             self.progress("Checking EKF state in log...")
             mlog = self.dfreader_for_current_onboard_log()
 
-            dx_vals = []
+            pfx_vals = []
             freq_vals = []
             finite_ok = True
 
@@ -7769,22 +7768,22 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                         tstart * 1.0e6, tend * 1.0e6))
                 if m is None:
                     break
-                if hasattr(m, 'DX'):
-                    dx_vals.append(m.DX)
-                    if numpy.isnan(m.DX) or numpy.isinf(m.DX):
+                if hasattr(m, 'PFX'):
+                    pfx_vals.append(m.PFX)
+                    if numpy.isnan(m.PFX) or numpy.isinf(m.PFX):
                         finite_ok = False
                 if hasattr(m, 'F'):
                     freq_vals.append(m.F)
                     if numpy.isnan(m.F) or numpy.isinf(m.F):
                         finite_ok = False
 
-            if len(dx_vals) == 0:
+            if len(pfx_vals) == 0:
                 raise NotAchievedException("No EKF state data in log")
 
             if not finite_ok:
                 raise NotAchievedException("EKF state contains NaN/Inf")
 
-            self.progress(f"EKF samples: {len(dx_vals)}")
+            self.progress(f"EKF samples: {len(pfx_vals)}")
 
             # Frequency should be within EKF bounds
             if len(freq_vals) > 10:

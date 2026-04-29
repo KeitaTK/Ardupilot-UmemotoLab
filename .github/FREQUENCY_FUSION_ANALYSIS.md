@@ -301,13 +301,21 @@ weight[axis] = w_nis * w_innov * w_energy;
 
 ### 4.1 メトリクス追加（plot_replay_results.py）
 
-現在はX軸（PLX/PRX）のみを可視化。以下を追加：
+リプレイは replay 専用の比較に限定する。実機飛行の前半レポートでは PRX/PRY を使わず、OBSV の実測列 `PLX/PLY` と EKF 状態 `DX/DY`、周波数 `F/FX/FY` を分離して扱う。
+
+前半の軸対応は以下に固定する。
+- `PLX` / `PLY`: EKF に入る前の実機外力入力
+- `DX` / `DY`: EKF 内部の force state
+- `F`: 融合周波数
+- `FX` / `FY`: 軸別周波数
+
+replay では必要に応じて `PRX/PRY` を使うが、これは再構成値であり実機 OBSV の force state ではない。
 
 ```python
 # 複数軸のFrequencyデータを統合評価
-freq_x = df['EstFreq_X']  # X軸周波数
-freq_y = df['EstFreq_Y']  # Y軸周波数
-freq_fused = df['EstFreq_Fused']  # 統合結果
+freq_x = df['EstFreq_X_Hz']  # X軸周波数
+freq_y = df['EstFreq_Y_Hz']  # Y軸周波数
+freq_fused = df['EstFreq_Hz']  # 統合結果
 
 metrics = {
     'freq_x_mae': MAE(freq_x - target_hz),
@@ -324,10 +332,11 @@ metrics = {
 
 ```cpp
 // OBSV ログに以下を追加
-// EstFreq_X, EstFreq_Y, EstFreq_Z  - 個別軸周波数
-// EstFreq_Fused                     - 統合周波数
-// NIS_X, NIS_Y, NIS_Z               - 各軸NIS値
-// Weight_X, Weight_Y, Weight_Z      - 各軸重み（統合方法②用）
+// PLX/PLY                          - EKF に入る前の実機外力入力
+// DX/DY                            - EKF の force state
+// F                                - 融合周波数
+// FX/FY                            - 軸別周波数
+// NOTE: これらは前半の実機レポートで使用し、PRX/PRY は replay 専用にする。
 ```
 
 ### 4.3 比較実験

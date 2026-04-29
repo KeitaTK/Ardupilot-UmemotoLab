@@ -21,29 +21,46 @@ def read_obsv_csv(csv_path: Path) -> pd.DataFrame:
     return df
 
 
-def plot_estimated_force_all_axes(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot requested overlays: DX with PLX, and DY with PLZ."""
+def compute_filtered_force(df: pd.DataFrame, prediction_time_s: float) -> pd.DataFrame:
+    """Reconstruct the post-EKF force used by AP_Observer."""
+    filtered = pd.DataFrame(index=df.index)
+    for axis in ("X", "Y", "Z"):
+        d_col = f"D{axis}"
+        if d_col not in df.columns:
+            continue
+        v_col = f"V{axis}"
+        c_col = f"C{axis}"
+        d = df[d_col].astype(float)
+        v = df[v_col].astype(float) if v_col in df.columns else 0.0
+        c = df[c_col].astype(float) if c_col in df.columns else 0.0
+        filtered[f"PF{axis}"] = d + prediction_time_s * v + c
+    return filtered
+
+
+def plot_estimated_force_all_axes(df: pd.DataFrame, outdir: Path, title: str, prediction_time_s: float) -> None:
+    """Plot pre-EKF input force against reconstructed post-EKF force."""
     t = df["Time_s"].to_numpy(dtype=float)
+    filtered = compute_filtered_force(df, prediction_time_s)
 
     fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
 
-    if "DX" in df.columns:
-        axes[0].plot(t, df["DX"].to_numpy(dtype=float), linewidth=1.2, label="DX (estimated)", color="tab:red")
+    if "PFX" in filtered.columns:
+        axes[0].plot(t, filtered["PFX"].to_numpy(dtype=float), linewidth=1.2, label=f"post-EKF filtered force X (dt={prediction_time_s:.3f}s)", color="tab:red")
     if "PLX" in df.columns:
         axes[0].plot(t, df["PLX"].to_numpy(dtype=float), linewidth=1.0, label="PLX (measured)", color="tab:orange", alpha=0.85)
     axes[0].axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
     axes[0].set_ylabel("Force [N]")
-    axes[0].set_title(f"{title} - Force Overlay: DX and PLX")
+    axes[0].set_title(f"{title} - Force Overlay: pre-EKF PLX vs post-EKF filtered force X")
     axes[0].grid(True, alpha=0.3)
     axes[0].legend(loc="best")
 
-    if "DY" in df.columns:
-        axes[1].plot(t, df["DY"].to_numpy(dtype=float), linewidth=1.2, label="DY (estimated)", color="tab:green")
-    if "PLZ" in df.columns:
-        axes[1].plot(t, df["PLZ"].to_numpy(dtype=float), linewidth=1.0, label="PLZ (measured)", color="tab:blue", alpha=0.85)
+    if "PFY" in filtered.columns:
+        axes[1].plot(t, filtered["PFY"].to_numpy(dtype=float), linewidth=1.2, label=f"post-EKF filtered force Y (dt={prediction_time_s:.3f}s)", color="tab:green")
+    if "PLY" in df.columns:
+        axes[1].plot(t, df["PLY"].to_numpy(dtype=float), linewidth=1.0, label="PLY (measured)", color="tab:blue", alpha=0.85)
     axes[1].axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
     axes[1].set_ylabel("Force [N]")
-    axes[1].set_title(f"{title} - Force Overlay: DY and PLZ")
+    axes[1].set_title(f"{title} - Force Overlay: pre-EKF PLY vs post-EKF filtered force Y")
     axes[1].grid(True, alpha=0.3)
     axes[1].legend(loc="best")
 
@@ -53,24 +70,25 @@ def plot_estimated_force_all_axes(df: pd.DataFrame, outdir: Path, title: str) ->
     plt.close(fig)
 
 
-def plot_estimated_force_combined(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot combined force view without DZ to avoid scale domination by divergence."""
+def plot_estimated_force_combined(df: pd.DataFrame, outdir: Path, title: str, prediction_time_s: float) -> None:
+    """Plot combined force view for XY only; do not mix in replay-only PRX/PRY."""
     t = df["Time_s"].to_numpy(dtype=float)
+    filtered = compute_filtered_force(df, prediction_time_s)
 
     fig, ax = plt.subplots(figsize=(14, 6))
 
-    for key, color in [("DX", "tab:red"), ("DY", "tab:green")]:
-        if key in df.columns:
-            ax.plot(t, df[key].to_numpy(dtype=float), linewidth=1.2, label=f"{key} (estimated)", color=color)
+    for key, color in [("PFX", "tab:red"), ("PFY", "tab:green")]:
+        if key in filtered.columns:
+            ax.plot(t, filtered[key].to_numpy(dtype=float), linewidth=1.2, label=f"{key} (reconstructed, dt={prediction_time_s:.3f}s)", color=color)
     if "PLX" in df.columns:
         ax.plot(t, df["PLX"].to_numpy(dtype=float), linewidth=1.0, label="PLX (measured)", color="tab:orange", alpha=0.8)
-    if "PLZ" in df.columns:
-        ax.plot(t, df["PLZ"].to_numpy(dtype=float), linewidth=1.0, label="PLZ (measured)", color="tab:blue", alpha=0.8)
+    if "PLY" in df.columns:
+        ax.plot(t, df["PLY"].to_numpy(dtype=float), linewidth=1.0, label="PLY (measured)", color="tab:blue", alpha=0.8)
 
     ax.axhline(0, color="black", linestyle="--", linewidth=0.5, alpha=0.5)
     ax.set_ylabel("Force [N]")
     ax.set_xlabel("Time [s]")
-    ax.set_title(f"{title} - Combined Force Overlay (DX, DY, PLX, PLZ)")
+    ax.set_title(f"{title} - Combined Force Overlay (pre-EKF vs post-EKF filtered force)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best", ncol=2)
 
@@ -80,12 +98,16 @@ def plot_estimated_force_combined(df: pd.DataFrame, outdir: Path, title: str) ->
 
 
 def plot_frequency_per_axis(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot per-axis frequency only when explicitly logged in the input CSV."""
+    """Plot per-axis and fused frequency from the actual OBSV log.
+
+    F is the fused frequency, FX/FY are the per-axis frequencies.
+    """
     t = df["Time_s"].to_numpy(dtype=float)
 
     x_col = "EstFreq_X_Hz" if "EstFreq_X_Hz" in df.columns else None
     y_col = "EstFreq_Y_Hz" if "EstFreq_Y_Hz" in df.columns else None
-    if x_col is None and y_col is None:
+    f_col = "F" if "F" in df.columns else None
+    if x_col is None and y_col is None and f_col is None:
         return
 
     fig, ax = plt.subplots(figsize=(14, 6))
@@ -93,10 +115,11 @@ def plot_frequency_per_axis(df: pd.DataFrame, outdir: Path, title: str) -> None:
         ax.plot(t, df[x_col].to_numpy(dtype=float), linewidth=1.3, label="X-axis estimate", color="tab:red")
     if y_col is not None:
         ax.plot(t, df[y_col].to_numpy(dtype=float), linewidth=1.3, label="Y-axis estimate", color="tab:green")
-    ax.axhline(0.45, color="black", linestyle="--", linewidth=1.0, alpha=0.7, label="Target 0.45 Hz")
+    if f_col is not None:
+        ax.plot(t, df[f_col].to_numpy(dtype=float), linewidth=1.2, label="F (fused)", color="tab:purple")
     ax.set_ylabel("Frequency [Hz]")
     ax.set_xlabel("Time [s]")
-    ax.set_title(f"{title} - Per-axis Frequency Estimates (logged)")
+    ax.set_title(f"{title} - Per-axis Frequency Estimates and Fused Result (logged)")
     ax.grid(True, alpha=0.3)
     ax.legend(loc="best")
     ax.set_ylim(0.0, 1.2)
@@ -107,7 +130,7 @@ def plot_frequency_per_axis(df: pd.DataFrame, outdir: Path, title: str) -> None:
 
 
 def plot_frequency_fused(df: pd.DataFrame, outdir: Path, title: str) -> None:
-    """Plot fused estimated frequency."""
+    """Plot fused estimated frequency only when a separate view is useful."""
     t = df["Time_s"].to_numpy(dtype=float)
     
     fig, ax = plt.subplots(figsize=(14, 6))
@@ -214,29 +237,28 @@ def plot_state_evolution(df: pd.DataFrame, outdir: Path, title: str) -> None:
     plt.close(fig)
 
 
-def generate_analysis_report(outdir: Path, csv_path: Path, metrics: Dict[str, float]) -> None:
+def generate_analysis_report(outdir: Path, csv_path: Path, metrics: Dict[str, float], prediction_time_s: float) -> None:
     """Generate a detailed analysis report."""
     report = []
     report.append(f"# Detailed OBSV Analysis Report\n")
     report.append(f"## Input\n")
     report.append(f"- CSV: {csv_path}\n")
+    report.append(f"- Prediction time used for reconstructed post-EKF force: {prediction_time_s:.3f} s\n")
     report.append(f"- Generated: {datetime.now().isoformat()}\n\n")
     
     report.append(f"## State Variable Explanation\n")
-    report.append(f"- **D (DX, DY, DZ)**: EKF-estimated external force (prediction time = 0). Estimated payload force per axis [N].\n")
-    report.append(f"- **V (VX, VY, VZ)**: Rate of estimated force (time derivative of D). Force change rate [N/s].\n")
-    report.append(f"- **C (CX, CY, CZ)**: DC offset component. Static external force component [N].\n")
+    report.append(f"- **PLX / PLY**: EKF に入る前の実機外力入力。\n")
+    report.append(f"- **Post-EKF filtered force**: D + pred_dt * V + C, matching AP_Observer::get_predicted_force().\n")
+    report.append(f"- **V (VX, VY, VZ)**: Rate state of D [N/s].\n")
+    report.append(f"- **C (CX, CY, CZ)**: DC offset state [N].\n")
     report.append(f"- **F**: Fused frequency estimate [Hz]. Integrated result of per-axis frequency estimates.\n")
+    report.append(f"- **FX / FY**: X/Y axis frequency estimates [Hz]. Use these together with F in the frequency figure.\n")
     report.append(f"- **SW**: Switch state (always 0 = OFF in this flight log).\n\n")
-    
-    report.append(f"## 発散分析（Z軸状態が飛行終了後に発散）\n")
-    report.append(f"OBSDivergence Analysis (Z-axis state diverges after flight)\n")
-    report.append(f"The Z-axis statistics show extreme scales (1e23 order) for DZ, VZ, CZ:\n")
-    report.append(f"- DZ_max: 1.717e+23\n")
-    report.append(f"- VZ_max: 8.836e+23\n")
-    report.append(f"- CZ_std: 0.0 (fixed)\n")
-    report.append(f"This indicates Z-axis EKF state breakdown due to uninitialization or axis mask mismatch.\n")
-    report.append(f"XY axes appear normal, so check per-axis initialization and update logic consistency.\n\n")
+
+    report.append(f"## 軸別 force/state の読み方\n")
+    report.append(f"- 前半の実機比較は、PLX / PLY と post-EKF filtered force を並べて見る。\n")
+    report.append(f"- replay は後半の検証だけに使い、PRX / PRY は実機 OBSV の前半には混ぜない。\n")
+    report.append(f"- F / FX / FY は周波数推定。F は融合結果、FX/FY は軸別推定。\n\n")
     
     report.append(f"## Frequency Estimation Anomaly Analysis (~35s)\n")
     if metrics:
@@ -253,10 +275,10 @@ def generate_analysis_report(outdir: Path, csv_path: Path, metrics: Dict[str, fl
         report.append(f"Detailed analysis skipped (insufficient data).\n")
     
     report.append(f"## Artifacts\n")
-    report.append(f"- `estimated_force_per_axis.png`: Estimated force per axis\n")
-    report.append(f"- `estimated_force_combined.png`: Estimated force combined\n")
+    report.append(f"- `estimated_force_per_axis.png`: Estimated force per axis (PLX/PLY vs reconstructed post-EKF force)\n")
+    report.append(f"- `estimated_force_combined.png`: Estimated force combined (XY only, pre/post EKF)\n")
     if (outdir / "frequency_per_axis_xy.png").exists():
-        report.append(f"- `frequency_per_axis_xy.png`: Per-axis frequency estimates (logged fields)\n")
+        report.append(f"- `frequency_per_axis_xy.png`: Per-axis and fused frequency estimates (F/FX/FY)\n")
     report.append(f"- `frequency_fused.png`: Fused frequency estimate\n")
     report.append(f"- `frequency_startup_anomaly.png`: Startup anomaly detail (zoomed)\n")
     report.append(f"- `state_evolution.png`: State variable evolution (D, V, C)\n")
@@ -279,14 +301,15 @@ def main() -> int:
     df = read_obsv_csv(csv_path)
     tag = csv_path.stem
 
-    plot_estimated_force_all_axes(df, outdir, tag)
-    plot_estimated_force_combined(df, outdir, tag)
+    prediction_time_s = 0.01
+    plot_estimated_force_all_axes(df, outdir, tag, prediction_time_s)
+    plot_estimated_force_combined(df, outdir, tag, prediction_time_s)
     plot_frequency_per_axis(df, outdir, tag)
     plot_frequency_fused(df, outdir, tag)
     plot_state_evolution(df, outdir, tag)
 
     metrics = analyze_startup_anomaly(df, outdir, tag, args.startup_window_start, args.startup_window_end)
-    generate_analysis_report(outdir, csv_path, metrics)
+    generate_analysis_report(outdir, csv_path, metrics, prediction_time_s)
 
     summary = {"metrics": metrics}
     (outdir / "analysis_summary.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")

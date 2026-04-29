@@ -1,16 +1,5 @@
-#define AP_OBSERVER_REPLAY_TEST 1
+// #define AP_OBSERVER_REPLAY_TEST 1
 #include "AP_Observer.h"
-
-#ifdef AP_OBSERVER_REPLAY_TEST
-// Mock GCS to prevent segfaults in standalone test
-class MockGCS {
-public:
-    void send_text(int severity, const char *fmt, ...) const {}
-};
-static MockGCS _mock_gcs;
-// Force substitution of gcs() calls to use our mock
-#define gcs() _mock_gcs
-#endif
 
 // パラメータテーブル定義
 const AP_Param::GroupInfo AP_Observer::var_info[] = {
@@ -1002,25 +991,22 @@ void AP_Observer::Write_Observer_Log() {
     }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, DX, DY, VX, VY, VZ, CX, CY, CZ, F, FX, FY, SW
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,DX,DY,VX,VY,VZ,CX,CY,CZ,F,FX,FY,SW",
-                  "s---------------", "F---------------",
-                  "QffffffffffffffB",
+    // OBSV: TimeUS, PLX, PLY, PLZ, PFX, PFY, PFZ, F, FX, FY, SW
+    // PFX/PFY/PFZ = predicted force from EKF (replaces D, V, C internal states)
+    const Vector3f predicted = get_predicted_force();
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,PFX,PFY,PFZ,F,FX,FY,SW",
+                  "s----------", "F----------",
+                  "QfffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
                   _payload_filtered.z,
-                  ekf_state[0][0],      // d X軸
-                  ekf_state[1][0],      // d Y軸
-                  ekf_state[0][1],      // d_dot X軸
-                  ekf_state[1][1],      // d_dot Y軸
-                  ekf_state[2][1],      // d_dot Z軸
-                  ekf_state[0][2],      // c X軸
-                  ekf_state[1][2],      // c Y軸
-                  ekf_state[2][2],      // c Z軸
-                  estimated_frequency,
-                  ekf_state[0][3] / (2.0f * M_PI), // FX
-                  ekf_state[1][3] / (2.0f * M_PI), // FY
+                  predicted.x,           // PFX: predicted force X
+                  predicted.y,           // PFY: predicted force Y
+                  predicted.z,           // PFZ: predicted force Z
+                  estimated_frequency,   // F: fused frequency
+                  ekf_state[0][3] / (2.0f * M_PI), // FX: X-axis frequency
+                  ekf_state[1][3] / (2.0f * M_PI), // FY: Y-axis frequency
                   (uint8_t)1);  // SW: 常にON
 #endif
 }

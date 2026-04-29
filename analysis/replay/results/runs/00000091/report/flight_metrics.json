@@ -1,0 +1,16 @@
+{
+  "samples":7937.0,
+  "duration_s":79.360378,
+  "plx_dx_corr":0.016427848,
+  "plx_dx_rmse":2.4172065992,
+  "ply_dy_corr":null,
+  "ply_dy_rmse":0.8330221496,
+  "F_mean":0.7164629813,
+  "FX_mean":0.715172596,
+  "FY_mean":0.7165235436,
+  "F_std":0.0987514681,
+  "FX_std":0.0984773639,
+  "FY_std":0.0984180386,
+  "DY_std":0.0,
+  "DY_unique":1.0
+}
