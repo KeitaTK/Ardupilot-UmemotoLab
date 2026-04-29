@@ -247,6 +247,65 @@ $$
 ![周波数融合の定量的効果](docs/figures/shared_frequency_fusion.png)
 *図：X軸単体、Y軸単体、および共有融合後の周波数推定。融合によりノイズが低減され、安定した 0.45Hz 付近の推定が実現されている。*
 
+### 6.3 共有周波数還元の詳細ロジック（実装ベース）
+
+本実装での共有周波数還元は、以下の流れで行われる。
+
+#### 6.3.1 融合重みの再定義
+
+各軸の「信頼度」は、以下の4要素の積で定義される（既出の `compute_axis_fusion_weight()` に対応）。
+
+$$
+w_i = w_i^{\mathrm{nis}} \cdot w_i^{\mathrm{eng}} \cdot w_i^{\mathrm{amp}} \cdot w_i^{\mathrm{hold}}
+$$
+
+| 重み | 意味 | 計算式 |
+|------|------|--------|
+| $w_i^{\mathrm{nis}}$ | NISが小さいほど高信頼 | $w^{\mathrm{nis}} = \dfrac{1}{1 + (\nu_i / \nu_{\max})^2}$ , $\nu_i$=NIS |
+| $w_i^{\mathrm{eng}}$ | エネルギーゲートONなら $1.0$、OFFなら `EKF_HOLD_W` | |
+| $w_i^{\mathrm{amp}}$ | 振幅が `EKF_FHOLD` を超えるまで滑らかに増加し、`EKF_FREJ` 以上で $0$ | 詳細はコード参照 |
+| $w_i^{\mathrm{hold}}$ | 周波数更新が許可されていれば $1.0$、凍結中なら `EKF_HOLD_W` | |
+
+この $w_i$ を用いて、**重み付き平均** および **寄与元 (donor) 平均** が計算される。
+
+#### 6.3.2 共有周波数 $\bar\omega$ の決定
+
+まず、信頼できる軸（`is_axis_frequency_trusted() == true`）かつ $w_i \ge w_{\min,\mathrm{donor}}$ である軸のみから、重み付き平均で **donor平均** を計算する：
+
+$$
+\bar\omega_{\mathrm{donor}} = \frac{\sum_{i\in\mathcal{D}} w_i\,\omega_i}{\sum_{i\in\mathcal{D}} w_i},
+\qquad
+\mathcal{D} = \{i\; |\; \text{trusted} \land w_i \ge 0.10 \}
+$$
+
+もし donor が存在しない場合は、全XY軸の重み付き平均 $\bar\omega_{\mathrm{all}}$ を使う。最終的な共有周波数 $\bar\omega$ は、donor平均（または全平均）を $[\omega_{\min}, \omega_{\max}]$ に制限した値である。
+
+#### 6.3.3 各軸への注入（還元）処理
+
+注入は、**信頼度が低い軸**（= `ekf_axis_trusted[axis]==0` ）かつ**周波数更新が凍結中**（= `ekf_axis_omega_updated[axis]==0` または `ekf_axis_hold_omega[axis]!=0`）の軸に対してのみ行われる。これにより、良好な軸の推定を壊さない。
+
+**ハードモード**（`hard_mode == true`）：  
+条件：両軸の信頼度・重みが高く、かつNISが小さい（`shared_weight_sum >= EKF_SH_HWM`, `trusted_xy_count >= 2`, `updated_xy_count >= 2`, `max_nis_xy <= EKF_SH_NIS`）。  
+この時、低信頼軸の $\omega_i$ を $\bar\omega$ で直接置換する：
+
+$$
+\omega_i \leftarrow \bar\omega
+$$
+
+**通常ブレンド（ソフトモード）**：  
+ハードモード不成立時、パラメータ $\beta$（`EKF_SH_BETA`）を用いて以下のようにブレンドする：
+
+$$
+\omega_i \leftarrow (1-\beta)\,\omega_i + \beta\,\bar\omega
+$$
+
+$\beta$ は0～1の定数で、値を大きくするほど共有周波数に強く引き寄せられる。
+
+#### 6.3.4 設計意図と注意点
+
+- **目的**: 単一軸の推定がノイズや外れ値で劣化しても、他軸の良好な情報で補完し、全体的な周波数推定の安定性を向上させる。
+- **注意点**: この機構は複雑さを増し、特にハードモードの閾値調整が不適切だと**軸間の推定が相互に干渉し、かえってノイズ源となる可能性がある**。そのため、将来的にはこの共有融合機能を削除し、各軸独立の推定に戻すことも検討されている。
+
 ## 7. 予測外力の生成
 
 補正に使用する外力は現在値ではなく、予測ホライズン $\Delta p$ 先で評価する。Z軸に対する計算も予測式のみ適用する。
