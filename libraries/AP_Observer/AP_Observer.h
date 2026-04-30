@@ -63,16 +63,11 @@ public:
                                         float rms_on,
                                         float rms_off,
                                         float tau_sec);
-    void set_ekf_force_thresholds_for_replay(float hold_max,
-                                             float reject_min);
-    void set_ekf_axis_mask_for_replay(uint8_t mask);
-    void set_ekf_shared_blend_beta_for_replay(float beta);
     void set_ekf_robust_update_for_replay(bool enabled,
                                           float nis_reject_scale);
-    float get_estimated_frequency() const { return estimated_frequency; }
     float get_axis_estimated_frequency(uint8_t axis) const {
         if (axis >= EKF_NUM_AXES) {
-            return estimated_frequency;  // Invalid axis, return public value
+            return 0.0f;  // Invalid axis
         }
         return ekf_state[axis][3] / (2.0f * M_PI);  // Convert rad/s to Hz
     }
@@ -127,16 +122,9 @@ private:
     float ekf_axis_amp[OBS_NUM_AXES];
     float ekf_axis_force_abs[OBS_NUM_AXES];
     float ekf_axis_energy_power[OBS_NUM_AXES];
-    float ekf_axis_weight[OBS_NUM_AXES];
-    uint8_t ekf_axis_trusted[OBS_NUM_AXES];
     uint8_t ekf_axis_energy_trusted[OBS_NUM_AXES];
     uint8_t ekf_axis_omega_updated[OBS_NUM_AXES];
     uint8_t ekf_axis_hold_omega[OBS_NUM_AXES];
-
-    // XY shared omega fusion state
-    float ekf_shared_omega_rad = 0.0f;
-    float ekf_shared_weight_sum = 0.0f;
-    uint8_t ekf_shared_hard_mode = 0U;
 
     // EKF tuning parameters
     AP_Float _ekf_q_d;
@@ -155,29 +143,20 @@ private:
     AP_Float _ekf_energy_tau_sec;
     AP_Float _ekf_force_hold_max;
     AP_Float _ekf_force_reject_min;
-    AP_Int8  _ekf_axis_mask;
     AP_Int8  _ekf_robust_update_enable;
     AP_Float _ekf_robust_nis_reject_scale;
-    AP_Float _ekf_hold_weight;
-    AP_Float _ekf_shared_blend_beta;
-    AP_Float _ekf_shared_hard_weight_min;
-    AP_Float _ekf_shared_hard_nis_max;
 
     // Estimator parameters
     AP_Float _prediction_time;
     
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
-    
-    float estimated_frequency;                         // 推定周波数 [Hz]（ログ用）
 
     // EKF関数
     void ekf_init();
     void ekf_update(const Vector3f& y_output, float dt);
     void ekf_update_axis(uint8_t axis, float measurement, float dt);
     bool is_axis_frequency_trusted(uint8_t axis) const;
-    bool is_axis_enabled_in_fusion(uint8_t axis) const;
-    float compute_axis_fusion_weight(uint8_t axis) const;
     Vector3f predict_force_from_state(const float state[EKF_STATE_SIZE], float dt) const;
     void update_prediction_cache();  // 予測用キャッシュ更新
     
@@ -206,8 +185,6 @@ private:
     
     // 離陸検知用の変数
     bool _has_taken_off = false;  // 離陸済みフラグ
-    
-    float _freq_estimation_result = 0.0f;    // 推定周波数結果 [Hz]
 
     // ヘルパー関数
     bool is_taking_off();  // 離陸検知

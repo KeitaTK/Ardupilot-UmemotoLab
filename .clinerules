@@ -9,7 +9,7 @@
 | ファイル | 役割 |
 |---------|------|
 | `libraries/AP_Observer/AP_Observer.h` | クラス宣言、パラメータ定義、状態変数 |
-| `libraries/AP_Observer/AP_Observer.cpp` | EKF実装、ロバスト化分岐、周波数融合 |
+| `libraries/AP_Observer/AP_Observer.cpp` | EKF実装、ロバスト化分岐、各軸独立周波数推定 |
 | `libraries/AP_Observer/README.md` | アルゴリズムの数理ドキュメント（設計意図含む） |
 
 ## アーキテクチャ上の重要な意思決定
@@ -24,10 +24,9 @@
 2. **振幅ベースゲート**: 瞬間物理量の絶対値判定、低振幅/高振幅の異常検出
 3. **NIS判定**: 統計的予測乖離評価、適応的R制御
 
-### 共有周波数融合 (現在の実装)
-- XY軸間で周波数を weighted average + donor 平均で共有
-- ハードモード（直接置換）とソフトモード（Betaブレンド）
-- **将来的には削除し各軸独立推定に戻す方向**
+### 周波数推定
+- X軸/Y軸は独立して周波数を推定（軸間の共有周波数融合は行わない）
+- Z軸はEKF更新をスキップ
 
 ## コーディング規約
 
@@ -70,17 +69,51 @@ source venv/bin/activate
 
 **重要**: Pixhawk6Cビルドは常に `./waf distclean` からのクリーンビルドを通すこと。差分ビルドは禁止。
 
-### オートテスト（基本的に簡易版）
-```bash
-# 簡易テスト（デフォルト）
-source venv/bin/activate
-./Tools/autotest/autotest.py --no-clean --skip-extra-hardware build.ArduCopter
+### オートテスト（三段階テスト + CIパイプライン）
 
-# フルテスト（明示的に指定した場合のみ）
-./Tools/autotest/autotest.py --no-clean build.ArduCopter
+コード変更後は以下のワークフローに従うこと：
+
+```bash
+# ==========================================
+# Step 1: Lite テスト（Observer 3テストのみ、~1-2分）
+# ==========================================
+# 起動確認 + パラメータチェック + ログ確認 + EKF動作確認
+./run_autotest_lite.sh
+
+# 失敗した場合 → デバッグ → 再実行
+
+# ==========================================
+# Step 2: Medium テスト（Observer + 基本機能、~2分）
+# ==========================================
+# Observer(3) + ArmFeatures + Parameters + ModeLoiter + MotorFail
+./run_autotest_medium.sh
+
+# 失敗した場合 → デバッグ → 再実行
+
+# ==========================================
+# Step 3: Pixhawk6C クリーンビルド
+# ==========================================
+./build_pixhawk6c.sh
+
+# ==========================================
+# Full テスト（test.CopterTests2b、~15分）は必要な場合のみ手動実行
+# ==========================================
+# Observer + MotorVibration + FFT + GPS 等を含む完全テスト
+# ./run_autotest_full.sh
+
+# ==========================================
+# CI パイプライン（一括実行）
+# ==========================================
+# Lite テスト + Medium テスト + Pixhawk6C クリーンビルド
+./run_ci_pipeline.sh
 ```
 
-**重要**: オートテストは基本的に `--skip-extra-hardware` 付きの簡易版で実行すること。フルテストは明示的に指示があった場合のみ。
+**重要**:
+- コード変更後は必ず Lite → Medium → Pixhawk6C の順でテストを通すこと
+- Lite テストが通らない場合は Medium テストに進まない
+- Medium テストが通らない場合は Pixhawk6C ビルドに進まない
+- Full テスト（test.CopterTests2b）は大規模変更時のみ手動実行
+- `--speedup` の最適値は実験により決定すること（Lite: 1000, Medium: 1000, Full: 2000、Ryzen 9950X + 128GB RAM 環境で安定動作確認済み）
 
 ## ドキュメント管理
 

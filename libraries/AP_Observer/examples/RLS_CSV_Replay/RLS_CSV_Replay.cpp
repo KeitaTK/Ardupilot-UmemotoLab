@@ -170,8 +170,6 @@ struct ReplayRunConfig {
     float ekf_force_reject_min = 5.0f;
     bool has_ekf_reset_on_switch = false;
     int ekf_reset_on_switch = 0;
-    bool has_ekf_axis_mask = false;
-    int ekf_axis_mask = 3;
     bool has_ekf_hold_omega_when_off = false;
     int ekf_hold_omega_when_off = 0;
     bool has_ekf_robust_update = false;
@@ -272,18 +270,6 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-reset-on-switch=", 22) == 0) {
             cfg.ekf_reset_on_switch = (int)strtol(arg + 22, nullptr, 10);
             cfg.has_ekf_reset_on_switch = true;
-            continue;
-        }
-
-        if ((strcmp(arg, "--ekf-axis-mask") == 0) && next != nullptr) {
-            cfg.ekf_axis_mask = (int)strtol(next, nullptr, 10);
-            cfg.has_ekf_axis_mask = true;
-            i++;
-            continue;
-        }
-        if (strncmp(arg, "--ekf-axis-mask=", 16) == 0) {
-            cfg.ekf_axis_mask = (int)strtol(arg + 16, nullptr, 10);
-            cfg.has_ekf_axis_mask = true;
             continue;
         }
 
@@ -669,9 +655,6 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     if (cfg.has_ekf_pred_time) {
         if (AP_Param::set_by_name("PRED_TIME", cfg.ekf_pred_time)) {}
     }
-    if (cfg.has_ekf_axis_mask) {
-        observer.set_ekf_axis_mask_for_replay((uint8_t)MAX(0, cfg.ekf_axis_mask));
-    }
     if (cfg.has_ekf_robust_update || cfg.has_ekf_robust_nis_reject) {
         observer.set_ekf_robust_update_for_replay(
             cfg.has_ekf_robust_update ? (cfg.ekf_robust_update != 0) : false,
@@ -759,9 +742,9 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         const int sw_out = current_sw ? 1 : 0;
         const int real_sw_out = real_sw ? 1 : 0;
         char buf[320];
-        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
+        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
             rel_time_s, d.plx, d.ply, d.plz,
-            observer.get_estimated_frequency(),
+            observer.get_axis_estimated_frequency(0),  // X axis frequency
             sw_out, real_sw_out,
             D.x, D.y, V.x, V.y, C.x, C.y, P.x, P.y,
             d.real_freq, d.real_phase);

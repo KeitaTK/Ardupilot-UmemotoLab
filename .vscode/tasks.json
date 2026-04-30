@@ -35,12 +35,12 @@
             }
         },
         {
-            "label": "Build & Test Mandatory SITL",
+            "label": "Build & Test Lite (Observer)",
             "type": "shell",
             "command": "bash",
             "args": [
                 "-c",
-                "source ${workspaceFolder}/venv/bin/activate && cd ${workspaceFolder} && ./waf configure --board sitl && ./waf copter && timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.ModeLoiter || exit 1 && timeout 300 Tools/autotest/autotest.py --no-clean --speedup=300 build.Copter test.Copter.GCSFailsafe || exit 1"
+                "source ${workspaceFolder}/venv/bin/activate && cd ${workspaceFolder} && ./waf configure --board sitl && ./waf build --target bin/arducopter && timeout 600 Tools/autotest/autotest.py --no-clean --speedup=1000 build.Copter test.CopterObserver"
             ],
             "group": {
                 "kind": "test",
@@ -55,6 +55,83 @@
                 "clear": false
             },
             "isBackground": false
+        },
+        {
+            "label": "Build & Test Medium (Observer + Core)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source ${workspaceFolder}/venv/bin/activate && cd ${workspaceFolder} && ./waf configure --board sitl && ./waf build --target bin/arducopter && timeout 300 Tools/autotest/autotest.py --no-clean --speedup=1000 build.Copter test.CopterMedium"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": false
+        },
+        {
+            "label": "Build & Test Full (tests2b)",
+            "type": "shell",
+            "command": "bash",
+            "args": [
+                "-c",
+                "source ${workspaceFolder}/venv/bin/activate && cd ${workspaceFolder} && ./waf configure --board sitl && ./waf build --target bin/arducopter && timeout 1200 Tools/autotest/autotest.py --no-clean --speedup=2000 build.Copter test.CopterTests2b"
+            ],
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": false
+        },
+        {
+            "label": "CI Pipeline (Lite → Medium → Pixhawk6C)",
+            "type": "shell",
+            "command": "${workspaceFolder}/run_ci_pipeline.sh",
+            "group": {
+                "kind": "test",
+                "isDefault": false
+            },
+            "presentation": {
+                "echo": true,
+                "reveal": "always",
+                "focus": true,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false
+            },
+            "isBackground": false,
+            "problemMatcher": {
+                "pattern": {
+                    "regexp": "^(.*):(\\d+):(\\d+):\\s+(error|warning):\\s+(.*)$",
+                    "file": 1,
+                    "line": 2,
+                    "column": 3,
+                    "severity": 4,
+                    "message": 5
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "^\\[1/4\\].*",
+                    "endsPattern": "^ AP_Observer CI Pipeline COMPLETE"
+                }
+            }
         }
     ]
 }

@@ -264,6 +264,8 @@ def should_run_step(step):
 
 __bin_names = {
     "Copter": "arducopter",
+    "CopterObserver": "arducopter",
+    "CopterMedium": "arducopter",
     "CopterTests1a": "arducopter",
     "CopterTests1b": "arducopter",
     "CopterTests1c": "arducopter",
@@ -343,6 +345,8 @@ def find_specific_test_to_run(step):
 tester_class_map = {
     "test.Blimp": blimp.AutoTestBlimp,
     "test.Copter": arducopter.AutoTestCopter,
+    "test.CopterMedium": arducopter.AutoTestCopterTestsMedium, # ~2min
+    "test.CopterObserver": arducopter.AutoTestCopterTestsObserver, # ~1-2min
     "test.CopterTests1a": arducopter.AutoTestCopterTests1a, # 8m43s
     "test.CopterTests1b": arducopter.AutoTestCopterTests1b, # 8m5s
     "test.CopterTests1c": arducopter.AutoTestCopterTests1c, # 5m17s
@@ -1099,6 +1103,9 @@ if __name__ == "__main__":
     ]
 
     moresteps = [
+        'test.CopterMedium',
+        'test.CopterObserver',
+
         'test.CopterTests1a',
         'test.CopterTests1b',
         'test.CopterTests1c',
@@ -1133,6 +1140,9 @@ if __name__ == "__main__":
         "drive.balancebot": "test.BalanceBot",
         "fly.CopterAVC": "test.Helicopter",
         "test.AntennaTracker": "test.Tracker",
+        "fly.ArduCopterMedium": "test.CopterMedium",
+        "fly.ArduCopterObserver": "test.CopterObserver",
+
         "fly.ArduCopterTests1a": "test.CopterTests1a",
         "fly.ArduCopterTests1b": "test.CopterTests1b",
         "fly.ArduCopterTests1c": "test.CopterTests1c",

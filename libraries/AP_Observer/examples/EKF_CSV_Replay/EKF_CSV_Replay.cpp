@@ -170,16 +170,12 @@ struct ReplayRunConfig {
     float ekf_force_reject_min = 5.0f;
     bool has_ekf_reset_on_switch = false;
     int ekf_reset_on_switch = 0;
-    bool has_ekf_axis_mask = false;
-    int ekf_axis_mask = 3;
     bool has_ekf_hold_omega_when_off = false;
     int ekf_hold_omega_when_off = 0;
     bool has_ekf_robust_update = false;
     int ekf_robust_update = 0;
     bool has_ekf_robust_nis_reject = false;
     float ekf_robust_nis_reject = 3.0f;
-    bool has_ekf_sh_beta = false;
-    float ekf_sh_beta = 0.0f;
 };
 
 static bool parse_replay_args(ReplayRunConfig& cfg) {
@@ -276,18 +272,6 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-reset-on-switch=", 22) == 0) {
             cfg.ekf_reset_on_switch = (int)strtol(arg + 22, nullptr, 10);
             cfg.has_ekf_reset_on_switch = true;
-            continue;
-        }
-
-        if ((strcmp(arg, "--ekf-axis-mask") == 0) && next != nullptr) {
-            cfg.ekf_axis_mask = (int)strtol(next, nullptr, 10);
-            cfg.has_ekf_axis_mask = true;
-            i++;
-            continue;
-        }
-        if (strncmp(arg, "--ekf-axis-mask=", 16) == 0) {
-            cfg.ekf_axis_mask = (int)strtol(arg + 16, nullptr, 10);
-            cfg.has_ekf_axis_mask = true;
             continue;
         }
 
@@ -676,9 +660,6 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     observer.set_ekf_q_w_for_replay(cfg.has_ekf_q_w ? cfg.ekf_q_w : 0.0005f);
     observer.set_ekf_r_meas_for_replay(cfg.has_ekf_r_meas ? cfg.ekf_r_meas : 46.0f);
 
-    // Keep replay behavior deterministic and aligned with historical baseline unless CLI overrides are added.
-    observer.set_ekf_shared_blend_beta_for_replay(cfg.has_ekf_sh_beta ? cfg.ekf_sh_beta : 0.0f);
-    observer.set_ekf_axis_mask_for_replay((uint8_t)MAX(0, cfg.has_ekf_axis_mask ? cfg.ekf_axis_mask : 3));
     observer.set_ekf_energy_gate_for_replay(
         cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true,
         cfg.has_ekf_energy_rms_on ? cfg.ekf_energy_rms_on : 0.20f,
@@ -763,11 +744,11 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         const int sw_out = current_sw ? 1 : 0;
         const int real_sw_out = real_sw ? 1 : 0;
         char buf[400];
-        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f", 
+        snprintf(buf, sizeof(buf), "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%d,%d,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f",
             rel_time_s, d.plx, d.ply, d.plz,
-            observer.get_estimated_frequency(),
             observer.get_axis_estimated_frequency(0),  // X axis frequency
             observer.get_axis_estimated_frequency(1),  // Y axis frequency
+            0.0f,  // F field removed, kept for column alignment
             sw_out, real_sw_out,
             D.x, D.y, V.x, V.y, C.x, C.y, P.x, P.y,
             d.real_freq, d.real_phase);

@@ -7601,7 +7601,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_EKF_Q_W': 0.0005,
             'OBS_EKF_R_MEAS': 46.0,
             'OBS_EKF_EN_GAT': 1,
-            'OBS_EKF_AX_MASK': 3,
             'OBS_EKF_RB_EN': 1,
         }
 
@@ -7680,15 +7679,15 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 obsv_count += 1
 
                 # Check required fields
-                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'PFY', 'PFZ', 'F', 'FX', 'FY', 'SW']:
+                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'PFY', 'PFZ', 'FX', 'FY', 'SW']:
                     if hasattr(m, field):
                         fields_found.add(field)
                         val = getattr(m, field)
                         if isinstance(val, float) and (numpy.isnan(val) or numpy.isinf(val)):
                             has_nan = True
 
-                if hasattr(m, 'F'):
-                    freq_values.append(m.F)
+                if hasattr(m, 'FX'):
+                    freq_values.append(m.FX)
 
             self.progress(f"Found {obsv_count} OBSV messages")
             self.progress(f"Fields found: {sorted(fields_found)}")
@@ -7702,7 +7701,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 )
 
             # Check all expected fields exist
-            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'F', 'FX', 'FY', 'SW'}
+            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'FX', 'FY', 'SW'}
             missing = expected_fields - fields_found
             if missing:
                 raise NotAchievedException(f"Missing OBSV fields: {missing}")
@@ -7710,18 +7709,18 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             if has_nan:
                 raise NotAchievedException("OBSV log contains NaN/Inf values")
 
-            # Check frequency is within valid range
+            # Check X-axis frequency is within valid range
             if len(freq_values) > 0:
                 freq_arr = numpy.asarray(freq_values)
                 freq_median = float(numpy.median(freq_arr))
                 freq_min = float(numpy.min(freq_arr))
                 freq_max = float(numpy.max(freq_arr))
-                self.progress(f"Frequency: median={freq_median:.4f}, min={freq_min:.4f}, max={freq_max:.4f} Hz")
+                self.progress(f"X-axis Frequency: median={freq_median:.4f}, min={freq_min:.4f}, max={freq_max:.4f} Hz")
 
                 # EKF_W_MIN=2.1991 rad/s -> 0.35 Hz, EKF_W_MAX=5.7180 rad/s -> 0.91 Hz
                 if freq_median < 0.30 or freq_median > 1.0:
                     raise NotAchievedException(
-                        f"Frequency out of valid range: {freq_median:.4f} Hz"
+                        f"X-axis frequency out of valid range: {freq_median:.4f} Hz"
                     )
 
             self.progress("PASS: ALL OBSERVER LOGGING TESTS PASSED")
@@ -7772,9 +7771,9 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                     pfx_vals.append(m.PFX)
                     if numpy.isnan(m.PFX) or numpy.isinf(m.PFX):
                         finite_ok = False
-                if hasattr(m, 'F'):
-                    freq_vals.append(m.F)
-                    if numpy.isnan(m.F) or numpy.isinf(m.F):
+                if hasattr(m, 'FX'):
+                    freq_vals.append(m.FX)
+                    if numpy.isnan(m.FX) or numpy.isinf(m.FX):
                         finite_ok = False
 
             if len(pfx_vals) == 0:
@@ -7790,12 +7789,12 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 freq_arr = numpy.asarray(freq_vals)
                 f_median = float(numpy.median(freq_arr))
                 f_std = float(numpy.std(freq_arr))
-                self.progress(f"EKF frequency: {f_median:.4f} +/- {f_std:.4f} Hz")
+                self.progress(f"EKF X-axis frequency: {f_median:.4f} +/- {f_std:.4f} Hz")
 
                 # Should be within OBS_EKF_W_MIN/MAX range (0.35-0.91 Hz)
                 if f_median < 0.30 or f_median > 1.0:
                     raise NotAchievedException(
-                        f"EKF frequency out of range: {f_median:.4f} Hz"
+                        f"EKF X-axis frequency out of range: {f_median:.4f} Hz"
                     )
 
             self.progress("PASS: ALL EKF OPERATION TESTS PASSED")
@@ -14091,3 +14090,29 @@ class AutoTestBattCAN(AutoTestCopter):
 
     def tests(self):
         return self.testcanbatt()
+
+
+class AutoTestCopterTestsMedium(AutoTestCopter):
+    '''Observer + core functionality tests - for medium autotest workflow (~2min)'''
+    def tests(self):
+        return [
+            # Observer tests
+            self.TestObserverParameters,
+            self.TestObserverLogging,
+            self.TestObserverEKFOperation,
+            # Core functionality tests
+            self.ArmFeatures,
+            self.Parameters,
+            self.ModeLoiter,
+            self.MotorFail,
+        ]
+
+
+class AutoTestCopterTestsObserver(AutoTestCopter):
+    '''Observer tests only - for lite autotest workflow'''
+    def tests(self):
+        return [
+            self.TestObserverParameters,
+            self.TestObserverLogging,
+            self.TestObserverEKFOperation,
+        ]
