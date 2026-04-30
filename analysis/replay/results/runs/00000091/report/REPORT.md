@@ -76,3 +76,35 @@
 - `PRX` と `EstFreq_Hz` は replay 専用であり、前半の実機解析には混ぜていない。
 - よって、以前のレポートの混乱は logging writer そのものより、解析層で実機 OBSV と replay 出力を混同したことが原因だった。
 - 再発防止として、解析スクリプト側も post-EKF filtered force を明示し、前半の説明順を pre-EKF → post-EKF に入れ替えた。
+
+## 4. 00000093.BIN の確認手順
+
+00000093.BIN が「直接 PRX で記録」されているかどうかを確認するには、以下のコマンドを Ubuntu 上で実行してください。
+
+### 4.1 メッセージ一覧の取得
+```bash
+mavlogdump --plist 00000093.BIN
+```
+
+### 4.2 実際のデータ行の例（OBSV メッセージがある場合）
+```bash
+mavlogdump --types=OBSV --master=00000093.BIN --format=csv 2>/dev/null | head -6
+```
+もし OBSV 以外のメッセージタイプが含まれている場合は、`--types=` の値を適宜変更してください。
+
+### 4.3 環境情報の確認
+```bash
+# Ubuntu バージョン
+lsb_release -a
+
+# Python バージョン
+python3 --version
+
+# 仮想環境の有無
+# (必要に応じて source venv/bin/activate など)
+
+# 必要なライブラリのインストール状況
+pip list | grep -E "pymavlink|pandas|matplotlib|numpy"
+```
+
+これらの情報が得られれば、正確なパースコードと図付きレポートを自動生成する Python スクリプトを提示できます。
