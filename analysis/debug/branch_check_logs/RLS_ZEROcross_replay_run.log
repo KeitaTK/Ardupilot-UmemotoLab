@@ -1,0 +1,11 @@
+Starting sketch 'UNKNOWN'
+Starting SITL input
+Read 13358 records from analysis/replay/data/00000434.csv.
+Running 00000434 (zero-cross)...
+Finished: analysis/replay/results/00000434_zero_cross.csv
+Read 12989 records from analysis/replay/data/00000443.csv.
+Running 00000443 (standard)...
+Finished: analysis/replay/results/00000443_result.csv
+Read 15332 records from analysis/replay/data/00000444.csv.
+Running 00000444 (standard)...
+Finished: analysis/replay/results/00000444_result.csv

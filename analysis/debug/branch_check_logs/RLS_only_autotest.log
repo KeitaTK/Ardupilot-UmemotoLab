@@ -1,0 +1,539 @@
+Setting top to                           : /home/memoto/Ardupilot-UmemotoLab 
+Setting out to                           : /home/memoto/Ardupilot-UmemotoLab/build 
+Autoconfiguration                        : enabled 
+Checking for program 'python'            : /home/memoto/Ardupilot-UmemotoLab/venv/bin/python3 
+Checking for python version >= 3.6.9     : 3.12.3 
+Setting board to                         : sitl 
+Using toolchain                          : native 
+Checking for 'g++' (C++ compiler)        : /usr/lib/ccache/g++ 
+Checking for 'gcc' (C compiler)          : /usr/lib/ccache/gcc 
+Checking for c flags '-MMD'              : yes 
+Checking for cxx flags '-MMD'            : yes 
+CXX Compiler                             : g++ 13.3.0 
+Checking for need to link with librt     : not necessary 
+Checking for feenableexcept              : yes 
+Enabling -Werror                         : no 
+Enabled OpenDroneID                      : no 
+Enabled firmware ID checking             : no 
+GPS Debug Logging                        : no 
+Enabled custom controller                : yes 
+Checking for HAVE_CMATH_ISFINITE         : yes 
+Checking for HAVE_CMATH_ISINF            : yes 
+Checking for HAVE_CMATH_ISNAN            : yes 
+Checking for NEED_CMATH_ISFINITE_STD_NAMESPACE : yes 
+Checking for NEED_CMATH_ISINF_STD_NAMESPACE    : yes 
+Checking for NEED_CMATH_ISNAN_STD_NAMESPACE    : yes 
+Checking for header endian.h                   : yes 
+Checking for header byteswap.h                 : yes 
+Checking for HAVE_MEMRCHR                      : yes 
+Configured VSCode Intellisense:                : no 
+DC_DSDL compiler in                            : /home/memoto/Ardupilot-UmemotoLab/modules/DroneCAN/dronecan_dsdlc 
+Source is git repository                       : yes 
+Update submodules                              : yes 
+Checking for program 'git'                     : /usr/bin/git 
+Littlefs                                       : disabled 
+Checking for program 'size'                    : /usr/bin/size 
+Benchmarks                                     : disabled 
+Unit tests                                     : enabled 
+Scripting                                      : maybe 
+Scripting runtime checks                       : enabled 
+Debug build                                    : enabled 
+VS Code launch                                 : disabled 
+Coverage build                                 : disabled 
+Force 32-bit build                             : disabled 
+Checking for program 'rsync'                   : /usr/bin/rsync 
+Removing target_list file /home/memoto/Ardupilot-UmemotoLab/build/sitl/target_list
+'configure' finished successfully (0.973s)
+Waf: Entering directory `/home/memoto/Ardupilot-UmemotoLab/build/sitl'
+Embedding file locations.txt:Tools/autotest/locations.txt
+Embedding file models/Callisto.json:Tools/autotest/models/Callisto.json
+Embedding file models/freestyle.json:Tools/autotest/models/freestyle.json
+Embedding file models/plane-3d.parm:Tools/autotest/models/plane-3d.parm
+Embedding file models/plane.parm:Tools/autotest/models/plane.parm
+Embedding file models/skywalker_2013.json:Tools/autotest/models/skywalker_2013.json
+Embedding file models/xplane_heli.json:Tools/autotest/models/xplane_heli.json
+Embedding file models/xplane_plane.json:Tools/autotest/models/xplane_plane.json
+[11/12] Creating build/sitl/ap_version.h
+No target_list file found, creating
+Generating compile_commands.json
+Build commands will be stored in build/sitl/compile_commands.json
+Generating compile_commands.json
+Build commands will be stored in build/sitl/compile_commands.json
+[  14/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl_Multi.cpp
+[  15/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl_Heli.cpp
+[  16/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl_TS.cpp
+[  17/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl_Sub.cpp
+[  18/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl_Logging.cpp
+[  19/1375] Compiling libraries/AC_AttitudeControl/AC_PosControl_Logging.cpp
+[  20/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl_Multi_6DoF.cpp
+[  21/1375] Compiling libraries/AC_AutoTune/AC_AutoTune_Multi.cpp
+[  22/1375] Compiling libraries/AC_AutoTune/AC_AutoTune_Heli.cpp
+[  25/1375] Compiling libraries/AC_Autorotation/AC_Autorotation.cpp
+[  27/1375] Compiling libraries/AC_Avoidance/AC_Avoidance_Logging.cpp
+[  30/1375] Compiling libraries/AC_CustomControl/AC_CustomControl_PID.cpp
+[  31/1375] Compiling libraries/AC_CustomControl/AC_CustomControl_Empty.cpp
+[  32/1375] Compiling libraries/AC_CustomControl/AC_CustomControl.cpp
+[  51/1375] Compiling libraries/AC_WPNav/AC_WPNav_OA.cpp
+[  52/1375] Compiling libraries/AC_WPNav/AC_WPNav.cpp
+[  53/1375] Compiling libraries/AC_WPNav/AC_Circle.cpp
+[  61/1375] Compiling libraries/AP_AHRS/AP_AHRS_Logging.cpp
+[  65/1375] Compiling libraries/AP_AdvancedFailsafe/AP_AdvancedFailsafe.cpp
+[ 136/1375] Compiling libraries/AP_Button/AP_Button.cpp
+[ 143/1375] Compiling libraries/AP_Camera/AP_RunCam.cpp
+[ 154/1375] Compiling libraries/AP_Camera/AP_Camera.cpp
+[ 168/1375] Compiling libraries/AP_Compass/Compass_learn.cpp
+[ 207/1375] Compiling libraries/AP_DroneCAN/AP_DroneCAN.cpp
+[ 212/1375] Compiling libraries/AP_EFI/AP_EFI_Serial_Hirth.cpp
+[ 216/1375] Compiling libraries/AP_EFI/AP_EFI_Loweheiser.cpp
+[ 242/1375] Compiling libraries/AP_Frsky_Telem/AP_Frsky_Telem.cpp
+[ 249/1375] Compiling libraries/AP_Frsky_Telem/AP_Frsky_MAVliteMsgHandler.cpp
+[ 272/1375] Compiling libraries/AP_Generator/AP_Generator_RichenPower.cpp
+[ 274/1375] Compiling libraries/AP_Generator/AP_Generator_Loweheiser.cpp
+[ 278/1375] Compiling libraries/AP_Generator/AP_Generator.cpp
+[ 284/1375] Compiling libraries/AP_ICEngine/AP_ICEngine_TCA9554.cpp
+[ 285/1375] Compiling libraries/AP_ICEngine/AP_ICEngine.cpp
+[ 317/1375] Compiling libraries/AP_Logger/LogFile.cpp
+[ 325/1375] Compiling libraries/AP_MSP/AP_MSP_Telem_Generic.cpp
+[ 326/1375] Compiling libraries/AP_MSP/AP_MSP_Telem_DisplayPort.cpp
+[ 327/1375] Compiling libraries/AP_MSP/AP_MSP_Telem_DJI.cpp
+[ 328/1375] Compiling libraries/AP_MSP/AP_MSP_Telem_Backend.cpp
+[ 329/1375] Compiling libraries/AP_MSP/AP_MSP.cpp
+[ 347/1375] Compiling libraries/AP_Mission/AP_Mission_Commands.cpp
+[ 353/1375] Compiling libraries/AP_Motors/AP_MotorsMatrix_Scripting_Dynamic.cpp
+[ 354/1375] Compiling libraries/AP_Motors/AP_MotorsMatrix_6DoF_Scripting.cpp
+[ 356/1375] Compiling libraries/AP_Motors/AP_MotorsHeli_Single.cpp
+[ 357/1375] Compiling libraries/AP_Motors/AP_MotorsHeli_RSC.cpp
+[ 358/1375] Compiling libraries/AP_Motors/AP_MotorsHeli_Quad.cpp
+[ 359/1375] Compiling libraries/AP_Motors/AP_MotorsHeli_Dual.cpp
+[ 360/1375] Compiling libraries/AP_Motors/AP_MotorsHeli.cpp
+[ 362/1375] Compiling libraries/AP_Motors/AP_Motors6DOF.cpp
+[ 366/1375] Compiling libraries/AP_Mount/AP_Mount_Xacti.cpp
+[ 367/1375] Compiling libraries/AP_Mount/AP_Mount_XFRobot.cpp
+[ 391/1375] Compiling libraries/AP_Mount/AP_Mount_Viewpro.cpp
+[ 392/1375] Compiling libraries/AP_Mount/AP_Mount_SoloGimbal.cpp
+[ 393/1375] Compiling libraries/AP_Mount/AP_Mount_SToRM32_serial.cpp
+[ 394/1375] Compiling libraries/AP_Mount/AP_Mount.cpp
+[ 395/1375] Compiling libraries/AP_Mount/AP_Mount_Alexmos.cpp
+[ 396/1375] Compiling libraries/AP_Mount/AP_Mount_Backend.cpp
+[ 397/1375] Compiling libraries/AP_Mount/AP_Mount_Backend_Serial.cpp
+[ 398/1375] Compiling libraries/AP_Mount/AP_Mount_CADDX.cpp
+[ 399/1375] Compiling libraries/AP_Mount/AP_Mount_Gremsy.cpp
+[ 400/1375] Compiling libraries/AP_Mount/AP_Mount_Scripting.cpp
+[ 401/1375] Compiling libraries/AP_Mount/AP_Mount_SToRM32.cpp
+[ 402/1375] Compiling libraries/AP_Mount/AP_Mount_Servo.cpp
+[ 403/1375] Compiling libraries/AP_Mount/AP_Mount_Topotek.cpp
+[ 405/1375] Compiling libraries/AP_Mount/AP_Mount_Siyi.cpp
+[ 519/1375] Compiling libraries/AP_OSD/AP_OSD_MSP_DisplayPort.cpp
+[ 520/1375] Compiling libraries/AP_OSD/AP_OSD_MSP.cpp
+[ 521/1375] Compiling libraries/AP_OSD/AP_OSD_MAX7456.cpp
+[ 522/1375] Compiling libraries/AP_OSD/AP_OSD_Backend.cpp
+[ 523/1375] Compiling libraries/AP_OSD/AP_OSD.cpp
+[ 524/1375] Compiling libraries/AP_OSD/AP_OSD_Setting.cpp
+[ 525/1375] Compiling libraries/AP_Observer/AP_Observer.cpp
+[ 527/1375] Compiling libraries/AP_OpenDroneID/AP_OpenDroneID.cpp
+[ 540/1375] Compiling libraries/AP_Parachute/AP_Parachute.cpp
+[ 585/1375] Compiling libraries/AP_RCProtocol/AP_RCProtocol_Backend.cpp
+[ 587/1375] Compiling libraries/AP_RCTelemetry/AP_GHST_Telem.cpp
+[ 600/1375] Compiling libraries/AP_RSSI/AP_RSSI.cpp
+[ 658/1375] Compiling libraries/AP_SerialManager/AP_SerialManager.cpp
+[ 659/1375] Compiling libraries/AP_ServoRelayEvents/AP_ServoRelayEvents.cpp
+[ 683/1375] Compiling libraries/AP_Tuning/AP_Tuning.cpp
+[ 684/1375] Compiling libraries/AP_Vehicle/Parameters.cpp
+[ 685/1375] Compiling libraries/AP_VideoTX/AP_VideoTX.cpp
+[ 686/1375] Compiling libraries/AP_VideoTX/AP_Tramp.cpp
+[ 701/1375] Compiling libraries/AP_Winch/AP_Winch_Backend.cpp
+[ 725/1375] Compiling libraries/RC_Channel/RC_Channels.cpp
+[ 727/1375] Compiling libraries/SRV_Channel/SRV_Channel_aux.cpp
+[ 828/1375] Compiling libraries/SITL/SIM_Submarine.cpp
+[ 829/1375] Compiling libraries/SITL/SIM_StratoBlimp.cpp
+[ 832/1375] Compiling libraries/SITL/SIM_SingleCopter.cpp
+[ 867/1375] Compiling libraries/SITL/SIM_Multicopter.cpp
+[ 868/1375] Compiling libraries/SITL/SIM_Motor.cpp
+[ 929/1375] Compiling libraries/SITL/SIM_AIS.cpp
+[ 941/1375] Compiling libraries/SITL/SIM_Frame.cpp
+[ 948/1375] Compiling libraries/AP_Scripting/AP_Scripting.cpp
+[1022/1375] Compiling libraries/AP_Baro/AP_Baro.cpp
+[1035/1375] Compiling libraries/AP_DAL/AP_DAL.cpp
+[1053/1375] Compiling libraries/AP_Scheduler/AP_Scheduler.cpp
+[1055/1375] Compiling libraries/AP_Vehicle/AP_Vehicle.cpp
+[1059/1375] Compiling libraries/AP_Logger/LoggerMessageWriter.cpp
+[1061/1375] Compiling libraries/GCS_MAVLink/GCS_Common.cpp
+[1063/1375] Compiling libraries/GCS_MAVLink/GCS.cpp
+[1064/1375] Compiling libraries/GCS_MAVLink/GCS_Fence.cpp
+[1066/1375] Compiling libraries/RC_Channel/RC_Channel.cpp
+[1068/1375] Compiling libraries/AP_Frsky_Telem/AP_Frsky_SPort_Passthrough.cpp
+[1069/1375] Compiling libraries/AP_IBus_Telem/AP_IBus_Telem.cpp
+[1070/1375] Compiling libraries/AP_Relay/AP_Relay.cpp
+[1071/1375] Compiling libraries/AP_RCProtocol/AP_RCProtocol_FPort.cpp
+[1073/1375] Compiling libraries/AP_RCProtocol/AP_RCProtocol_CRSF.cpp
+[1074/1375] Compiling libraries/AP_RCProtocol/AP_RCProtocol.cpp
+[1075/1375] Compiling libraries/AP_RCProtocol/AP_RCProtocol_FPort2.cpp
+[1077/1375] Compiling libraries/AP_RCProtocol/AP_RCProtocol_GHST.cpp
+[1084/1375] Compiling libraries/AC_Avoidance/AC_Avoid.cpp
+[1086/1375] Compiling libraries/AP_OSD/AP_OSD_ParamScreen.cpp
+[1087/1375] Compiling libraries/AP_OSD/AP_OSD_Screen.cpp
+[1089/1375] Compiling libraries/AP_OSD/AP_OSD_ParamSetting.cpp
+[1093/1375] Compiling libraries/AP_GyroFFT/AP_GyroFFT.cpp
+[1094/1375] Compiling libraries/AP_RCTelemetry/AP_CRSF_Telem.cpp
+[1099/1375] Compiling libraries/AP_Arming/AP_Arming.cpp
+[1101/1375] Compiling libraries/AC_AttitudeControl/AC_PosControl.cpp
+[1102/1375] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl.cpp
+[1105/1375] Compiling libraries/AC_WPNav/AC_Loiter.cpp
+[1106/1375] Compiling libraries/AP_Motors/AP_MotorsMatrix.cpp
+[1111/1375] Compiling libraries/AC_AutoTune/AC_AutoTune.cpp
+[1112/1375] Compiling libraries/AP_HAL_SITL/SITL_cmdline.cpp
+[1119/1375] Compiling libraries/AP_Scripting/lua_bindings.cpp
+[1120/1375] Compiling libraries/AP_Scripting/AP_Scripting_helpers.cpp
+[1121/1375] Compiling libraries/AP_Scripting/AP_Scripting_CRSFMenu.cpp
+[1122/1375] Compiling libraries/AP_Scripting/lua_boxed_numerics.cpp
+[1123/1375] Compiling libraries/AP_Scripting/lua_scripts.cpp
+[1124/1375] Compiling build/sitl/libraries/AP_Scripting/lua_generated_bindings.cpp
+[1299/1375] Linking build/sitl/lib/libArduCopter_libs.a
+[1300/1375] Compiling ArduCopter/mode_brake.cpp
+[1301/1375] Compiling ArduCopter/mode_follow.cpp
+[1302/1375] Compiling ArduCopter/mode_smart_rtl.cpp
+[1303/1375] Compiling ArduCopter/mode_avoid_adsb.cpp
+[1304/1375] Compiling ArduCopter/mode_stabilize.cpp
+[1305/1375] Compiling ArduCopter/failsafe.cpp
+[1306/1375] Compiling ArduCopter/mode_flowhold.cpp
+[1307/1375] Compiling ArduCopter/GCS_Copter.cpp
+[1308/1375] Compiling ArduCopter/mode_drift.cpp
+[1309/1375] Compiling ArduCopter/mode_turtle.cpp
+[1310/1375] Compiling ArduCopter/mode_guided_nogps.cpp
+[1311/1375] Compiling ArduCopter/AP_State.cpp
+[1312/1375] Compiling ArduCopter/precision_landing.cpp
+[1313/1375] Compiling ArduCopter/mode_autorotate.cpp
+[1314/1375] Compiling ArduCopter/UserParameters.cpp
+[1315/1375] Compiling ArduCopter/Log.cpp
+[1316/1375] Compiling ArduCopter/mode_guided_custom.cpp
+[1317/1375] Compiling ArduCopter/mode_acro.cpp
+[1318/1375] Compiling ArduCopter/sensors.cpp
+[1319/1375] Compiling ArduCopter/rate_thread.cpp
+[1320/1375] Compiling ArduCopter/ekf_check.cpp
+[1321/1375] Compiling ArduCopter/crash_check.cpp
+[1322/1375] Compiling ArduCopter/mode_circle.cpp
+[1323/1375] Compiling ArduCopter/tuning.cpp
+[1324/1375] Compiling ArduCopter/terrain.cpp
+[1325/1375] Compiling ArduCopter/standby.cpp
+[1326/1375] Compiling ArduCopter/mode.cpp
+[1327/1375] Compiling ArduCopter/compassmot.cpp
+[1328/1375] Compiling ArduCopter/UserCode.cpp
+[1329/1375] Compiling ArduCopter/surface_tracking.cpp
+[1330/1375] Compiling ArduCopter/AP_Rally.cpp
+[1331/1375] Compiling ArduCopter/AP_Arming_Copter.cpp
+[1332/1375] Compiling ArduCopter/heli.cpp
+[1333/1375] Compiling ArduCopter/radio.cpp
+[1334/1375] Compiling ArduCopter/navigation.cpp
+[1335/1375] Compiling ArduCopter/mode_land.cpp
+[1336/1375] Compiling ArduCopter/mode_poshold.cpp
+[1337/1375] Compiling ArduCopter/takeoff.cpp
+[1338/1375] Compiling ArduCopter/system.cpp
+[1339/1375] Compiling ArduCopter/mode_acro_heli.cpp
+[1340/1375] Compiling ArduCopter/Parameters.cpp
+[1341/1375] Compiling ArduCopter/mode_throw.cpp
+[1342/1375] Compiling ArduCopter/GCS_MAVLink_Copter.cpp
+[1343/1375] Compiling ArduCopter/mode_althold.cpp
+[1344/1375] Compiling ArduCopter/events.cpp
+[1345/1375] Compiling ArduCopter/mode_flip.cpp
+[1346/1375] Compiling ArduCopter/commands.cpp
+[1347/1375] Compiling ArduCopter/autoyaw.cpp
+[1348/1375] Compiling ArduCopter/avoidance_adsb.cpp
+[1349/1375] Compiling ArduCopter/RC_Channel_Copter.cpp
+[1350/1375] Compiling ArduCopter/mode_loiter.cpp
+[1351/1375] Compiling ArduCopter/motors.cpp
+[1352/1375] Compiling ArduCopter/takeoff_check.cpp
+[1353/1375] Compiling ArduCopter/avoidance.cpp
+[1354/1375] Compiling ArduCopter/mode_rtl.cpp
+[1355/1375] Compiling ArduCopter/esc_calibration.cpp
+[1356/1375] Compiling ArduCopter/mode_sport.cpp
+[1357/1375] Compiling ArduCopter/land_detector.cpp
+[1358/1375] Compiling ArduCopter/toy_mode.cpp
+[1359/1375] Compiling ArduCopter/mode_zigzag.cpp
+[1360/1375] Compiling ArduCopter/baro_ground_effect.cpp
+[1361/1375] Compiling ArduCopter/mode_guided.cpp
+[1362/1375] Compiling ArduCopter/mode_systemid.cpp
+[1363/1375] Compiling ArduCopter/afs_copter.cpp
+[1364/1375] Compiling ArduCopter/mode_autotune.cpp
+[1365/1375] Compiling ArduCopter/landing_gear.cpp
+[1366/1375] Compiling ArduCopter/mode_stabilize_heli.cpp
+[1367/1375] Compiling ArduCopter/Copter.cpp
+[1368/1375] Compiling ArduCopter/motor_test.cpp
+[1369/1375] Compiling ArduCopter/Attitude.cpp
+[1370/1375] Compiling ArduCopter/inertia.cpp
+[1371/1375] Compiling ArduCopter/fence.cpp
+[1372/1375] Compiling ArduCopter/mode_auto.cpp
+[1373/1375] Compiling ArduCopter/AP_ExternalControl_Copter.cpp
+[1374/1375] Linking build/sitl/bin/arducopter
+[1375/1375] checking symbols build/sitl/bin/arducopter
+Waf: Leaving directory `/home/memoto/Ardupilot-UmemotoLab/build/sitl'
+
+BUILD SUMMARY
+Build directory: /home/memoto/Ardupilot-UmemotoLab/build/sitl
+Target          Text (B)  Data (B)  BSS (B)  Total Flash Used (B)  Free Flash (B)  External Flash Used (B)
+----------------------------------------------------------------------------------------------------------
+bin/arducopter   5461999    206160   279136               5668159  Not Applicable  Not Applicable         
+
+'build' finished successfully (3.044s)
+lckfile='/home/memoto/buildlogs/autotest.lck'
+step=build.Copter
+step=test.Copter.TestRLSBasicEstimation
+Running: ("git rev-parse HEAD") in (/home/memoto/Ardupilot-UmemotoLab)
+Removing diagnostic files: ['autotest-1775208439453150.tlog']
+>>>> RUNNING STEP: build.Copter at Fri Apr  3 18:27:27 2026
+Running: ("/bin/rm -f logs/*.BIN logs/LASTLOG.TXT") in (.)
+Running: ("./modules/waf/waf-light" "configure" "--board" "sitl" "--debug") in (/home/memoto/Ardupilot-UmemotoLab)
+Running: ("./modules/waf/waf-light" "build" "--target" "bin/arducopter") in (/home/memoto/Ardupilot-UmemotoLab)
+>>>> PASSED STEP: build.Copter at Fri Apr  3 18:27:31 2026
+>>>> RUNNING STEP: test.Copter.TestRLSBasicEstimation at Fri Apr  3 18:27:31 2026
+Running: ("/bin/rm -f logs/*.BIN logs/LASTLOG.TXT") in (.)
+step=test.Copter.TestRLSBasicEstimation
+step=test.Copter.TestRLSBasicEstimation
+Got PIDTuning
+Got ArmFeatures
+Got SetHome
+Got ConfigErrorLoop
+Got CPUFailsafe
+Got Parameters
+Got LoggerDocumentation
+Got Logging
+Got GetCapabilities
+Got InitialMode
+Got NavDelayTakeoffAbsTime
+Got NavDelayAbsTime
+Got NavDelay
+Got GuidedSubModeChange
+Got MAV_CMD_CONDITION_YAW
+Got LoiterToAlt
+Got PayloadPlaceMission
+Got PayloadPlaceMissionOpenGripper
+Got PrecisionLoiterCompanion
+Got Landing
+Got PrecisionLanding
+Got SetModesViaModeSwitch
+Got SetModesViaAuxSwitch
+Got AuxSwitchOptions
+Got AuxFunctionsInMission
+Got AutoTune
+Got AutoTuneYawD
+Got NoRCOnBootPreArmFailure
+Got ThrowMode
+Got BrakeMode
+Got RecordThenPlayMission
+Got ThrottleFailsafe
+Got ThrottleFailsafePassthrough
+Got GCSFailsafe
+Got CustomController
+Got BatteryFailsafe
+Got BatteryMissing
+Got VibrationFailsafe
+Got EK3AccelBias
+Got StabilityPatch
+Got OBSTACLE_DISTANCE_3D
+Got AC_Avoidance_Proximity
+Got AC_Avoidance_Proximity_AVOID_ALT_MIN
+Got AC_Avoidance_Fence
+Got AC_Avoidance_Beacon
+Got AvoidanceAltFence
+Got BaroWindCorrection
+Got SetpointGlobalPos
+Got ThrowDoubleDrop
+Got SetpointGlobalVel
+Got SetpointBadVel
+Got SplineTerrain
+Got TakeoffCheck
+Got GainBackoffTakeoff
+Got HorizontalFence
+Got HorizontalAvoidFence
+Got MaxAltFence
+Got MaxAltFenceAvoid
+Got MinAltFence
+Got MinAltFenceAvoid
+Got FenceFloorEnabledLanding
+Got FenceFloorAutoDisableLanding
+Got FenceFloorAutoEnableOnArming
+Got FenceMargin
+Got AutoTuneSwitch
+Got GPSGlitchLoiter
+Got GPSGlitchLoiter2
+Got GPSGlitchAuto
+Got ModeAltHold
+Got ModeLoiter
+Got SimpleMode
+Got SuperSimpleCircle
+Got ModeCircle
+Got MagFail
+Got OpticalFlow
+Got OpticalFlowLocation
+Got OpticalFlowLimits
+Got OpticalFlowCalibration
+Got MotorFail
+Got ModeFlip
+Got CopterMission
+Got TakeoffAlt
+Got SplineLastWaypoint
+Got Gripper
+Got TestLocalHomePosition
+Got TestGripperMission
+Got VisionPosition
+Got ATTITUDE_FAST
+Got BaseLoggingRates
+Got BodyFrameOdom
+Got GPSViconSwitching
+Got BeaconPosition
+Got RTLSpeed
+Got Mount
+Got MountYawVehicleForMountROI
+Got MAV_CMD_DO_MOUNT_CONTROL
+Got MAV_CMD_DO_GIMBAL_MANAGER_CONFIGURE
+Got AutoYawDO_MOUNT_CONTROL
+Got Button
+Got ShipTakeoff
+Got RangeFinder
+Got BaroDrivers
+Got SurfaceTracking
+Got Parachute
+Got ParameterChecks
+Got ManualThrottleModeChange
+Got MANUAL_CONTROL
+Got ModeZigZag
+Got PosHoldTakeOff
+Got ModeFollow
+Got ModeFollow_with_FOLLOW_TARGET
+Got RangeFinderDrivers
+Got RangeFinderDriversMaxAlt
+Got RangeFinderDriversLongRange
+Got RangeFinderSITLLongRange
+Got MaxBotixI2CXL
+Got MAVProximity
+Got ParameterValidation
+Got AltTypes
+Got PAUSE_CONTINUE
+Got PAUSE_CONTINUE_GUIDED
+Got RichenPower
+Got IE24
+Got Loweheiser
+Got MAVLandedStateTakeoff
+Got Weathervane
+Got MAV_CMD_AIRFRAME_CONFIGURATION
+Got MAV_CMD_NAV_LOITER_UNLIM
+Got MAV_CMD_NAV_RETURN_TO_LAUNCH
+Got MAV_CMD_NAV_VTOL_LAND
+Got clear_roi
+Got FixedYawCalibration
+Got SITLCompassCalibration
+Got MotorVibration
+Got DynamicNotches
+Got PositionWhenGPSIsZero
+Got DynamicRpmNotches
+Got DynamicRpmNotchesRateThread
+Got PIDNotches
+Got StaticNotches
+Got RefindGPS
+Got GyroFFT
+Got GyroFFTHarmonic
+Got GyroFFTAverage
+Got GyroFFTContinuousAveraging
+Got GyroFFTPostFilter
+Got GyroFFTMotorNoiseCheck
+Got CompassReordering
+Got CRSF
+Got MotorTest
+Got AltEstimation
+Got EKFSource
+Got GSF
+Got GSF_reset
+Got AP_Avoidance
+Got RTL_ALT_FINAL
+Got SMART_RTL
+Got SMART_RTL_EnterLeave
+Got SMART_RTL_Repeat
+Got RTL_TO_RALLY
+Got RTLYaw
+Got FlyEachFrame
+Got GPSBlending
+Got GPSWeightedBlending
+Got GPSBlendingLog
+Got GPSBlendingAffinity
+Got DataFlash
+Got DataFlashErase
+Got Callisto
+Got PerfInfo
+Got Replay
+Got FETtecESC
+Got ProximitySensors
+Got GroundEffectCompensation_touchDownExpected
+Got GroundEffectCompensation_takeOffExpected
+Got DO_CHANGE_SPEED
+Got MISSION_START
+Got AUTO_LAND_TO_BRAKE
+Got WPNAV_SPEED
+Got RTLStoppingDistanceSpeed
+Got WPNAV_SPEED_UP
+Got WPNAV_SPEED_DN
+Got DO_WINCH
+Got SensorErrorFlags
+Got GPSForYaw
+Got DefaultIntervalsFromFiles
+Got GPSTypes
+Got MultipleGPS
+Got WatchAlts
+Got GuidedEKFLaneChange
+Got Sprayer
+Got AutoContinueOnRCFailsafe
+Got EK3_RNG_USE_HGT
+Got TerrainDBPreArm
+Got ThrottleGainBoost
+Got ScriptMountPOI
+Got ScriptCopterPosOffsets
+Got MountSolo
+Got FlyMissionTwice
+Got FlyMissionTwiceWithReset
+Got MissionIndexValidity
+Got InvalidJumpTags
+Got IMUConsistency
+Got AHRSTrimLand
+Got IBus
+Got GuidedYawRate
+Got NoArmWithoutMissionItems
+Got DO_CHANGE_SPEED_in_guided
+Got ArmSwitchAfterReboot
+Got RPLidarA1
+Got RPLidarA2
+Got MISSION_OPTION_CLEAR_MISSION_AT_BOOT
+Got SafetySwitch
+Got BrakeZ
+Got MAV_CMD_DO_FLIGHTTERMINATION
+Got MAV_CMD_DO_LAND_START
+Got MAV_CMD_SET_EKF_SOURCE_SET
+Got MAV_CMD_NAV_TAKEOFF
+Got MAV_CMD_NAV_TAKEOFF_command_int
+Got Ch6TuningWPSpeed
+Got PILOT_THR_BHV
+Got GPSForYawCompassLearn
+Got CameraLogMessages
+Got LoiterToGuidedHomeVSOrigin
+Got GuidedModeThrust
+Got CompassMot
+Got AutoRTL
+Got EK3_OGN_HGT_MASK_climbing
+Got EK3_OGN_HGT_MASK
+Got FarOrigin
+Got GuidedForceArm
+Got GuidedWeatherVane
+Got Clamp
+Got GripperReleaseOnThrustLoss
+Got REQUIRE_LOCATION_FOR_ARMING
+Got LoggingFormat
+Got MissionRTLYawBehaviour
+Got BatteryInternalUseOnly
+Got MAV_CMD_MISSION_START_p1_p2
+Got ScriptingAHRSSource
+Got CommonOrigin
+Got TestTetherStuck
+Got ScriptingFlipMode
+Got CompassLearnCopyFromEKF
+Got AHRSAutoTrim
+Got Ch6TuningLoitMaxXYSpeed
+Got TestEKF3CompassFailover
+Got test_EKF3_option_disable_lane_switch
+Failed to find test TestRLSBasicEstimation on test.Copter

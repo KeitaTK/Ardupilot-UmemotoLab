@@ -1,0 +1,32 @@
+Waf: Entering directory `/home/memoto/Ardupilot-UmemotoLab/build/sitl'
+Embedding file locations.txt:Tools/autotest/locations.txt
+Embedding file models/Callisto.json:Tools/autotest/models/Callisto.json
+Embedding file models/freestyle.json:Tools/autotest/models/freestyle.json
+Embedding file models/plane-3d.parm:Tools/autotest/models/plane-3d.parm
+Embedding file models/plane.parm:Tools/autotest/models/plane.parm
+Embedding file models/skywalker_2013.json:Tools/autotest/models/skywalker_2013.json
+Embedding file models/xplane_heli.json:Tools/autotest/models/xplane_heli.json
+Embedding file models/xplane_plane.json:Tools/autotest/models/xplane_plane.json
+[11/12] Creating build/sitl/ap_version.h
+Generating compile_commands.json
+Build commands will be stored in build/sitl/compile_commands.json
+Generating compile_commands.json
+Build commands will be stored in build/sitl/compile_commands.json
+[  23/1317] Compiling libraries/AC_AttitudeControl/AC_AttitudeControl.cpp
+[ 389/1317] Compiling libraries/AP_Logger/LoggerMessageWriter.cpp
+[ 623/1317] Compiling libraries/AP_Observer/AP_Observer.cpp
+[ 862/1317] Compiling libraries/GCS_MAVLink/GCS_Common.cpp
+[ 950/1317] Compiling libraries/AP_HAL_SITL/SITL_cmdline.cpp
+[ 985/1317] Compiling libraries/SITL/SIM_AIS.cpp
+[1314/1317] Compiling libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp
+../../libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp: In function ‘void run_case(float, const char*, const std::vector<ReplayData>&)’:
+../../libraries/AP_Observer/examples/RLS_CSV_Replay/RLS_CSV_Replay.cpp:65:14: error: ‘class AP_Observer’ has no member named ‘set_params_for_replay’
+   65 |     observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
+      |              ^~~~~~~~~~~~~~~~~~~~~
+compilation terminated due to -Wfatal-errors.
+
+Waf: Leaving directory `/home/memoto/Ardupilot-UmemotoLab/build/sitl'
+Build failed
+ -> task in 'examples/RLS_CSV_Replay' failed (exit status 1): 
+	{task 129107772616032: cxx RLS_CSV_Replay.cpp -> RLS_CSV_Replay.cpp.1.o}
+ (run with -v to display more information)
