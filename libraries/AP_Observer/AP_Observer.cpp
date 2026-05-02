@@ -363,10 +363,29 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     float x_pred[EKF_STATE_SIZE];
     // シンプレクティック・オイラー法（Symplectic Euler）を用いてエネルギー保存則を満たし、
     // 長期的な予測での数値発散（前進オイラー法特有の爆発）を防ぐ。
+    //
+    // 【なぜ速度(d_dot)を先に更新するのか？】
+    // 単振動 d'' = -ω²d を前進オイラー法で離散化すると、
+    //   d_{k+1} = d_k + dt·d_dot_k
+    //   d_dot_{k+1} = d_dot_k - dt·ω²·d_k
+    // となり、各ステップでエネルギーが増加し発散する。
+    // シンプレクティック・オイラー法では速度を先に更新することで、
+    //   d_dot_{k+1} = d_dot_k - dt·ω²·d_k  (新しい速度)
+    //   d_{k+1} = d_k + dt·d_dot_{k+1}       (新しい速度を使って位置更新)
+    // となり、エネルギー保存が改善される（調和振動子のシンプレクティック性）。
+    //
+    // 【状態方程式の意味】
+    // d_dotの変化: d_dot_{k+1} - d_dot_k = -ω²·d_k·dt
+    //   → これは「dは角周波数ωの単振動をする」というモデルを離散化したもの。
+    //     外力の振動成分を仮想的なバネマス系の位置とみなしている。
+    // dの変化: d_{k+1} - d_k = d_dot_{k+1}·dt
+    //   → 新しい速度を使って位置を更新（シンプレクティック性の要）。
+    // c, ω: 予測ステップでは変化しない（観測更新でのみ変化）。
     x_pred[1] = d_dot + dt * (-(omega * omega) * d);
     x_pred[0] = d + dt * x_pred[1];
     x_pred[2] = c;
     x_pred[3] = omega;
+
 
     x_pred[3] = constrain_value(x_pred[3], _ekf_omega_min.get(), _ekf_omega_max.get());
 
@@ -449,8 +468,13 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         measurement = 0.0f;
     }
 
+    // 【観測モデル】y_pred = d + c
+    // 観測される外力 = 振動成分(d) + DCバイアス(c)
+    // これは H = [1, 0, 1, 0] による線形観測。
+    // 速度(d_dot)と周波数(omega)は観測に直接現れない。
     const float y_pred = x_pred[0] + x_pred[2];
     const float innov_raw = measurement - y_pred;
+
     float innov_used = innov_raw;
     float R = _ekf_r_meas.get();
     if (R < 1.0e-6f) {

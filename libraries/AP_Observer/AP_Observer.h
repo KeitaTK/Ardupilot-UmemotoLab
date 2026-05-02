@@ -107,8 +107,13 @@ private:
     static constexpr uint8_t OBS_NUM_AXES = EKF_NUM_AXES;
 
     // 各軸のEKF状態 [軸][状態番号]
-    // 状態: [0]=d, [1]=d_dot, [2]=c, [3]=omega
+    // 状態: [0]=d (振動位置: 正弦波の現在値。外力の振動成分を仮想的なバネマス系の位置とみなしたもの)
+    //       [1]=d_dot (振動速度: dの時間微分。次の瞬間のdを決める)
+    //       [2]=c (DCバイアス: 定常外力・センサバイアス・重心ずれなどゆっくり変動する成分)
+    //       [3]=omega (角周波数 [rad/s]: 振動の速さ。プロペラ回転数に比例)
+    // 観測モデル: z = d + c (振動成分とDCバイアスの線形和)
     float ekf_state[EKF_NUM_AXES][EKF_STATE_SIZE];
+
 
     // 各軸の共分散行列 [軸][行][列]
     float ekf_P[EKF_NUM_AXES][EKF_STATE_SIZE][EKF_STATE_SIZE];
