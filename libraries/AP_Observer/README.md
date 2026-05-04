@@ -342,15 +342,13 @@ f_2(\mathbf{x}_k) \\[3pt]
 f_3(\mathbf{x}_k) \\[3pt]
 f_4(\mathbf{x}_k)
 \end{bmatrix}
-=
-\begin{bmatrix}
+= \begin{bmatrix}
 d_k + \Delta t_k\,\dot d_{k+1} \\[3pt]
 \dot d_k - \Delta t_k\,\omega_k^2 d_k \\[3pt]
 c_k \\[3pt]
 \omega_k
 \end{bmatrix}
-=
-\begin{bmatrix}
+= \begin{bmatrix}
 d_k + \Delta t_k(\dot d_k - \Delta t_k\,\omega_k^2 d_k) \\[3pt]
 \dot d_k - \Delta t_k\,\omega_k^2 d_k \\[3pt]
 c_k \\[3pt]
