@@ -199,13 +199,7 @@ $$
 $$
 
 と書ける。振動成分とDCバイアスは**足し算で重なる**ため、観測モデルは線形になる。
-したがって観測行列は
-
-$$
-\mathbf{H} = \begin{bmatrix}1 & 0 & 1 & 0\end{bmatrix}
-$$
-
-となり、「状態 $d$ と状態 $c$ を取り出して足す」という単純な操作になる。
+したがって観測行列は $\mathbf{H} = \begin{bmatrix}1 & 0 & 1 & 0\end{bmatrix}$（4.1節で正式定義）となり、「状態 $d$ と状態 $c$ を取り出して足す」という単純な操作になる。
 これが「線形っぽい式」の正体である。
 
 #### 2.2.4 状態量の役割まとめ
@@ -332,19 +326,172 @@ $$
 
 となる。
 
-### 4.2 ヤコビアン
+### 4.2 ヤコビアン（線形化）の導出
 
-予測点 $(d_k,\dot d_k,c_k,\omega_k)$ 周りの状態ヤコビアンは以下の通り定義する。
+本節では、状態遷移関数 $f(\cdot)$ を予測点 $\hat{\mathbf{x}}_k = (d_k, \dot d_k, c_k, \omega_k)^\top$ の周りで線形化し、ヤコビアン $\mathbf{F}_k$ の各要素を解析的に導出する。
+
+#### 4.2.1 非線形状態遷移関数の定義
+
+4.1節のシンプレクティック・オイラー法による状態遷移を、非線形関数 $f: \mathbb{R}^4 \to \mathbb{R}^4$ として書き下す：
 
 $$
-\mathbf{F}_k=
+\mathbf{x}_{k+1} = f(\mathbf{x}_k) =
 \begin{bmatrix}
-1 & \Delta t_k & 0 & 0 \\
+f_1(\mathbf{x}_k) \\[3pt]
+f_2(\mathbf{x}_k) \\[3pt]
+f_3(\mathbf{x}_k) \\[3pt]
+f_4(\mathbf{x}_k)
+\end{bmatrix}
+=
+\begin{bmatrix}
+d_k + \Delta t_k\,\dot d_{k+1} \\[3pt]
+\dot d_k - \Delta t_k\,\omega_k^2 d_k \\[3pt]
+c_k \\[3pt]
+\omega_k
+\end{bmatrix}
+=
+\begin{bmatrix}
+d_k + \Delta t_k(\dot d_k - \Delta t_k\,\omega_k^2 d_k) \\[3pt]
+\dot d_k - \Delta t_k\,\omega_k^2 d_k \\[3pt]
+c_k \\[3pt]
+\omega_k
+\end{bmatrix}
+$$
+
+ここで、シンプレクティック・オイラー法では $\dot d_{k+1}$ を先に計算し、その値を使って $d_{k+1}$ を更新するため、$f_1$ には $\dot d_{k+1}$ が内部展開されて代入されていることに注意する。
+
+#### 4.2.2 ヤコビアンの定義
+
+状態ヤコビアンは、非線形関数 $f$ の各出力成分 $f_i$ を各状態変数 $x_j$ で偏微分した $4\times4$ 行列である：
+
+$$
+\mathbf{F}_k = \left.\frac{\partial f}{\partial \mathbf{x}}\right|_{\hat{\mathbf{x}}_k}
+= \begin{bmatrix}
+\displaystyle\frac{\partial f_1}{\partial d_k} & \displaystyle\frac{\partial f_1}{\partial \dot d_k} & \displaystyle\frac{\partial f_1}{\partial c_k} & \displaystyle\frac{\partial f_1}{\partial \omega_k} \\[8pt]
+\displaystyle\frac{\partial f_2}{\partial d_k} & \displaystyle\frac{\partial f_2}{\partial \dot d_k} & \displaystyle\frac{\partial f_2}{\partial c_k} & \displaystyle\frac{\partial f_2}{\partial \omega_k} \\[8pt]
+\displaystyle\frac{\partial f_3}{\partial d_k} & \displaystyle\frac{\partial f_3}{\partial \dot d_k} & \displaystyle\frac{\partial f_3}{\partial c_k} & \displaystyle\frac{\partial f_3}{\partial \omega_k} \\[8pt]
+\displaystyle\frac{\partial f_4}{\partial d_k} & \displaystyle\frac{\partial f_4}{\partial \dot d_k} & \displaystyle\frac{\partial f_4}{\partial c_k} & \displaystyle\frac{\partial f_4}{\partial \omega_k}
+\end{bmatrix}
+$$
+
+以下、各成分を順に計算する。
+
+#### 4.2.3 第1行: $d_{k+1} = f_1(\mathbf{x}_k)$ の偏微分
+
+$$f_1(\mathbf{x}_k) = d_k + \Delta t_k\,\dot d_k - \Delta t_k^2\,\omega_k^2 d_k$$
+
+- $d_k$ による偏微分：
+  $$
+  \frac{\partial f_1}{\partial d_k} = 1 - \Delta t_k^2\,\omega_k^2
+  $$
+
+  $d_k$ は2ヶ所に現れる（1項目の $d_k$ と3項目の $\omega_k^2 d_k$）ことに注意。
+
+- $\dot d_k$ による偏微分：
+  $$
+  \frac{\partial f_1}{\partial \dot d_k} = \Delta t_k
+  $$
+
+- $c_k$ による偏微分：
+  $$
+  \frac{\partial f_1}{\partial c_k} = 0
+  $$
+
+- $\omega_k$ による偏微分：
+  $$
+  \frac{\partial f_1}{\partial \omega_k} = -2\Delta t_k^2\,\omega_k d_k
+  $$
+
+  $\omega_k^2$ の微分 $2\omega_k$ により、$- \Delta t_k^2 d_k \cdot 2\omega_k = -2\Delta t_k^2 \omega_k d_k$ となる。
+
+  **検算**: 上式を用いると、微小変位 $\delta\omega$ に対する $d_{k+1}$ の変化量は
+  $\delta d_{k+1} \approx (-2\Delta t_k^2\omega_k d_k)\,\delta\omega$ と予測される。
+
+#### 4.2.4 第2行: $\dot d_{k+1} = f_2(\mathbf{x}_k)$ の偏微分
+
+$$f_2(\mathbf{x}_k) = \dot d_k - \Delta t_k\,\omega_k^2 d_k$$
+
+- $d_k$ による偏微分：
+  $$
+  \frac{\partial f_2}{\partial d_k} = -\Delta t_k\,\omega_k^2
+  $$
+
+- $\dot d_k$ による偏微分：
+  $$
+  \frac{\partial f_2}{\partial \dot d_k} = 1
+  $$
+
+- $c_k$ による偏微分：
+  $$
+  \frac{\partial f_2}{\partial c_k} = 0
+  $$
+
+- $\omega_k$ による偏微分（本ヤコビアンで最も重要な成分）：
+  $$
+  \frac{\partial f_2}{\partial \omega_k} = -2\Delta t_k\,\omega_k d_k
+  $$
+
+  $-\Delta t_k\,\omega_k^2 d_k$ の $\omega_k$ による微分として、$- \Delta t_k d_k \cdot 2\omega_k = -2\Delta t_k\,\omega_k d_k$ を得る。
+  この成分は角周波数の変動が速度変化に与える影響を表現しており、周波数推定に必要な感度である。
+
+#### 4.2.5 第3行: $c_{k+1} = f_3(\mathbf{x}_k)$ の偏微分
+
+$f_3(\mathbf{x}_k) = c_k$ は自明な恒等写像である：
+
+$$
+\frac{\partial f_3}{\partial d_k} = 0,\quad
+\frac{\partial f_3}{\partial \dot d_k} = 0,\quad
+\frac{\partial f_3}{\partial c_k} = 1,\quad
+\frac{\partial f_3}{\partial \omega_k} = 0
+$$
+
+#### 4.2.6 第4行: $\omega_{k+1} = f_4(\mathbf{x}_k)$ の偏微分
+
+$f_4(\mathbf{x}_k) = \omega_k$ も自明な恒等写像である：
+
+$$
+\frac{\partial f_4}{\partial d_k} = 0,\quad
+\frac{\partial f_4}{\partial \dot d_k} = 0,\quad
+\frac{\partial f_4}{\partial c_k} = 0,\quad
+\frac{\partial f_4}{\partial \omega_k} = 1
+$$
+
+#### 4.2.7 ヤコビアンの完成形と実装上の近似
+
+以上の偏微分結果をまとめると、解析的に正しい状態ヤコビアンは以下のようになる：
+
+$$
+\mathbf{F}_k^{\text{(exact)}} =
+\begin{bmatrix}
+1 - \Delta t_k^2\omega_k^2 & \Delta t_k & 0 & -2\Delta t_k^2\omega_k d_k \\
 -\Delta t_k\omega_k^2 & 1 & 0 & -2\Delta t_k\omega_k d_k \\
 0 & 0 & 1 & 0 \\
 0 & 0 & 0 & 1
 \end{bmatrix}
 $$
+
+ここで $F_{1,1}=1-\Delta t_k^2\omega_k^2$ および $F_{1,4}=-2\Delta t_k^2\omega_k d_k$ はシンプレクティック積分由来の項であり、前進オイラー法では現れない。
+
+**実装上の近似**: 本推定器では、上記の正確なヤコビアンの代わりに、**前進オイラー法ベースの簡略化ヤコビアン**を使用する：
+
+$$
+\boxed{\mathbf{F}_k=
+\begin{bmatrix}
+1 & \Delta t_k & 0 & 0 \\
+-\Delta t_k\omega_k^2 & 1 & 0 & -2\Delta t_k\omega_k d_k \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1
+\end{bmatrix}}
+$$
+
+すなわち、第1行の $F_{1,1}$ を $1$ に、$F_{1,4}$ を $0$ にそれぞれ近似している。これは $O(\Delta t_k^2)$ の高次項を切り落としたことに相当し、$\Delta t_k$ が十分に小さい（実装では $\Delta t_k \approx 0.004$ s = 250 Hz）ことを根拠とする。
+
+**なぜこの近似が許容されるか**：
+1. $\Delta t_k \approx 0.004$ s に対して $\omega_k \lesssim 20$ rad/s（実機の振動外乱周波数）を仮定すると、$\Delta t_k^2\omega_k^2 \lesssim 0.0064 \ll 1$ となり、$F_{1,1} \approx 1$ の誤差は無視できる。
+2. カルマンフィルタは共分散予測において $O(\Delta t_k^2)$ の誤差をプロセスノイズ $\mathbf{Q}_k$ で吸収するため、ナイーブな近似でも推定精度への影響は限定的である。
+3. 実装の単純さと計算負荷低減を優先し、あえて簡略化ヤコビアンを採用している。
+
+このように、**状態伝播にはエネルギー保存に優れるシンプレクティック・オイラー法を用い、線形化（共分散伝播・カルマンゲイン計算）には前進オイラー法由来の簡易ヤコビアンを用いる** というハイブリッド設計が本推定器の特徴である。
 
 ### 4.3 標準EKF更新とNaN防御
 
@@ -469,7 +616,7 @@ $$
 
 ## 7. 補正角と補正クォータニオン
 
-### 8.1 補正角の算出
+### 7.1 補正角の算出
 
 予測外力ノルム $\|\hat{\mathbf{f}}\|$ が閾値 $f_{min}$ 未満なら補正はゼロとする。
 それ以外では、補正ゲイン $k_c$ と機体質量 $m$ を用いてオイラー角を算出する（ヨー角は常にゼロ）。
@@ -484,7 +631,7 @@ $$
 
 ここで $\mathrm{sat}(\cdot)$ は角度上限（`_max_correction_angle`）での飽和関数である。
 
-### 8.2 クォータニオン化
+### 7.2 クォータニオン化
 
 得られたオイラー角 $(\phi,\theta,\psi)$ から補正クォータニオン $\mathbf{q}_c$ を生成し、正規化してフライトコントローラの姿勢制御ループへ出力する。
 
