@@ -2,515 +2,124 @@
 
 最終更新: 2026-04
 
-## 0. カルマンフィルタ（KF）の概要
+## 1. はじめに
+本ドキュメントは、AP_Observer における「外乱力の推定」から「姿勢補正角の生成」までの数理アルゴリズムをまとめたものである。
+ドローン（UAV）が荷物を吊り下げて飛行する際、荷物の揺れは機体に対して複雑な周期外乱を与える。本システムでは、この外乱を精度良く推定し、機体の傾きで補償するために**拡張カルマンフィルタ（EKF）**を採用している。
 
-本ドキュメントで用いる拡張カルマンフィルタ（EKF）を理解するために、まず線形カルマンフィルタの基本を説明する。  
-カルマンフィルタは、**予測モデル**と**観測**を逐次的に組み合わせて、ノイズの影響を抑えながらシステムの内部状態を推定する手法である。
+本稿では、まずカルマンフィルタの基本的な考え方を解説し、それを非線形システムへ拡張するロジック（EKF）を整理する。その上で、`AP_Observer` の実装がどのような数理的背景に基づいているかを解説する。
 
-### 0.1 状態空間モデル
+---
 
-システムは以下の２式で記述される。
+## 2. カルマンフィルタ（KF）の基礎理論
 
-**状態方程式**（システムの時間発展を表す）：
+カルマンフィルタは、ノイズを含む観測データから、システムの内部状態を最適に推定するアルゴリズムである。
 
-$$
-\mathbf{x}_k = \mathbf{F}_k \mathbf{x}_{k-1} + \mathbf{B}_k \mathbf{u}_k + \mathbf{w}_k, \quad \mathbf{w}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_k)
-$$
+### 2.1 予測と更新のロジック
+カルマンフィルタの核心は、**「予測（Predict）」**と**「更新（Update）」**の繰り返しにある。
 
-**観測方程式**（状態から観測値への写像）：
+1.  **予測ステップ**: 「現在の状態」と「物理法則」を用いて、次の瞬間の状態を予測する。このとき、時間の経過とともに予測の**不確かさ（誤差共分散 $P$）**は増大する。
+2.  **更新ステップ**: 実際のセンサデータ（観測値 $z$）が得られたら、予測値との差（イノベーション）を計算する。**「予測の自信」と「センサの自信」を天秤にかけ（カルマンゲイン $K$）**、状態を修正する。これにより、不確かさは減少する。
 
-$$
-\mathbf{z}_k = \mathbf{H}_k \mathbf{x}_k + \mathbf{v}_k, \quad \mathbf{v}_k \sim \mathcal{N}(\mathbf{0}, \mathbf{R}_k)
-$$
+### 2.2 線形カルマンフィルタの数式
+システムが線形（行列の足し算・掛け算のみ）で記述できる場合、以下の式で表される。
 
-各記号の意味：
+#### ① 状態空間モデル
+* **状態方程式**: $\mathbf{x}_{k} = \mathbf{F}_{k} \mathbf{x}_{k-1} + \mathbf{w}_{k-1}$
+* **観測方程式**: $\mathbf{z}_{k} = \mathbf{H}_{k} \mathbf{x}_{k} + \mathbf{v}_{k}$
+    * $\mathbf{F}$: 状態遷移行列、$\mathbf{H}$: 観測行列
+    * $\mathbf{w} \sim \mathcal{N}(0, \mathbf{Q})$: プロセスノイズ（モデルの不確かさ）
+    * $\mathbf{v} \sim \mathcal{N}(0, \mathbf{R})$: 観測ノイズ（センサの不確かさ）
 
-- $\mathbf{x}_k$ : 時刻 $k$ における**状態ベクトル**（例：位置・速度・バイアスなど）
-- $\mathbf{F}_k$ : **状態遷移行列**（前時刻の状態から現在の状態を予測する線形写像）
-- $\mathbf{B}_k$ : **制御入力行列**（制御入力 $\mathbf{u}_k$ の状態への影響を表す）
-- $\mathbf{u}_k$ : **制御入力**（既知の操作量）
-- $\mathbf{w}_k$ : **プロセスノイズ**（モデル化誤差や外乱、平均ゼロ・共分散 $\mathbf{Q}_k$ のガウス分布に従うと仮定）
-- $\mathbf{z}_k$ : **観測値ベクトル**（センサなどで得られる測定値）
-- $\mathbf{H}_k$ : **観測行列**（状態から観測空間への線形写像）
-- $\mathbf{v}_k$ : **観測ノイズ**（センサノイズ、平均ゼロ・共分散 $\mathbf{R}_k$ のガウス分布）
+#### ② 予測（Predict）
+$$\hat{\mathbf{x}}_{k|k-1} = \mathbf{F}_k \hat{\mathbf{x}}_{k-1|k-1}$$
+$$\mathbf{P}_{k|k-1} = \mathbf{F}_k \mathbf{P}_{k-1|k-1} \mathbf{F}_k^\top + \mathbf{Q}_k$$
 
-ここで「$ \sim \mathcal{N}(\mathbf{0}, \mathbf{Q}_k)$」は「平均がゼロベクトル、共分散行列が $\mathbf{Q}_k$ の多変量正規分布に従う」ことを意味する。
+#### ③ 更新（Update）
+カルマンゲイン $K$ は、誤差共分散 $P$ と観測ノイズ $R$ の比率で決まる。
+$$\mathbf{K}_k = \mathbf{P}_{k|k-1} \mathbf{H}_k^\top (\mathbf{H}_k \mathbf{P}_{k|k-1} \mathbf{H}_k^\top + \mathbf{R}_k)^{-1}$$
+$$\hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k (\mathbf{z}_k - \mathbf{H}_k \hat{\mathbf{x}}_{k|k-1})$$
+$$\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}_k) \mathbf{P}_{k|k-1}$$
 
-### 0.2 予測ステップ（Time Update）
+---
 
-**Predict（予測）**：前の時刻の推定値を使って、現在の状態を「とりあえず」予測する。
+## 3. 拡張カルマンフィルタ（EKF）への拡張
 
-$$
-\hat{\mathbf{x}}_{k|k-1} = \mathbf{F}_k \hat{\mathbf{x}}_{k-1|k-1} + \mathbf{B}_k \mathbf{u}_k
-$$
-$$
-\mathbf{P}_{k|k-1} = \mathbf{F}_k \mathbf{P}_{k-1|k-1} \mathbf{F}_k^\top + \mathbf{Q}_k
-$$
+現実の物理現象は非線形であることが多い。状態方程式が $\mathbf{x}_{k+1} = f(\mathbf{x}_k)$ という非線形関数の場合、そのままでは行列演算（$\mathbf{F} \mathbf{P} \mathbf{F}^\top$）ができない。
 
-記号の意味：
+### 3.1 局所線形化とヤコビアン
+EKFでは、現在の推定値 $\hat{\mathbf{x}}$ の周りで関数を微分（1次テイラー展開）し、その瞬間の「傾き」で直線を引くことで近似する。
+$$f(\mathbf{x}) \approx f(\hat{\mathbf{x}}) + \underbrace{\frac{\partial f}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}}}_{\mathbf{F}_k} (\mathbf{x} - \hat{\mathbf{x}})$$
+この偏微分行列 $\mathbf{F}_k$ を**ヤコビアン（ヤコビ行列）**と呼ぶ。
 
-- $\hat{\mathbf{x}}_{k|k-1}$ : 時刻 $k$ における**事前状態推定値**（まだ観測を使っていない）
-- $\mathbf{P}_{k|k-1}$ : **事前共分散行列**（推定の不確かさを表す）
-- $\mathbf{Q}_k$ : **プロセスノイズ共分散行列**（予測モデルの不確かさ）
+### 3.2 EKFの計算分担
+* **状態の予測**: 正確さを期すため、**非線形な式 $f$ をそのまま計算**する。
+* **誤差の伝播（$P$ の更新）**: 行列計算が必要なため、**ヤコビアン $\mathbf{F}_k$ を使って計算**する。
 
-### 0.3 観測更新ステップ（Measurement Update）
+---
 
-**Update（更新）**：実際の観測値を使って予測を修正する。
+## 4. AP_Observer の状態モデル定義
 
-まず、**カルマンゲイン** $\mathbf{K}_k$ を計算する。これは「予測と観測のどちらをどれだけ信頼するか」の重みを表す。
+### 4.1 状態ベクトル $\mathbf{x}$
+外乱を「周期的な振動」＋「ゆっくり変わるオフセット」と捉え、以下の4状態を定義する。
+$$\mathbf{x}_{k} = [d_k, \dot{d}_k, c_k, \omega_k]^\top$$
 
-$$
-\mathbf{K}_k = \mathbf{P}_{k|k-1} \mathbf{H}_k^\top (\mathbf{H}_k \mathbf{P}_{k|k-1} \mathbf{H}_k^\top + \mathbf{R}_k)^{-1}
-$$
+1.  **$d$ (振動位置)**: 外力の振動成分。仮想的なバネマス系の変位。
+2.  **$\dot{d}$ (振動速度)**: $d$ の時間微分。
+3.  **$c$ (DCバイアス)**: 重心ズレや定常風による一定方向の外力。
+4.  **$\omega$ (角周波数)**: 振り子振動の速さ。時変パラメータとして推定する。
 
-次に、観測値 $\mathbf{z}_k$ を使って状態を補正する。
+### 4.2 物理的イメージ
+外力 $z$ は、振動成分 $d$ とバイアス $c$ の足し算として観測される。
+$$z_k = d_k + c_k + \text{noise}$$
+これに基づき、観測行列は $\mathbf{H} = [1, 0, 1, 0]$ となる。
 
-$$
-\hat{\mathbf{x}}_{k|k} = \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_k (\mathbf{z}_k - \mathbf{H}_k \hat{\mathbf{x}}_{k|k-1})
-$$
+---
 
-最後に、共分散も更新する。
+## 5. 予測ステップ（実装詳細）
 
-$$
-\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}_k) \mathbf{P}_{k|k-1}
-$$
+### 5.1 調和振動子モデルの導出
 
-記号の意味：
-
-- $\mathbf{K}_k$ : **カルマンゲイン行列**（予測と観測の混合比率）
-- $(\mathbf{z}_k - \mathbf{H}_k \hat{\mathbf{x}}_{k|k-1})$ : **イノベーション**（「予測と実際の差」＝新しい情報）
-- $\hat{\mathbf{x}}_{k|k}$ : **事後状態推定値**（観測で修正後の状態）
-- $\mathbf{P}_{k|k}$ : **事後共分散行列**（更新後の不確かさ）
-
-### 0.4 拡張カルマンフィルタ（EKF）
-
-現実のシステムは多くの場合、**非線形**である。非線形システム $f(\cdot)$ および $h(\cdot)$ に対しては、**ヤコビアン**（偏微分行列）を使って線形近似を行う。
+状態 $d_k$ は外力の振動成分を表し、その波形は正弦波 $d(t) = A\sin(\omega t + \phi)$ で近似できる。このとき、
 
 $$
-\mathbf{F}_k = \frac{\partial f}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}_{k-1|k-1}}, \quad
-\mathbf{H}_k = \frac{\partial h}{\partial \mathbf{x}}\bigg|_{\hat{\mathbf{x}}_{k|k-1}}
+\dot d(t) = A\omega\cos(\omega t + \phi), \quad
+\ddot d(t) = -A\omega^2\sin(\omega t + \phi) = -\omega^2 d(t)
 $$
 
-これらを上記の線形カルマンフィルタの式にそのまま代入することで、非線形状態推定を実現する。本推定器ではシンプレクティック積分を用いた非線形状態方程式と線形観測モデルを持つEKFを実装している。
-
-## 1. 目的
-
-本書は、AP_Observer の処理をプログラム実行順に従って、数式中心で記述する。
-対象は「外乱力の観測量生成」から「EKFによる状態推定」「予測外力算出」「補正角・補正クォータニオン生成」までである。
-実機運用における数値発散防止（シンプレクティック積分、NaNリセット）や、特定軸の計算省略など、実装上の分岐条件・安全化処理も推定器の一部として明示する。
-
-## 2. 記号定義
-
-- サンプリング時刻: $k$
-- サンプリング間隔: $\Delta t_k$
-- 予測ホライズン: $\Delta p$
-- 機体質量: $m$
-- 重力加速度: $g$
-- 正規化スロットル指令: $u_k$
-- 推力モデル係数: $\alpha_T = 6.3157, \beta_T = -0.9995$
-- 機体座標系加速度: $\mathbf{a}_k=[a_{x,k},a_{y,k},a_{z,k}]^\top$
-- 観測外力: $\mathbf{z}_k=[z_{x,k},z_{y,k},z_{z,k}]^\top$
-- 軸インデックス: $i\in\{x,y,z\}$
-
-各軸EKF状態は
-
-$$
-\mathbf{x}_{i,k} =
-\begin{bmatrix}
-d_{i,k} \\
-\dot d_{i,k} \\
-c_{i,k} \\
-\omega_{i,k}
-\end{bmatrix},
-\qquad
-\mathbf{P}_{i,k}\in\mathbb{R}^{4\times 4}
-$$
-
-### 2.1 状態量の選定理由
-
-本推定器では、ペイロードの振動外乱を「振幅変調された正弦波（周波数ω）＋低周波バイアス成分」とモデル化する。
-正弦波成分は２次の調和振動子（位置d、速度d_dot）で表現し、周波数ωを別状態とすることで時変周波数への適応を可能とする。
-バイアス成分cはDCオフセットやゆっくり変動する外乱を吸収するための状態である。
-各軸独立にこのモデルを適用し、Z軸を実装上都合の良い理由で除外している。
-
-この状態表現の利点は以下の通り：
-- 調和振動子の線形性を活かし、シンプレクティック積分によるエネルギー保存が容易。
-- ωを状態とすることで、未知かつ変動する周波数に対して追従可能。
-- バイアス項cにより、外界の定常的力やセンサバイアスを自動的に補償。
-- d, d_dotの二次元により振幅と位相を表現し、観測モデルがd+cと線形になる。
-
-### 2.2 なぜこの形になるのか？（初学者向け直感）
-
-本節では、上記の状態モデルが「なぜそうなるのか」を直感的に説明する。
-
-#### 2.2.1 「外力 = 正弦波 + DCバイアス」とモデル化する理由
-
-本実装の AP_Observer が対象とするのは、**ドローンがワイヤーで吊り下げた荷物の振り子運動**に起因する周期外乱である。
-吊り下げ荷物が振り子のように振動すると、その張力変動が機体に周期的な外力として現れるため、その波形は近似的に**正弦波**で表現できる。
-
-- 正弦波の周波数 ω は振り子の固有角周波数 $\sqrt{g/L}$ 付近の値となる（L：ワイヤー長）。
-- 正弦波の振幅 A は荷物の振れ幅に相当する。
-- DCバイアス c は、機体の重心ずれ・トリム誤差・定常風などによる**時間的にゆっくり変化する力**を吸収するための状態である。
-
-したがって、各軸の外力は以下の形で近似できる：
-
-$$
-\text{外力}(t) \approx \underbrace{A \sin(\omega t + \phi)}_{\text{振動成分}} + \underbrace{c}_{\text{DCバイアス}}
-$$
-
-#### 2.2.2 「なぜ d（位置）と d_dot（速度）で外力を表すのか？」
-
-正弦波 $A\sin(\omega t + \phi)$ は、以下の**2階線形微分方程式**を満たす：
-
-
-$$
-\frac{d^2}{dt^2}\big(A\sin(\omega t + \phi)\big) = -\omega^2 \cdot A\sin(\omega t + \phi)
-$$
-
-つまり「2回微分すると元の関数に $-\omega^2$ がかかる」という性質を持つ。
-この2階微分方程式をEKFで扱うには、**2つの状態変数**が必要になる：
-
-- $d$（位置に相当）：正弦波の現在値 $A\sin(\omega t + \phi)$ を表す
-- $\dot d$（速度に相当）：正弦波の時間微分 $A\omega\cos(\omega t + \phi)$ を表す
-
-**重要な発想の転換**：ここで $d$ は「実際の物理的な位置」ではなく、
-**「外力の振動成分を、あたかもバネにつながった質量の位置であるかのようにモデル化したもの」** である。
-つまり、外力の振動を「仮想的なバネマス系の運動」に置き換えて推定している。
-
-$$
-\text{外力の振動成分 } d(t) \quad\longleftrightarrow\quad \text{バネマス系の位置}
-$$
-
-このように考えると、状態方程式が単振動の形になる理由が理解できる：
+より、以下の2階線形微分方程式が得られる。
 
 $$
 \ddot d = -\omega^2 d
 $$
 
-これは「外力の振動成分は、角周波数 ω の単振動をする」というモデルである。
+すなわち、外力の振動成分は角周波数 $\omega$ の単振動としてモデル化される。
 
-#### 2.2.3 「なぜ観測が d + c なのか？」
+### 5.2 シンプレクティック・オイラー法の採用
 
-観測される外力 $\mathbf{z}$ は、加速度センサと推力モデルから計算される「今この瞬間の外力」である。
-これはモデル上、
+上記の単振動 $\ddot{d} = -\omega^2 d$ を単純な離散化（前進オイラー法）で解くと、数値的にエネルギーが増大し発散する。本実装ではエネルギー保存特性に優れた**シンプレクティック・オイラー法**を採用している。
+$$\dot d_{k+1} = \dot d_k - \Delta t_k \omega_k^2 d_k$$
+$$d_{k+1} = d_k + \Delta t_k \dot d_{k+1}$$
 
-$$
-\mathbf{z} = \underbrace{d}_{\text{振動成分}} + \underbrace{c}_{\text{DCバイアス}} + \underbrace{v}_{\text{センサノイズ}}
-$$
-
-と書ける。振動成分とDCバイアスは**足し算で重なる**ため、観測モデルは線形になる。
-したがって観測行列は $\mathbf{H} = \begin{bmatrix}1 & 0 & 1 & 0\end{bmatrix}$（4.1節で正式定義）となり、「状態 $d$ と状態 $c$ を取り出して足す」という単純な操作になる。
-これが「線形っぽい式」の正体である。
-
-#### 2.2.4 状態量の役割まとめ
-
-| 状態 | 記号 | 物理的イメージ | 役割 |
-|------|------|----------------|------|
-| 振動位置 | $d$ | 正弦波の現在値 | 外力の振動成分の瞬時値 |
-| 振動速度 | $\dot d$ | 正弦波の時間微分 | 次の瞬間の $d$ を決める |
-| DCバイアス | $c$ | ゆっくり変わるオフセット | 定常外力・センサバイアス |
-| 角周波数 | $\omega$ | 振動の速さ | 振動数の変動に追従 |
-
-この4状態により、「振幅・位相・周波数・DCオフセットがすべて未知の正弦波状外力」を逐次推定できる。
-
-## 3. 観測外力の生成 (処理の先頭)
-
-### 3.1 推力補償
-
-推力はスロットル指令に対する線形近似で
-
-$$
-T_k = -\left(\alpha_T u_k + \beta_T\right)g
-$$
-
-とし、機体加速度から外力観測量を
-
-$$
-z_{x,k}=m a_{x,k},\quad
-z_{y,k}=m a_{y,k},\quad
-z_{z,k}=m a_{z,k}-T_k
-$$
-
-として構成する。ここで $\mathbf{z}_k$ は「推定すべき外乱力」の観測値である。なお、本実装ではフィルタ処理をバイパスし、生のペイロード力を入力として用いる。
-
-### 3.2 Z軸の計算除外
-
-実装上、Z軸（$i=z$）については推力変動との分離困難性および計算負荷低減（発散防止）の観点から、**EKFの更新処理を完全にスキップ**する。したがって、以降のEKF状態更新はX軸およびY軸のみに適用される。
-
-## 4. 軸別EKFの状態方程式と観測方程式
-
-### 4.1 非線形離散時間モデル（シンプレクティック・オイラー法）
-
-単純な前進オイラー法では振動系において数値発散（エネルギー増大）を招くため、時間更新にはシンプレクティック・オイラー法を採用する。速度（$\dot d$）を先に更新し、その値を用いて位置（$d$）を更新する。
-
-#### 4.1.1 この式はどこから来るのか？（初学者向け導出）
-
-**Step 1: 連続時間の微分方程式**
-
-2.2.2節で説明した通り、外力の振動成分 $d(t)$ は調和振動子の方程式に従う：
-
-$$
-\ddot d(t) = -\omega^2 d(t)
-$$
-
-これは「$d(t)$ を2回微分すると、元の関数に $-\omega^2$ がかかったものになる」という意味で、正弦波 $A\sin(\omega t + \phi)$ が満たす性質そのものである。
-
-**Step 2: 1階連立微分方程式に分解**
-
-2階微分方程式を、2つの1階微分方程式に分解する：
-
-$$
-\begin{cases}
-\displaystyle \frac{d}{dt}\dot d(t) = -\omega^2 d(t) \quad\cdots\text{「速度の変化率 = $-\omega^2 \times$ 現在位置」}\\[8pt]
-\displaystyle \frac{d}{dt}d(t) = \dot d(t) \qquad\;\;\,\cdots\text{「位置の変化率 = 現在速度」}
-\end{cases}
-$$
-
-**Step 3: 前進オイラー法で離散化**
-
-微分を「差分」で近似する（$\frac{df}{dt} \approx \frac{f_{k+1} - f_k}{\Delta t_k}$）：
-
-$$
-\begin{cases}
-\displaystyle \frac{\dot d_{k+1} - \dot d_k}{\Delta t_k} = -\omega_k^2 d_k \\[10pt]
-\displaystyle \frac{d_{k+1} - d_k}{\Delta t_k} = \dot d_k
-\end{cases}
-$$
-
-両辺に $\Delta t_k$ をかけて整理すると：
-
-$$
-\begin{cases}
-\dot d_{k+1} = \dot d_k - \Delta t_k \cdot \omega_k^2 d_k \\[3pt]
-d_{k+1} = d_k + \Delta t_k \cdot \dot d_k
-\end{cases}
-$$
-
-これが「素朴な前進オイラー法」による離散化である。
-
-**Step 4: シンプレクティック・オイラー法への修正**
-
-上の素朴な前進オイラー法には、**時間が経つごとに系の全エネルギー $\frac{1}{2}\dot d^2 + \frac{1}{2}\omega^2 d^2$ が増大し、数値的に発散する**という問題がある。
-
-そこで、速度 $\dot d$ を先に更新し、**更新後の速度を使って位置 $d$ を更新する** シンプレクティック・オイラー法を用いる：
-
-$$
-\boxed{\dot d_{k+1} = \dot d_k - \Delta t_k \, \omega_k^2 d_k}
-$$
-
-$$
-\boxed{d_{k+1} = d_k + \Delta t_k \, \dot d_{k+1}} \quad (\leftarrow \text{新しい速度を使う！})
-$$
-
-これによりエネルギーが保存され、長期間のシミュレーションでも発散を防げる。これがシンプレクティック積分の利点である。
-
-DCバイアス $c$ と角周波数 $\omega$ は「時間変化しない」と仮定するため、その更新は単に：
-
-$$
-c_{k+1} = c_k, \qquad \omega_{k+1} = \omega_k
-$$
-
-となる。
-
-観測モデルは
-
-$$
-z_k = d_k + c_k + v_k
-$$
-
-であり、観測行列は
-
-$$
-\mathbf{H}=\begin{bmatrix}1&0&1&0\end{bmatrix}
-$$
-
-となる。
-
-### 4.2 ヤコビアン（線形化）の導出
-
-本節では、状態遷移関数 $f(\cdot)$ を予測点 $\hat{\mathbf{x}}_k = (d_k, \dot d_k, c_k, \omega_k)^\top$ の周りで線形化し、ヤコビアン $\mathbf{F}_k$ の各要素を解析的に導出する。
-
-#### 4.2.1 非線形状態遷移関数の定義
-
-4.1節のシンプレクティック・オイラー法による状態遷移を、非線形関数 $f: \mathbb{R}^4 \to \mathbb{R}^4$ として書き下す：
-
-$$
-\mathbf{x}_{k+1} = f(\mathbf{x}_k) =
-\begin{bmatrix}
-f_1(\mathbf{x}_k) \\[3pt]
-f_2(\mathbf{x}_k) \\[3pt]
-f_3(\mathbf{x}_k) \\[3pt]
-f_4(\mathbf{x}_k)
-\end{bmatrix}
-= \begin{bmatrix}
-d_k + \Delta t_k\,\dot d_{k+1} \\[3pt]
-\dot d_k - \Delta t_k\,\omega_k^2 d_k \\[3pt]
-c_k \\[3pt]
+### 5.3 状態遷移関数 $f(\mathbf{x}_k)$
+速度更新を位置更新に代入して整理すると、以下の非線形状態遷移関数が得られる。
+$$\mathbf{x}_{k+1} = f(\mathbf{x}_k) = \begin{bmatrix}
+d_k + \Delta t_k(\dot d_k - \Delta t_k \omega_k^2 d_k) \\
+\dot d_k - \Delta t_k \omega_k^2 d_k \\
+c_k \\
 \omega_k
-\end{bmatrix}
-= \begin{bmatrix}
-d_k + \Delta t_k(\dot d_k - \Delta t_k\,\omega_k^2 d_k) \\[3pt]
-\dot d_k - \Delta t_k\,\omega_k^2 d_k \\[3pt]
-c_k \\[3pt]
-\omega_k
-\end{bmatrix}
-$$
+\end{bmatrix}$$
 
-ここで、シンプレクティック・オイラー法では $\dot d_{k+1}$ を先に計算し、その値を使って $d_{k+1}$ を更新するため、$f_1$ には $\dot d_{k+1}$ が内部展開されて代入されていることに注意する。
-
-#### 4.2.2 ヤコビアンの定義
-
-状態ヤコビアンは、非線形関数 $f$ の各出力成分 $f_i$ を各状態変数 $x_j$ で偏微分した $4\times4$ 行列である：
-
-$$
-\mathbf{F}_k = \left.\frac{\partial f}{\partial \mathbf{x}}\right|_{\hat{\mathbf{x}}_k}
-= \begin{bmatrix}
-\displaystyle\frac{\partial f_1}{\partial d_k} & \displaystyle\frac{\partial f_1}{\partial \dot d_k} & \displaystyle\frac{\partial f_1}{\partial c_k} & \displaystyle\frac{\partial f_1}{\partial \omega_k} \\[8pt]
-\displaystyle\frac{\partial f_2}{\partial d_k} & \displaystyle\frac{\partial f_2}{\partial \dot d_k} & \displaystyle\frac{\partial f_2}{\partial c_k} & \displaystyle\frac{\partial f_2}{\partial \omega_k} \\[8pt]
-\displaystyle\frac{\partial f_3}{\partial d_k} & \displaystyle\frac{\partial f_3}{\partial \dot d_k} & \displaystyle\frac{\partial f_3}{\partial c_k} & \displaystyle\frac{\partial f_3}{\partial \omega_k} \\[8pt]
-\displaystyle\frac{\partial f_4}{\partial d_k} & \displaystyle\frac{\partial f_4}{\partial \dot d_k} & \displaystyle\frac{\partial f_4}{\partial c_k} & \displaystyle\frac{\partial f_4}{\partial \omega_k}
-\end{bmatrix}
-$$
-
-以下、各成分を順に計算する。
-
-#### 4.2.3 第1行: $d_{k+1} = f_1(\mathbf{x}_k)$ の偏微分
-
-$$f_1(\mathbf{x}_k) = d_k + \Delta t_k\,\dot d_k - \Delta t_k^2\,\omega_k^2 d_k$$
-
-- $d_k$ による偏微分：
-  $$
-  \frac{\partial f_1}{\partial d_k} = 1 - \Delta t_k^2\,\omega_k^2
-  $$
-
-  $d_k$ は2ヶ所に現れる（1項目の $d_k$ と3項目の $\omega_k^2 d_k$）ことに注意。
-
-- $\dot d_k$ による偏微分：
-  $$
-  \frac{\partial f_1}{\partial \dot d_k} = \Delta t_k
-  $$
-
-- $c_k$ による偏微分：
-  $$
-  \frac{\partial f_1}{\partial c_k} = 0
-  $$
-
-- $\omega_k$ による偏微分：
-  $$
-  \frac{\partial f_1}{\partial \omega_k} = -2\Delta t_k^2\,\omega_k d_k
-  $$
-
-  $\omega_k^2$ の微分 $2\omega_k$ により、$- \Delta t_k^2 d_k \cdot 2\omega_k = -2\Delta t_k^2 \omega_k d_k$ となる。
-
-  **検算**: 上式を用いると、微小変位 $\delta\omega$ に対する $d_{k+1}$ の変化量は
-  $\delta d_{k+1} \approx (-2\Delta t_k^2\omega_k d_k)\,\delta\omega$ と予測される。
-
-#### 4.2.4 第2行: $\dot d_{k+1} = f_2(\mathbf{x}_k)$ の偏微分
-
-$$f_2(\mathbf{x}_k) = \dot d_k - \Delta t_k\,\omega_k^2 d_k$$
-
-- $d_k$ による偏微分：
-  $$
-  \frac{\partial f_2}{\partial d_k} = -\Delta t_k\,\omega_k^2
-  $$
-
-- $\dot d_k$ による偏微分：
-  $$
-  \frac{\partial f_2}{\partial \dot d_k} = 1
-  $$
-
-- $c_k$ による偏微分：
-  $$
-  \frac{\partial f_2}{\partial c_k} = 0
-  $$
-
-- $\omega_k$ による偏微分（本ヤコビアンで最も重要な成分）：
-  $$
-  \frac{\partial f_2}{\partial \omega_k} = -2\Delta t_k\,\omega_k d_k
-  $$
-
-  $-\Delta t_k\,\omega_k^2 d_k$ の $\omega_k$ による微分として、$- \Delta t_k d_k \cdot 2\omega_k = -2\Delta t_k\,\omega_k d_k$ を得る。
-  この成分は角周波数の変動が速度変化に与える影響を表現しており、周波数推定に必要な感度である。
-
-#### 4.2.5 第3行: $c_{k+1} = f_3(\mathbf{x}_k)$ の偏微分
-
-$f_3(\mathbf{x}_k) = c_k$ は自明な恒等写像である：
-
-$$
-\frac{\partial f_3}{\partial d_k} = 0,\quad
-\frac{\partial f_3}{\partial \dot d_k} = 0,\quad
-\frac{\partial f_3}{\partial c_k} = 1,\quad
-\frac{\partial f_3}{\partial \omega_k} = 0
-$$
-
-#### 4.2.6 第4行: $\omega_{k+1} = f_4(\mathbf{x}_k)$ の偏微分
-
-$f_4(\mathbf{x}_k) = \omega_k$ も自明な恒等写像である：
-
-$$
-\frac{\partial f_4}{\partial d_k} = 0,\quad
-\frac{\partial f_4}{\partial \dot d_k} = 0,\quad
-\frac{\partial f_4}{\partial c_k} = 0,\quad
-\frac{\partial f_4}{\partial \omega_k} = 1
-$$
-
-#### 4.2.7 ヤコビアンの完成形と実装上の近似
-
-以上の偏微分結果をまとめると、解析的に正しい状態ヤコビアンは以下のようになる：
-
-$$
-\mathbf{F}_k^{\text{(exact)}} =
-\begin{bmatrix}
+### 5.4 ヤコビアン $\mathbf{F}_k$ の導出
+上記 $f$ を各状態で偏微分すると、ヤコビアンは以下となる。
+$$\mathbf{F}_k^{\text{exact}} = \begin{bmatrix}
 1 - \Delta t_k^2\omega_k^2 & \Delta t_k & 0 & -2\Delta t_k^2\omega_k d_k \\
 -\Delta t_k\omega_k^2 & 1 & 0 & -2\Delta t_k\omega_k d_k \\
 0 & 0 & 1 & 0 \\
 0 & 0 & 0 & 1
-\end{bmatrix}
-$$
+\end{bmatrix}$$
+実装では $\Delta t_k$ が十分に小さいことから、2次項を無視した簡略化ヤコビアンを採用し、計算負荷を抑制している。
 
-ここで $F_{1,1}=1-\Delta t_k^2\omega_k^2$ および $F_{1,4}=-2\Delta t_k^2\omega_k d_k$ はシンプレクティック積分由来の項であり、前進オイラー法では現れない。
-
-**実装上の近似**: 本推定器では、上記の正確なヤコビアンの代わりに、**前進オイラー法ベースの簡略化ヤコビアン**を使用する：
-
-$$
-\boxed{\mathbf{F}_k=
-\begin{bmatrix}
-1 & \Delta t_k & 0 & 0 \\
--\Delta t_k\omega_k^2 & 1 & 0 & -2\Delta t_k\omega_k d_k \\
-0 & 0 & 1 & 0 \\
-0 & 0 & 0 & 1
-\end{bmatrix}}
-$$
-
-すなわち、第1行の $F_{1,1}$ を $1$ に、$F_{1,4}$ を $0$ にそれぞれ近似している。これは $O(\Delta t_k^2)$ の高次項を切り落としたことに相当し、$\Delta t_k$ が十分に小さい（実装では $\Delta t_k \approx 0.004$ s = 250 Hz）ことを根拠とする。
-
-**なぜこの近似が許容されるか**：
-1. $\Delta t_k \approx 0.004$ s に対して $\omega_k \lesssim 20$ rad/s（実機の振動外乱周波数）を仮定すると、$\Delta t_k^2\omega_k^2 \lesssim 0.0064 \ll 1$ となり、$F_{1,1} \approx 1$ の誤差は無視できる。
-2. カルマンフィルタは共分散予測において $O(\Delta t_k^2)$ の誤差をプロセスノイズ $\mathbf{Q}_k$ で吸収するため、ナイーブな近似でも推定精度への影響は限定的である。
-3. 実装の単純さと計算負荷低減を優先し、あえて簡略化ヤコビアンを採用している。
-
-このように、**状態伝播にはエネルギー保存に優れるシンプレクティック・オイラー法を用い、線形化（共分散伝播・カルマンゲイン計算）には前進オイラー法由来の簡易ヤコビアンを用いる** というハイブリッド設計が本推定器の特徴である。
-
-### 4.3 標準EKF更新とNaN防御
-
-事前状態予測 $\mathbf{x}_{k|k-1}$ と共分散予測 $\mathbf{P}_{k|k-1}$ は標準EKF式に従う。これにプロセスノイズ $\mathbf{Q}_k$ を加算する。
-
-$$
-r_k=z_k-h(\mathbf{x}_{k|k-1}),\quad
-S_k=\mathbf{H}\mathbf{P}_{k|k-1}\mathbf{H}^\top+R_k
-$$
-
-$$
-\mathbf{K}_k=\mathbf{P}_{k|k-1}\mathbf{H}^\top S_k^{-1}
-$$
-
-$$
-\mathbf{x}_{k|k}=\mathbf{x}_{k|k-1}+\mathbf{K}_k r_k,
-\quad
-\mathbf{P}_{k|k}=(\mathbf{I}-\mathbf{K}_k\mathbf{H})\mathbf{P}_{k|k-1}
-$$
-
-実装では数値安定化のため共分散対称化を行う。さらに、演算過程で非有限値（NaN/Inf）が発生した場合、**周波数 $\omega$ は直前の値を維持しつつ、他の状態 $(d, \dot d, c)$ を $0$ にリセットし、共分散行列 $\mathbf{P}$ を初期化する**堅牢性対策が組み込まれている。
+---
 
 ## 5. ロバスト化分岐 (実装の本質)
 
