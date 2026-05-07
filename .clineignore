@@ -1,5 +1,14 @@
 # すべてのファイルとディレクトリを除外
 *
 
-# ただし、.clineignore 自身は除外しない（許可する）
+# === 常時許可 ===
 !.clineignore
+!.clinerules
+!README.md
+!libraries/
+!libraries/AP_Observer/
+!libraries/AP_Observer/README.md
+
+# === 作業時に一時的に追加する行（作業後は削除または再コメントアウト） ===
+# !libraries/AP_Observer/AP_Observer.h
+# !libraries/AP_Observer/AP_Observer.cpp
