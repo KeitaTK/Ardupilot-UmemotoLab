@@ -120,3 +120,164 @@ source venv/bin/activate
 - README.md は「理論教科書」「実装解説書」「設計メモ」の3層構造
 - 数式はシンプレクティック・オイラー法のエネルギー保存を重視
 - 図は `docs/figures/` に格納
+
+## .clineignore 動的管理ルール
+
+### 基本方針
+- `.clineignore` はブラックリスト方式。記載されたパターンのみ Cline のスコープから除外される。
+- `.clineignore` 自体は常に Cline から読み書き可能（除外の対象外）。
+- タスク開始時に MCP repo-map-viewer (`get_repo_structure`) でリポジトリ構造を把握し、作業スコープを判定する。
+
+### スコープ定義と推奨ブラックリスト設定
+
+#### スコープ A: AP_Observer コア開発（デフォルト）
+以下のパスを動的ブラックリストに追記する：
+
+```
+analysis/
+ArduCopter/mode_acro.cpp
+ArduCopter/mode_acro_heli.cpp
+ArduCopter/mode_althold.cpp
+ArduCopter/mode_auto.cpp
+ArduCopter/mode_autorotate.cpp
+ArduCopter/mode_autotune.cpp
+ArduCopter/mode_avoid_adsb.cpp
+ArduCopter/mode_brake.cpp
+ArduCopter/mode_circle.cpp
+ArduCopter/mode_drift.cpp
+ArduCopter/mode_flip.cpp
+ArduCopter/mode_flowhold.cpp
+ArduCopter/mode_follow.cpp
+ArduCopter/mode_guided.cpp
+ArduCopter/mode_guided_custom.cpp
+ArduCopter/mode_guided_nogps.cpp
+ArduCopter/mode_land.cpp
+ArduCopter/mode_loiter.cpp
+ArduCopter/mode_poshold.cpp
+ArduCopter/mode_rtl.cpp
+ArduCopter/mode_smart_rtl.cpp
+ArduCopter/mode_sport.cpp
+ArduCopter/mode_stabilize.cpp
+ArduCopter/mode_stabilize_heli.cpp
+ArduCopter/mode_systemid.cpp
+ArduCopter/mode_throw.cpp
+ArduCopter/mode_turtle.cpp
+ArduCopter/mode_zigzag.cpp
+ArduCopter/toy_mode.cpp
+ArduCopter/toy_mode.h
+benchmarks/
+docs/
+libraries/AC_AttitudeControl/
+libraries/AC_AutoTune/
+libraries/AC_Autorotation/
+libraries/AC_Avoidance/
+libraries/AC_Circle/
+libraries/AC_Fence/
+libraries/AC_InputManager/
+libraries/AC_Notify/
+libraries/AC_PID/
+libraries/AC_PrecLand/
+libraries/AC_Sprayer/
+libraries/AC_WPNav/
+libraries/AP_ADSB/
+libraries/AP_AHRS/
+libraries/AP_Airspeed/
+libraries/AP_Arming/
+libraries/AP_Avoidance/
+libraries/AP_Baro/
+libraries/AP_BattMonitor/
+libraries/AP_BoardConfig/
+libraries/AP_Buffer/
+libraries/AP_Camera/
+libraries/AP_Common/
+libraries/AP_Compass/
+libraries/AP_Declination/
+libraries/AP_DepthSensor/
+libraries/AP_EFI/
+libraries/AP_ESC_Telem/
+libraries/AP_ExternalControl/
+libraries/AP_Filesystem/
+libraries/AP_Follow/
+libraries/AP_Frsky_Telem/
+libraries/AP_GPS/
+libraries/AP_Gripper/
+libraries/AP_GyroFFT/
+libraries/AP_HAL/
+libraries/AP_Hott_Telem/
+libraries/AP_InertialNav/
+libraries/AP_InertialSensor/
+libraries/AP_IRLock/
+libraries/AP_JSON/
+libraries/AP_KDECAN/
+libraries/AP_Logger/
+libraries/AP_LandingGear/
+libraries/AP_JSButton/
+libraries/AP_Math/
+libraries/AP_Menu/
+libraries/AP_Mission/
+libraries/AP_Module/
+libraries/AP_Motors/
+libraries/AP_NavEKF2/
+libraries/AP_NavEKF3/
+libraries/AP_Navigation/
+libraries/AP_Networking/
+libraries/AP_OLC/
+libraries/AP_OpticalFlow/
+libraries/AP_Param/
+libraries/AP_Proximity/
+libraries/AP_Radio/
+libraries/AP_Rally/
+libraries/AP_RCMapper/
+libraries/AP_RPM/
+libraries/AP_Relay/
+libraries/AP_RTC/
+libraries/AP_SBusOut/
+libraries/AP_Scripting/
+libraries/AP_SerialLE/
+libraries/AP_SerialManager/
+libraries/AP_ServoRelayEvents/
+libraries/AP_Stats/
+libraries/AP_TempCalibration/
+libraries/AP_TemperatureSensor/
+libraries/AP_Terrain/
+libraries/AP_Tuning/
+libraries/AP_UAVCAN/
+libraries/AP_Vehicle/
+libraries/AP_VisualOdom/
+libraries/AP_Voltage_Current/
+libraries/AP_WheelEncoder/
+libraries/AP_WindVane/
+libraries/AR_WPNav/
+libraries/Filter/
+libraries/GCS_MAVLink/
+libraries/rc_efis/
+libraries/RC_Channel/
+libraries/SITL/
+libraries/SRV_Channel/
+libraries/StorageManager/
+tests/
+```
+
+#### スコープ B: ArduCopter フライトモード開発
+動的ブラックリストには分析/テスト系のみ追加：
+```
+analysis/
+benchmarks/
+tests/
+```
+
+#### スコープ C: Python 解析スクリプト作業
+動的ブラックリストは空（全ファイル可視）。
+
+### 動的書き換え手順
+1. MCP `repo-map-viewer` で `get_repo_structure()` を呼び構造を確認する
+2. ユーザーのタスク内容からスコープ A/B/C を判定する
+3. `write_to_file` で `.clineignore` の全内容を書き換える（常にこの方法を使うこと）
+4. 作業中に新たに不要と判断したファイルがあれば随時追記する
+5. タスク完了時は動的ブラックリストをクリアしてベース状態に戻す
+
+### 重要: `.clineignore` 書き換え上の注意
+- `.clineignore` がブラックリストルールにマッチすると `replace_in_file` がブロックされる可能性がある。
+- そのため、**常に `write_to_file` でファイル全体を上書きする方式**を採用する。部分編集は行わない。
+- `write_to_file` はブラックリストの対象外であるため常に成功する（Cline の実装保証）。
+- `.clinerules` は常に可視なので、`replace_in_file` による部分編集は問題なく行える。
