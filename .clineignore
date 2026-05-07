@@ -1,4 +1,3 @@
-# すべてのファイルとディレクトリを除外
 *
 
 # === 常時許可 ===
@@ -9,6 +8,3 @@
 !libraries/AP_Observer/
 !libraries/AP_Observer/README.md
 
-# === 作業時に一時的に追加する行（作業後は削除または再コメントアウト） ===
-# !libraries/AP_Observer/AP_Observer.h
-# !libraries/AP_Observer/AP_Observer.cpp
