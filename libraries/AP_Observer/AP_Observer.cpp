@@ -1,4 +1,4 @@
-// #define AP_OBSERVER_REPLAY_TEST 1
+#define AP_OBSERVER_REPLAY_TEST 1
 #include "AP_Observer.h"
 
 // パラメータテーブル定義

@@ -64,7 +64,9 @@ public:
                                         float rms_off,
                                         float tau_sec);
     void set_ekf_robust_update_for_replay(bool enabled,
-                                          float nis_reject_scale);
+                                           float nis_reject_scale);
+    void set_ekf_force_thresholds_for_replay(float hold_max,
+                                              float reject_min);
     float get_axis_estimated_frequency(uint8_t axis) const {
         if (axis >= EKF_NUM_AXES) {
             return 0.0f;  // Invalid axis

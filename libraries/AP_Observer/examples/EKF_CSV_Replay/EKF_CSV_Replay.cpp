@@ -176,6 +176,8 @@ struct ReplayRunConfig {
     int ekf_robust_update = 0;
     bool has_ekf_robust_nis_reject = false;
     float ekf_robust_nis_reject = 3.0f;
+    bool has_ekf_sh_beta = false;
+    float ekf_sh_beta = 0.0f;
 };
 
 static bool parse_replay_args(ReplayRunConfig& cfg) {
