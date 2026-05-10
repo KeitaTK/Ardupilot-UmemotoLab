@@ -2,6 +2,14 @@
 
 # 開発履歴・トライアンドエラー記録
 
+### 2026-05-10 19:05: [AP_Observer/Logging] EKF P/S/K debug log added for numeric-collapse detection
+
+- 問題: EKF内部のP対角やS/Kの異常（負値/ゼロ近傍）をログで追えず、数値崩壊の早期検出が困難だった。
+- 調査: `ekf_update_axis()` でP_pred/S/Kを算出しているが、`OBSV` には記録していないことを確認。
+- 試行: `AP_Observer` に軸別のデバッグ変数を追加し、`OBEK` ログ（TimeUS,AX,P00,P22,SS,K0,K2,DV）を書き出すよう実装。
+- 結果: Lite/Medium autotest を実行し、Observer logging/EKF operation と `test.CopterMedium` がPASS。
+- 備考: Pixhawk6C buildは必須SITL（全mandatory）パス後のみ実行ルールのため保留。
+
 ### 2026-04-29: [Analysis/OBSV Report] 実機OBSVと replay の列混同を解消
 
 - Problem: 00000091 のレポートで、実機 OBSV の `PLX/PLY` と EKF 状態 `DX/DY` を比較すべきところを、replay 由来の `PRX/PRY` や `EstFreq_Hz` を前半に混ぜてしまい、MP の表示とも齟齬が出ていた。

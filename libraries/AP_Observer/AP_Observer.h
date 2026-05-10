@@ -132,6 +132,12 @@ private:
     uint8_t ekf_axis_energy_trusted[OBS_NUM_AXES];
     uint8_t ekf_axis_omega_updated[OBS_NUM_AXES];
     uint8_t ekf_axis_hold_omega[OBS_NUM_AXES];
+    float ekf_axis_p00[OBS_NUM_AXES];
+    float ekf_axis_p22[OBS_NUM_AXES];
+    float ekf_axis_s[OBS_NUM_AXES];
+    float ekf_axis_k0[OBS_NUM_AXES];
+    float ekf_axis_k2[OBS_NUM_AXES];
+    uint8_t ekf_axis_dbg_valid[OBS_NUM_AXES];
 
     // EKF tuning parameters
     AP_Float _ekf_q_d;

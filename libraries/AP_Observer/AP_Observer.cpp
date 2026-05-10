@@ -208,6 +208,12 @@ void AP_Observer::ekf_init() {
         ekf_axis_energy_trusted[axis] = 0U;
         ekf_axis_omega_updated[axis] = 0U;
         ekf_axis_hold_omega[axis] = 0U;
+        ekf_axis_p00[axis] = 0.0f;
+        ekf_axis_p22[axis] = 0.0f;
+        ekf_axis_s[axis] = 0.0f;
+        ekf_axis_k0[axis] = 0.0f;
+        ekf_axis_k2[axis] = 0.0f;
+        ekf_axis_dbg_valid[axis] = 0U;
 
         for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
             for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
@@ -430,6 +436,13 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     P_pred[2][2] += q_c;
     P_pred[3][3] += q_omega;
 
+    ekf_axis_p00[axis] = P_pred[0][0];
+    ekf_axis_p22[axis] = P_pred[2][2];
+    ekf_axis_s[axis] = 0.0f;
+    ekf_axis_k0[axis] = 0.0f;
+    ekf_axis_k2[axis] = 0.0f;
+    ekf_axis_dbg_valid[axis] = 0U;
+
     if (predict_only_hold) {
             // SW OFF またはエネルギーゲート OFF では観測更新を行わない。
         const float y_pred_hold = x_pred[0] + x_pred[2];
@@ -488,6 +501,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     }
 
     float S = PHt[0] + PHt[2] + R_eff;
+    ekf_axis_s[axis] = S;
     if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
         ekf_axis_innovation[axis] = innov_raw;
         ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
@@ -508,6 +522,7 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
             const float nis_ratio = constrain_value(nis_raw / nis_max, 1.0f, 50.0f);
             R_eff = R * nis_ratio;
             S = PHt[0] + PHt[2] + R_eff;
+            ekf_axis_s[axis] = S;
             if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
                 ekf_axis_innovation[axis] = innov_raw;
                 ekf_axis_nis[axis] = nis_raw;
@@ -546,6 +561,10 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         // hold 条件下では omega 更新を止める。
         K[3] = 0.0f;
     }
+
+    ekf_axis_k0[axis] = K[0];
+    ekf_axis_k2[axis] = K[2];
+    ekf_axis_dbg_valid[axis] = 1U;
     
     ekf_axis_innovation[axis] = innov_raw;
     ekf_axis_nis[axis] = nis_raw;
@@ -817,6 +836,20 @@ void AP_Observer::Write_Observer_Log() {
                   ekf_state[0][3] / (2.0f * M_PI), // FX: X-axis frequency
                   ekf_state[1][3] / (2.0f * M_PI), // FY: Y-axis frequency
                   (uint8_t)1);  // SW: 常にON
+
+    for (uint8_t axis = 0; axis < 2; axis++) {
+        logger->Write("OBEK", "TimeUS,AX,P00,P22,SS,K0,K2,DV",
+                      "s-------", "F-------",
+                      "QBfffffB",
+                      AP_HAL::micros64(),
+                      axis,
+                      ekf_axis_p00[axis],
+                      ekf_axis_p22[axis],
+                      ekf_axis_s[axis],
+                      ekf_axis_k0[axis],
+                      ekf_axis_k2[axis],
+                      ekf_axis_dbg_valid[axis]);
+    }
 #endif
 }
 
