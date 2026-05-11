@@ -7600,8 +7600,6 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
             'OBS_PRED_TIME': 0.01,
             'OBS_EKF_Q_W': 0.0005,
             'OBS_EKF_R_MEAS': 46.0,
-            'OBS_EKF_EN_GAT': 1,
-            'OBS_EKF_RB_EN': 1,
         }
 
         for param_name, expected_val in expected_defaults.items():

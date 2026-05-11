@@ -662,23 +662,12 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     observer.set_ekf_q_w_for_replay(cfg.has_ekf_q_w ? cfg.ekf_q_w : 0.0005f);
     observer.set_ekf_r_meas_for_replay(cfg.has_ekf_r_meas ? cfg.ekf_r_meas : 46.0f);
 
-    observer.set_ekf_energy_gate_for_replay(
-        cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true,
-        cfg.has_ekf_energy_rms_on ? cfg.ekf_energy_rms_on : 0.20f,
-        cfg.has_ekf_energy_rms_off ? cfg.ekf_energy_rms_off : 0.16f,
-        cfg.has_ekf_energy_tau ? cfg.ekf_energy_tau : 2.0f
     );
     observer.set_ekf_innovation_limits_for_replay(
         cfg.has_ekf_innov_max ? cfg.ekf_innov_max : 0.7f,
         cfg.has_ekf_nis_max ? cfg.ekf_nis_max : 4.0f
     );
-    observer.set_ekf_force_thresholds_for_replay(
-        cfg.has_ekf_force_hold_max ? cfg.ekf_force_hold_max : 0.10f,
-        cfg.has_ekf_force_reject_min ? cfg.ekf_force_reject_min : 5.0f
     );
-    observer.set_ekf_robust_update_for_replay(
-        cfg.has_ekf_robust_update ? (cfg.ekf_robust_update != 0) : false,
-        cfg.has_ekf_robust_nis_reject ? cfg.ekf_robust_nis_reject : 3.0f
     );
     if (cfg.has_ekf_w_init_hz) {
         observer.set_ekf_w_init_hz_for_replay(cfg.ekf_w_init_hz);

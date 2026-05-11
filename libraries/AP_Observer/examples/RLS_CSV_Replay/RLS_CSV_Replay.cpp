@@ -656,9 +656,6 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
         if (AP_Param::set_by_name("PRED_TIME", cfg.ekf_pred_time)) {}
     }
     if (cfg.has_ekf_robust_update || cfg.has_ekf_robust_nis_reject) {
-        observer.set_ekf_robust_update_for_replay(
-            cfg.has_ekf_robust_update ? (cfg.ekf_robust_update != 0) : false,
-            cfg.has_ekf_robust_nis_reject ? cfg.ekf_robust_nis_reject : 3.0f
         );
     }
     if (cfg.has_ekf_axis_gate || cfg.has_ekf_amp_min || cfg.has_ekf_amp_max) {
@@ -672,17 +669,9 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     }
     if (cfg.has_ekf_energy_gate || cfg.has_ekf_energy_rms_on || cfg.has_ekf_energy_rms_off || cfg.has_ekf_energy_tau) {
         const bool energy_gate_enabled = cfg.has_ekf_energy_gate ? (cfg.ekf_energy_gate != 0) : true;
-        observer.set_ekf_energy_gate_for_replay(
-            energy_gate_enabled,
-            cfg.ekf_energy_rms_on,
-            cfg.ekf_energy_rms_off,
-            cfg.ekf_energy_tau
         );
     }
     if (cfg.has_ekf_force_hold_max || cfg.has_ekf_force_reject_min) {
-        observer.set_ekf_force_thresholds_for_replay(
-            cfg.has_ekf_force_hold_max ? cfg.ekf_force_hold_max : 1.5f,
-            cfg.has_ekf_force_reject_min ? cfg.ekf_force_reject_min : 5.0f
         );
     }
     if (AP_Param::set_by_name("OBS_CORR_GAIN", 0.0f)) {}

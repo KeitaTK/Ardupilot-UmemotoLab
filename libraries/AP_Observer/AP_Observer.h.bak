@@ -59,6 +59,14 @@ public:
     void set_prediction_time_for_replay(float pred_time_sec);
     void set_ekf_innovation_limits_for_replay(float innov_max,
                                               float nis_max);
+    void set_ekf_energy_gate_for_replay(bool enabled,
+                                        float rms_on,
+                                        float rms_off,
+                                        float tau_sec);
+    void set_ekf_robust_update_for_replay(bool enabled,
+                                           float nis_reject_scale);
+    void set_ekf_force_thresholds_for_replay(float hold_max,
+                                              float reject_min);
     float get_axis_estimated_frequency(uint8_t axis) const {
         if (axis >= EKF_NUM_AXES) {
             return 0.0f;  // Invalid axis
@@ -72,28 +80,6 @@ public:
     static const struct AP_Param::GroupInfo var_info[];
 
 private:
-
-    // --- AP_Param variables (must match var_info order exactly) ---
-    AP_Float _correction_gain;
-    AP_Float _filter_cutoff_freq;
-    AP_Float _ekf_q_d;
-    AP_Float _ekf_q_d_dot;
-    AP_Float _ekf_q_c;
-    AP_Float _ekf_q_omega;
-    AP_Float _ekf_r_meas;
-    AP_Float _ekf_omega_init;
-    AP_Float _ekf_omega_min;
-    AP_Float _ekf_omega_max;
-    AP_Float _prediction_time;
-    AP_Float _max_correction_angle;
-    AP_Float _ekf_innov_max;
-    AP_Float _ekf_nis_max;
-    AP_Float _out_fade_th;
-    AP_Float _out_fade_dly;
-    AP_Float _out_fade_in_t;
-    AP_Float _out_fade_out_t;
-    // -------------------------------------------------------------
-
 // #ifdef AP_OBSERVER_REPLAY_TEST
     uint32_t _test_current_ms = 0;
     bool _replay_active = false;
@@ -153,13 +139,28 @@ private:
     float ekf_axis_k2[OBS_NUM_AXES];
     uint8_t ekf_axis_dbg_valid[OBS_NUM_AXES];
 
-    // Fade control variables
-    float _fade_timer[EKF_NUM_AXES] = {0};
-    float _fade_gain[EKF_NUM_AXES] = {1.0f, 1.0f, 1.0f};
-
     // EKF tuning parameters
+    AP_Float _ekf_q_d;
+    AP_Float _ekf_q_d_dot;
+    AP_Float _ekf_q_c;
+    AP_Float _ekf_q_omega;
+    AP_Float _ekf_r_meas;
+    AP_Float _ekf_omega_init;
+    AP_Float _ekf_omega_min;
+    AP_Float _ekf_omega_max;
+    AP_Float _ekf_innov_max;
+    AP_Float _ekf_nis_max;
+    AP_Int8  _ekf_energy_gate_enable;
+    AP_Float _ekf_energy_rms_on;
+    AP_Float _ekf_energy_rms_off;
+    AP_Float _ekf_energy_tau_sec;
+    AP_Float _ekf_force_hold_max;
+    AP_Float _ekf_force_reject_min;
+    AP_Int8  _ekf_robust_update_enable;
+    AP_Float _ekf_robust_nis_reject_scale;
 
     // Estimator parameters
+    AP_Float _prediction_time;
     
     // 予測用キャッシュ変数（計算量削減）
     float _omega_rad;                  // ω [rad/s]
@@ -178,9 +179,12 @@ private:
     float apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const;
 
     // 揺れ制御のゲイン
+    AP_Float    _correction_gain;
     // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）
+    AP_Float    _filter_cutoff_freq;
     
     // 補正角度の最大値
+    AP_Float    _max_correction_angle;
 
     // 定数
     static constexpr uint32_t TIMEOUT_MS            = 500;

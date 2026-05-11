@@ -1,0 +1,1060 @@
+Setting top to                           : /home/umemoto/Ardupilot-UmemotoLab 
+Setting out to                           : /home/umemoto/Ardupilot-UmemotoLab/build 
+Autoconfiguration                        : enabled 
+Checking for program 'python'            : /home/umemoto/Ardupilot-UmemotoLab/venv/bin/python3 
+Checking for python version >= 3.6.9     : 3.12.3 
+Setting board to                         : sitl 
+Using toolchain                          : native 
+Checking for 'g++' (C++ compiler)        : /usr/lib/ccache/g++ 
+Checking for 'gcc' (C compiler)          : /usr/lib/ccache/gcc 
+Checking for c flags '-MMD'              : yes 
+Checking for cxx flags '-MMD'            : yes 
+CXX Compiler                             : g++ 13.3.0 
+Checking for need to link with librt     : not necessary 
+Checking for feenableexcept              : yes 
+Enabling -Werror                         : no 
+Enabled OpenDroneID                      : no 
+Enabled firmware ID checking             : no 
+GPS Debug Logging                        : no 
+Enabled custom controller                : yes 
+Checking for HAVE_CMATH_ISFINITE         : yes 
+Checking for HAVE_CMATH_ISINF            : yes 
+Checking for HAVE_CMATH_ISNAN            : yes 
+Checking for NEED_CMATH_ISFINITE_STD_NAMESPACE : yes 
+Checking for NEED_CMATH_ISINF_STD_NAMESPACE    : yes 
+Checking for NEED_CMATH_ISNAN_STD_NAMESPACE    : yes 
+Checking for header endian.h                   : yes 
+Checking for header byteswap.h                 : yes 
+Checking for HAVE_MEMRCHR                      : yes 
+Configured VSCode Intellisense:                : no 
+DC_DSDL compiler in                            : /home/umemoto/Ardupilot-UmemotoLab/modules/DroneCAN/dronecan_dsdlc 
+Source is git repository                       : yes 
+Update submodules                              : yes 
+Checking for program 'git'                     : /usr/bin/git 
+Littlefs                                       : disabled 
+Checking for program 'size'                    : /usr/bin/size 
+Benchmarks                                     : disabled 
+Unit tests                                     : enabled 
+Scripting                                      : maybe 
+Scripting runtime checks                       : enabled 
+Debug build                                    : enabled 
+VS Code launch                                 : disabled 
+Coverage build                                 : disabled 
+Force 32-bit build                             : disabled 
+Checking for program 'rsync'                   : /usr/bin/rsync 
+Removing target_list file /home/umemoto/Ardupilot-UmemotoLab/build/sitl/target_list
+'configure' finished successfully (1.319s)
+Waf: Entering directory `/home/umemoto/Ardupilot-UmemotoLab/build/sitl'
+Embedding file locations.txt:Tools/autotest/locations.txt
+Embedding file models/Callisto.json:Tools/autotest/models/Callisto.json
+Embedding file models/freestyle.json:Tools/autotest/models/freestyle.json
+Embedding file models/plane-3d.parm:Tools/autotest/models/plane-3d.parm
+Embedding file models/plane.parm:Tools/autotest/models/plane.parm
+Embedding file models/skywalker_2013.json:Tools/autotest/models/skywalker_2013.json
+Embedding file models/xplane_heli.json:Tools/autotest/models/xplane_heli.json
+Embedding file models/xplane_plane.json:Tools/autotest/models/xplane_plane.json
+No target_list file found, creating
+Generating compile_commands.json
+Build commands will be stored in build/sitl/compile_commands.json
+Generating compile_commands.json
+Build commands will be stored in build/sitl/compile_commands.json
+[1374/1375] Linking build/sitl/bin/arducopter
+[1375/1375] checking symbols build/sitl/bin/arducopter
+Waf: Leaving directory `/home/umemoto/Ardupilot-UmemotoLab/build/sitl'
+
+BUILD SUMMARY
+Build directory: /home/umemoto/Ardupilot-UmemotoLab/build/sitl
+Target          Text (B)  Data (B)  BSS (B)  Total Flash Used (B)  Free Flash (B)  External Flash Used (B)
+----------------------------------------------------------------------------------------------------------
+bin/arducopter   5467063    206480   279584               5673543  Not Applicable  Not Applicable         
+
+'build' finished successfully (2.498s)
+lckfile='/home/umemoto/buildlogs/autotest.lck'
+step=build.Copter
+step=test.CopterObserver
+Running: ("git rev-parse HEAD") in (/home/umemoto/Ardupilot-UmemotoLab)
+Removing diagnostic files: ['autotest-1778514870474431.tlog']
+>>>> RUNNING STEP: build.Copter at Tue May 12 00:54:49 2026
+Running: ("/bin/rm -f logs/*.BIN logs/LASTLOG.TXT") in (.)
+Running: ("./modules/waf/waf-light" "configure" "--board" "sitl" "--debug") in (/home/umemoto/Ardupilot-UmemotoLab)
+Running: ("./modules/waf/waf-light" "build" "--target" "bin/arducopter") in (/home/umemoto/Ardupilot-UmemotoLab)
+>>>> PASSED STEP: build.Copter at Tue May 12 00:54:53 2026
+>>>> RUNNING STEP: test.CopterObserver at Tue May 12 00:54:53 2026
+Running: ("/bin/rm -f logs/*.BIN logs/LASTLOG.TXT") in (.)
+AT-0000.0: Starting simulator
+AT-0000.0: Starting SITL
+Running: "/home/umemoto/Ardupilot-UmemotoLab/build/sitl/bin/arducopter" "-w" "--home" "-35.362938,149.165085,584,270" "--model" "+" "--serial1=tcp:2" "--defaults" "/tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm"
+arducopter: Suggested EK3_DRAG_BCOEF_* = 17.209, EK3_DRAG_MCOEF = 0.209
+arducopter: Home: -35.362938 149.165085 alt=584.000000m hdg=270.000000
+arducopter: Starting sketch 'ArduCopter'
+arducopter: Starting SITL input
+arducopter: Using Irlock at port : 9005
+arducopter: bind port 5760 for SERIAL0
+arducopter: SERIAL0 on TCP port 5760
+arducopter: Waiting for connection ....
+AT-0000.0: Starting MAVLink connection
+AT-0000.0: Drained 0 messages from mav (0.000000/s)
+arducopter: Connection on serial port 5760
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Smoothing reset at 0.001
+arducopter: bind port 5762 for SERIAL1
+arducopter: SERIAL1 on TCP port 5762
+arducopter: bind port 5763 for SERIAL2
+arducopter: SERIAL2 on TCP port 5763
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: validate_structures:528: Validating structures
+arducopter: Waiting for internal clock bits to be set (current=0x00)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+AT-0000.0: Doing timesync roundtrip
+AT-0000.0: Received: TIMESYNC {tc1 : 1059667000, ts1 : 137250}
+AT-0000.0: Received TIMESYNC response after 0.000025s
+AT-0000.0: AP: Barometer 1 calibration complete
+AT-0000.0: AP: Barometer 2 calibration complete
+AT-0000.0: AP: ArduPilot Ready
+AT-0000.0: AP: AHRS: DCM active
+AT-0000.0: Drained 4 messages from mav (21129.994962/s)
+AT-0000.1: AP: RC7: SaveWaypoint LOW
+AT-0000.1: Firmware Version (4, 7, 0, 'dev')
+AT-0000.1: Firmware hash 97149c9f
+Running: ("git rev-parse --short=8 HEAD") in (/home/umemoto/Ardupilot-UmemotoLab)
+AT-0000.1: Git hash 97149c9f
+AT-0000.1: Sim time: 3.307000
+AT-0000.1: set_parameters: ({'LOG_DISARMED': 1, 'LOG_DARM_RATEMAX': 5, 'LOG_FILE_RATEMAX': 10})
+AT-0000.1: LOG_DISARMED want=1.000000 autopilot=None (attempt=1/30)
+AT-0000.1: Requesting (LOG_DISARMED)
+AT-0000.1: LOG_DARM_RATEMAX want=5.000000 autopilot=None (attempt=1/30)
+AT-0000.1: Requesting (LOG_DARM_RATEMAX)
+AT-0000.1: LOG_FILE_RATEMAX want=10.000000 autopilot=None (attempt=1/30)
+AT-0000.1: Requesting (LOG_FILE_RATEMAX)
+AT-0000.1: Received wanted PARAM_VALUE LOG_DISARMED=0.000000
+AT-0000.1: Received wanted PARAM_VALUE LOG_DARM_RATEMAX=0.000000
+AT-0000.1: Received wanted PARAM_VALUE LOG_FILE_RATEMAX=0.000000
+AT-0000.1: LOG_DISARMED want=1.000000 autopilot=0.0 (attempt=2/30)
+AT-0000.1: Sending set (LOG_DISARMED) to (1.000000) (old=0.000000)
+AT-0000.1: LOG_DARM_RATEMAX want=5.000000 autopilot=0.0 (attempt=2/30)
+AT-0000.1: Sending set (LOG_DARM_RATEMAX) to (5.000000) (old=0.000000)
+AT-0000.1: LOG_FILE_RATEMAX want=10.000000 autopilot=0.0 (attempt=2/30)
+AT-0000.1: Sending set (LOG_FILE_RATEMAX) to (10.000000) (old=0.000000)
+AT-0000.1: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0000.1: Received wanted PARAM_VALUE LOG_DARM_RATEMAX=5.000000
+AT-0000.1: Received wanted PARAM_VALUE LOG_FILE_RATEMAX=10.000000
+AT-0000.1: LOG_DISARMED want=1.000000 autopilot=1.0 (attempt=3/30)
+AT-0000.1: LOG_DISARMED is now 1.000000
+AT-0000.1: LOG_DARM_RATEMAX want=5.000000 autopilot=5.0 (attempt=3/30)
+AT-0000.1: LOG_DARM_RATEMAX is now 5.000000
+AT-0000.1: LOG_FILE_RATEMAX want=10.000000 autopilot=10.0 (attempt=3/30)
+AT-0000.1: LOG_FILE_RATEMAX is now 10.000000
+AT-0000.1: Drained 0 messages from mav (0.000000/s)
+AT-0000.1: Rebooting SITL
+AT-0000.1: Sending param_request_read for (STAT_RESET)
+AT-0000.1: get_parameter(STAT_RESET): PARAM_VALUE {param_id : STAT_RESET, param_value : 1.0, param_type : 6, param_count : 1366, param_index : 65535}
+AT-0000.1: Sending param_request_read for (STAT_BOOTCNT)
+AT-0000.1: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 1.0, param_type : 4, param_count : 1366, param_index : 65535}
+AT-0000.1: Sending reboot command
+AT-0000.1: Sending COMMAND_LONG to (1,1) (MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN=246) (p1=1.000000 p2=1.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0000.1: Sending param_request_read for (STAT_BOOTCNT)
+AT-0000.1: While awaiting reboot received (COMMAND_ACK {command : 246, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250})
+EOF on TCP socket
+Attempting reconnect
+[Errno 111] Connection refused sleeping
+arducopter: Suggested EK3_DRAG_BCOEF_* = 17.209, EK3_DRAG_MCOEF = 0.209
+arducopter: Home: -35.362938 149.165085 alt=584.000000m hdg=270.000000
+arducopter: Starting sketch 'ArduCopter'
+arducopter: Starting SITL input
+arducopter: Using Irlock at port : 9005
+arducopter: bind port 5760 for SERIAL0
+arducopter: SERIAL0 on TCP port 5760
+arducopter: Waiting for connection ....
+arducopter: Connection on serial port 5760
+AT-0001.1: get_parameter(STAT_BOOTCNT): None
+AT-0001.1: Sending param_request_read for (STAT_BOOTCNT)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: bind port 5762 for SERIAL1
+arducopter: SERIAL1 on TCP port 5762
+arducopter: bind port 5763 for SERIAL2
+arducopter: SERIAL2 on TCP port 5763
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Smoothing reset at 0.001
+arducopter: validate_structures:528: Validating structures
+arducopter: Waiting for internal clock bits to be set (current=0x00)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+AT-0001.1: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 2.0, param_type : 4, param_count : 1356, param_index : 65535}
+AT-0001.1: current=2.0 required=2
+AT-0001.1: Doing timesync roundtrip
+AT-0001.1: Received: TIMESYNC {tc1 : 174188000, ts1 : 140250}
+AT-0001.1: Received TIMESYNC response after 0.000020s
+AT-0001.1: Calling initialise-after-reboot
+AT-0001.1: AP: RCInput: decoding UDP (Pulses)
+AT-0001.1: Drained 0 messages from mav (0.000000/s)
+AT-0001.1: AP: Calibrating barometer
+AT-0001.1: Doing timesync roundtrip
+AT-0001.1: Received: TIMESYNC {tc1 : 1024681000, ts1 : 141250}
+AT-0001.1: Received TIMESYNC response after 0.000012s
+AT-0001.1: AP: Barometer 1 calibration complete
+AT-0001.1: AP: Barometer 2 calibration complete
+AT-0001.1: AP: ArduPilot Ready
+AT-0001.1: AP: AHRS: DCM active
+AT-0001.1: Reboot complete
+AT-0001.1: set_parameters: ({})
+AT-0001.1: Simstate Close to startup location: dist=0.000000 max=1.000000 (simstate: lat=-35.362938,lon=149.165085,alt=0.0 start-loc: lat=-35.362938,lon=149.165085,alt=584.0)
+AT-0001.1: SITL is running
+AT-0001.1: Ready to start testing!
+AT-0001.1: Waiting for a heartbeat with mavlink protocol 2.0
+AT-0001.1: Drained 3 messages from mav (29330.797203/s)
+AT-0001.1: AP: RC7: SaveWaypoint LOW
+AT-0001.1: Waiting for initial mode STABILIZE
+AT-0001.1: Waiting for mode STABILIZE
+AT-0001.1: Got mode STABILIZE
+AT-0001.1: Setting up RC parameters
+AT-0001.1: RC values good
+AT-0001.1: Waiting for mode-switch mode STABILIZE
+AT-0001.1: Waiting for mode STABILIZE
+AT-0001.1: AP: RC7: SaveWaypoint MIDDLE
+AT-0001.1: AP: EKF3 IMU0 initialised
+AT-0001.1: AP: EKF3 IMU1 initialised
+AT-0001.1: AP: AHRS: EKF3 active
+AT-0001.2: Got mode STABILIZE
+AT-0001.2: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 1})
+AT-0001.2: MISSION_ACK.target_system has expected value 250
+AT-0001.2: MISSION_ACK.target_component has expected value 250
+AT-0001.2: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0001.2: AP: Fence Indexed OK
+AT-0001.2: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 0})
+AT-0001.2: MISSION_ACK.target_system has expected value 250
+AT-0001.2: MISSION_ACK.target_component has expected value 250
+AT-0001.2: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0001.2: AP: Flight plan received
+AT-0001.2: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 2})
+AT-0001.2: MISSION_ACK.target_system has expected value 250
+AT-0001.2: MISSION_ACK.target_component has expected value 250
+AT-0001.2: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0001.2: ##################################################################################
+AT-0001.2: ########## TestObserverParameters (Test AP_Observer parameter defaults and set/get)  ##########
+AT-0001.2: ##################################################################################
+AT-0001.2: Doing timesync roundtrip
+AT-0001.2: Received: TIMESYNC {tc1 : 5337955000, ts1 : 142250}
+AT-0001.2: Received TIMESYNC response after 0.000000s
+AT-0001.2: AP: EKF3 IMU1 tilt alignment complete
+AT-0001.2: AP: EKF3 IMU0 tilt alignment complete
+AT-0001.2: RC values good
+AT-0001.2: AP: EKF3 IMU1 MAG0 initial yaw alignment complete
+AT-0001.2: AP: EKF3 IMU0 MAG0 initial yaw alignment complete
+AT-0001.2: Drained 14 messages from mav (26948.258834/s)
+AT-0001.2: Changing mode to STABILIZE
+AT-0001.2: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=0.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0001.2: Got mode STABILIZE
+AT-0001.2: Testing AP_Observer parameter defaults and changes
+AT-0001.2: Sending param_request_read for (OBS_CORR_GAIN)
+AT-0001.2: get_parameter(OBS_CORR_GAIN): PARAM_VALUE {param_id : OBS_CORR_GAIN, param_value : 0.0, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2:   OBS_CORR_GAIN: 0.0 (expected 0.0)
+AT-0001.2: Sending param_request_read for (OBS_FILT_CUTOFF)
+AT-0001.2: get_parameter(OBS_FILT_CUTOFF): PARAM_VALUE {param_id : OBS_FILT_CUTOFF, param_value : 20.0, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2:   OBS_FILT_CUTOFF: 20.0 (expected 20.0)
+AT-0001.2: Sending param_request_read for (OBS_MAX_CORR_ANG)
+AT-0001.2: get_parameter(OBS_MAX_CORR_ANG): PARAM_VALUE {param_id : OBS_MAX_CORR_ANG, param_value : 0.5, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2:   OBS_MAX_CORR_ANG: 0.5 (expected 0.5)
+AT-0001.2: Sending param_request_read for (OBS_PRED_TIME)
+AT-0001.2: get_parameter(OBS_PRED_TIME): PARAM_VALUE {param_id : OBS_PRED_TIME, param_value : 0.009999999776482582, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2:   OBS_PRED_TIME: 0.009999999776482582 (expected 0.01)
+AT-0001.2: Sending param_request_read for (OBS_EKF_Q_W)
+AT-0001.2: get_parameter(OBS_EKF_Q_W): PARAM_VALUE {param_id : OBS_EKF_Q_W, param_value : 0.0005000000237487257, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2:   OBS_EKF_Q_W: 0.0005000000237487257 (expected 0.0005)
+AT-0001.2: Sending param_request_read for (OBS_EKF_R_MEAS)
+AT-0001.2: get_parameter(OBS_EKF_R_MEAS): PARAM_VALUE {param_id : OBS_EKF_R_MEAS, param_value : 46.0, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2:   OBS_EKF_R_MEAS: 46.0 (expected 46.0)
+AT-0001.2: PASS: All parameter defaults correct
+AT-0001.2: set_parameters: ({'OBS_CORR_GAIN': 0.01})
+AT-0001.2: OBS_CORR_GAIN want=0.010000 autopilot=None (attempt=1/10)
+AT-0001.2: Requesting (OBS_CORR_GAIN)
+AT-0001.2: Received wanted PARAM_VALUE OBS_CORR_GAIN=0.000000
+AT-0001.2: OBS_CORR_GAIN want=0.010000 autopilot=0.0 (attempt=2/10)
+AT-0001.2: Sending set (OBS_CORR_GAIN) to (0.010000) (old=0.000000)
+AT-0001.2: Received wanted PARAM_VALUE OBS_CORR_GAIN=0.010000
+AT-0001.2: OBS_CORR_GAIN want=0.010000 autopilot=0.009999999776482582 (attempt=3/10)
+AT-0001.2: OBS_CORR_GAIN is now 0.010000
+AT-0001.2: Delaying 0.500000 seconds
+AT-0001.2: Sending param_request_read for (OBS_CORR_GAIN)
+AT-0001.2: get_parameter(OBS_CORR_GAIN): PARAM_VALUE {param_id : OBS_CORR_GAIN, param_value : 0.009999999776482582, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.2: set_parameters: ({'OBS_MAX_CORR_ANG': 0.3})
+AT-0001.2: OBS_MAX_CORR_ANG want=0.300000 autopilot=None (attempt=1/10)
+AT-0001.2: Requesting (OBS_MAX_CORR_ANG)
+AT-0001.2: Received wanted PARAM_VALUE OBS_MAX_CORR_ANG=0.500000
+AT-0001.2: OBS_MAX_CORR_ANG want=0.300000 autopilot=0.5 (attempt=2/10)
+AT-0001.2: Sending set (OBS_MAX_CORR_ANG) to (0.300000) (old=0.500000)
+AT-0001.2: AP: GPS 1: probing for u-blox at 230400 baud
+AT-0001.2: AP: GPS 1: detected u-blox
+AT-0001.2: Received wanted PARAM_VALUE OBS_MAX_CORR_ANG=0.300000
+AT-0001.2: OBS_MAX_CORR_ANG want=0.300000 autopilot=0.30000001192092896 (attempt=3/10)
+AT-0001.2: OBS_MAX_CORR_ANG is now 0.300000
+AT-0001.3: Delaying 0.500000 seconds
+AT-0001.3: Sending param_request_read for (OBS_MAX_CORR_ANG)
+AT-0001.3: get_parameter(OBS_MAX_CORR_ANG): PARAM_VALUE {param_id : OBS_MAX_CORR_ANG, param_value : 0.30000001192092896, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.3: set_parameters: ({'OBS_EKF_Q_W': 0.001})
+AT-0001.3: OBS_EKF_Q_W want=0.001000 autopilot=None (attempt=1/10)
+AT-0001.3: Requesting (OBS_EKF_Q_W)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_Q_W=0.000500
+AT-0001.3: OBS_EKF_Q_W want=0.001000 autopilot=0.0005000000237487257 (attempt=2/10)
+AT-0001.3: Sending set (OBS_EKF_Q_W) to (0.001000) (old=0.000500)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_Q_W=0.001000
+AT-0001.3: OBS_EKF_Q_W want=0.001000 autopilot=0.0010000000474974513 (attempt=3/10)
+AT-0001.3: OBS_EKF_Q_W is now 0.001000
+AT-0001.3: Delaying 0.500000 seconds
+AT-0001.3: Sending param_request_read for (OBS_EKF_Q_W)
+AT-0001.3: get_parameter(OBS_EKF_Q_W): PARAM_VALUE {param_id : OBS_EKF_Q_W, param_value : 0.0010000000474974513, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.3: set_parameters: ({'OBS_EKF_R_MEAS': 10.0})
+AT-0001.3: OBS_EKF_R_MEAS want=10.000000 autopilot=None (attempt=1/10)
+AT-0001.3: Requesting (OBS_EKF_R_MEAS)
+AT-0001.3: OBS_EKF_R_MEAS want=10.000000 autopilot=None (attempt=2/10)
+AT-0001.3: Requesting (OBS_EKF_R_MEAS)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_R_MEAS=46.000000
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_R_MEAS=46.000000
+AT-0001.3: OBS_EKF_R_MEAS want=10.000000 autopilot=46.0 (attempt=3/10)
+AT-0001.3: Sending set (OBS_EKF_R_MEAS) to (10.000000) (old=46.000000)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_R_MEAS=10.000000
+AT-0001.3: OBS_EKF_R_MEAS want=10.000000 autopilot=10.0 (attempt=4/10)
+AT-0001.3: OBS_EKF_R_MEAS is now 10.000000
+AT-0001.3: Delaying 0.500000 seconds
+AT-0001.3: Sending param_request_read for (OBS_EKF_R_MEAS)
+AT-0001.3: get_parameter(OBS_EKF_R_MEAS): PARAM_VALUE {param_id : OBS_EKF_R_MEAS, param_value : 10.0, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.3: PASS: Parameter set/get works correctly
+AT-0001.3: set_parameters: ({'OBS_CORR_GAIN': 0.0})
+AT-0001.3: OBS_CORR_GAIN want=0.000000 autopilot=None (attempt=1/10)
+AT-0001.3: Requesting (OBS_CORR_GAIN)
+AT-0001.3: Received wanted PARAM_VALUE OBS_CORR_GAIN=0.010000
+AT-0001.3: OBS_CORR_GAIN want=0.000000 autopilot=0.009999999776482582 (attempt=2/10)
+AT-0001.3: Sending set (OBS_CORR_GAIN) to (0.000000) (old=0.010000)
+AT-0001.3: Received wanted PARAM_VALUE OBS_CORR_GAIN=0.000000
+AT-0001.3: OBS_CORR_GAIN want=0.000000 autopilot=0.0 (attempt=3/10)
+AT-0001.3: OBS_CORR_GAIN is now 0.000000
+AT-0001.3: set_parameters: ({'OBS_MAX_CORR_ANG': 0.5})
+AT-0001.3: OBS_MAX_CORR_ANG want=0.500000 autopilot=None (attempt=1/10)
+AT-0001.3: Requesting (OBS_MAX_CORR_ANG)
+AT-0001.3: Received wanted PARAM_VALUE OBS_MAX_CORR_ANG=0.300000
+AT-0001.3: OBS_MAX_CORR_ANG want=0.500000 autopilot=0.30000001192092896 (attempt=2/10)
+AT-0001.3: Sending set (OBS_MAX_CORR_ANG) to (0.500000) (old=0.300000)
+AT-0001.3: Received wanted PARAM_VALUE OBS_MAX_CORR_ANG=0.500000
+AT-0001.3: OBS_MAX_CORR_ANG want=0.500000 autopilot=0.5 (attempt=3/10)
+AT-0001.3: OBS_MAX_CORR_ANG is now 0.500000
+AT-0001.3: set_parameters: ({'OBS_EKF_Q_W': 0.0005})
+AT-0001.3: OBS_EKF_Q_W want=0.000500 autopilot=None (attempt=1/10)
+AT-0001.3: Requesting (OBS_EKF_Q_W)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_Q_W=0.001000
+AT-0001.3: OBS_EKF_Q_W want=0.000500 autopilot=0.0010000000474974513 (attempt=2/10)
+AT-0001.3: Sending set (OBS_EKF_Q_W) to (0.000500) (old=0.001000)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_Q_W=0.000500
+AT-0001.3: OBS_EKF_Q_W want=0.000500 autopilot=0.0005000000237487257 (attempt=3/10)
+AT-0001.3: OBS_EKF_Q_W is now 0.000500
+AT-0001.3: set_parameters: ({'OBS_EKF_R_MEAS': 46.0})
+AT-0001.3: OBS_EKF_R_MEAS want=46.000000 autopilot=None (attempt=1/10)
+AT-0001.3: Requesting (OBS_EKF_R_MEAS)
+AT-0001.3: Received wanted PARAM_VALUE OBS_EKF_R_MEAS=10.000000
+AT-0001.3: OBS_EKF_R_MEAS want=46.000000 autopilot=10.0 (attempt=2/10)
+AT-0001.3: Sending set (OBS_EKF_R_MEAS) to (46.000000) (old=10.000000)
+AT-0001.4: Received wanted PARAM_VALUE OBS_EKF_R_MEAS=46.000000
+AT-0001.4: OBS_EKF_R_MEAS want=46.000000 autopilot=46.0 (attempt=3/10)
+AT-0001.4: OBS_EKF_R_MEAS is now 46.000000
+AT-0001.4: PASS: ALL OBSERVER PARAMETER TESTS PASSED
+AT-0001.4: Drained 0 messages from mav (0.000000/s)
+AT-0001.4: set_parameters: ({'OBS_CORR_GAIN': 0.0, 'OBS_MAX_CORR_ANG': 0.5, 'OBS_EKF_Q_W': 0.0005000000237487257, 'OBS_EKF_R_MEAS': 46.0})
+AT-0001.4: OBS_CORR_GAIN want=0.000000 autopilot=None (attempt=1/40)
+AT-0001.4: Requesting (OBS_CORR_GAIN)
+AT-0001.4: OBS_MAX_CORR_ANG want=0.500000 autopilot=None (attempt=1/40)
+AT-0001.4: Requesting (OBS_MAX_CORR_ANG)
+AT-0001.4: OBS_EKF_Q_W want=0.000500 autopilot=None (attempt=1/40)
+AT-0001.4: Requesting (OBS_EKF_Q_W)
+AT-0001.4: OBS_EKF_R_MEAS want=46.000000 autopilot=None (attempt=1/40)
+AT-0001.4: Requesting (OBS_EKF_R_MEAS)
+AT-0001.4: Received wanted PARAM_VALUE OBS_CORR_GAIN=0.000000
+AT-0001.4: Received wanted PARAM_VALUE OBS_MAX_CORR_ANG=0.500000
+AT-0001.4: Received wanted PARAM_VALUE OBS_EKF_Q_W=0.000500
+AT-0001.4: Received wanted PARAM_VALUE OBS_EKF_R_MEAS=46.000000
+AT-0001.4: OBS_CORR_GAIN want=0.000000 autopilot=0.0 (attempt=2/40)
+AT-0001.4: OBS_CORR_GAIN is now 0.000000
+AT-0001.4: OBS_MAX_CORR_ANG want=0.500000 autopilot=0.5 (attempt=2/40)
+AT-0001.4: OBS_MAX_CORR_ANG is now 0.500000
+AT-0001.4: OBS_EKF_Q_W want=0.000500 autopilot=0.0005000000237487257 (attempt=2/40)
+AT-0001.4: OBS_EKF_Q_W is now 0.000500
+AT-0001.4: OBS_EKF_R_MEAS want=46.000000 autopilot=46.0 (attempt=2/40)
+AT-0001.4: OBS_EKF_R_MEAS is now 46.000000
+AT-0001.4: Drained 0 messages from mav (0.000000/s)
+AT-0001.4: PASSED: "TestObserverParameters (Test AP_Observer parameter defaults and set/get)"
+AT-0001.4: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 1})
+AT-0001.4: MISSION_ACK.target_system has expected value 250
+AT-0001.4: MISSION_ACK.target_component has expected value 250
+AT-0001.4: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0001.4: AP: Fence Indexed OK
+AT-0001.4: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 0})
+AT-0001.4: MISSION_ACK.target_system has expected value 250
+AT-0001.4: MISSION_ACK.target_component has expected value 250
+AT-0001.4: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0001.4: AP: Flight plan received
+AT-0001.4: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 2})
+AT-0001.4: MISSION_ACK.target_system has expected value 250
+AT-0001.4: MISSION_ACK.target_component has expected value 250
+AT-0001.4: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0001.4: ##################################################################################
+AT-0001.4: ########## TestObserverLogging (Test AP_Observer OBSV log messages during flight)  ##########
+AT-0001.4: ##################################################################################
+AT-0001.4: Doing timesync roundtrip
+AT-0001.4: Received: TIMESYNC {tc1 : 17343151000, ts1 : 161250}
+AT-0001.4: Received TIMESYNC response after 0.000000s
+AT-0001.4: RC values good
+AT-0001.4: Drained 13 messages from mav (15943.260819/s)
+AT-0001.4: Changing mode to STABILIZE
+AT-0001.4: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=0.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0001.4: Got mode STABILIZE
+AT-0001.4: set_parameters: ({'LOG_DISARMED': 1})
+AT-0001.4: LOG_DISARMED want=1.000000 autopilot=None (attempt=1/10)
+AT-0001.4: Requesting (LOG_DISARMED)
+AT-0001.4: LOG_DISARMED want=1.000000 autopilot=None (attempt=2/10)
+AT-0001.4: Requesting (LOG_DISARMED)
+AT-0001.4: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0001.4: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0001.4: LOG_DISARMED want=1.000000 autopilot=1.0 (attempt=3/10)
+AT-0001.4: LOG_DISARMED is now 1.000000
+AT-0001.4: Drained 0 messages from mav (0.000000/s)
+AT-0001.4: AP: EKF3 IMU1 origin set
+AT-0001.4: Rebooting SITL
+AT-0001.4: Sending param_request_read for (STAT_RESET)
+AT-0001.4: get_parameter(STAT_RESET): PARAM_VALUE {param_id : BARO1_GND_PRESS, param_value : 101325.0625, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.4: (BARO1_GND_PRESS) != (STAT_RESET)
+AT-0001.4: get_parameter(STAT_RESET): PARAM_VALUE {param_id : BARO2_GND_PRESS, param_value : 101323.2265625, param_type : 9, param_count : 1366, param_index : 65535}
+AT-0001.4: (BARO2_GND_PRESS) != (STAT_RESET)
+AT-0001.4: AP: Field Elevation Set: 584m
+AT-0001.4: get_parameter(STAT_RESET): PARAM_VALUE {param_id : STAT_RESET, param_value : 1.0, param_type : 6, param_count : 1366, param_index : 65535}
+AT-0001.4: Sending param_request_read for (STAT_BOOTCNT)
+AT-0001.4: AP: EKF3 IMU0 origin set
+AT-0001.4: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 2.0, param_type : 4, param_count : 1366, param_index : 65535}
+AT-0001.4: Sending reboot command
+AT-0001.4: Sending COMMAND_LONG to (1,1) (MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN=246) (p1=1.000000 p2=1.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0001.4: Sending param_request_read for (STAT_BOOTCNT)
+AT-0001.4: While awaiting reboot received (COMMAND_ACK {command : 246, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250})
+EOF on TCP socket
+Attempting reconnect
+[Errno 111] Connection refused sleeping
+arducopter: Suggested EK3_DRAG_BCOEF_* = 17.209, EK3_DRAG_MCOEF = 0.209
+arducopter: Home: -35.362938 149.165085 alt=584.000000m hdg=270.000000
+arducopter: Starting sketch 'ArduCopter'
+arducopter: Starting SITL input
+arducopter: Using Irlock at port : 9005
+arducopter: bind port 5760 for SERIAL0
+arducopter: SERIAL0 on TCP port 5760
+arducopter: Waiting for connection ....
+arducopter: Connection on serial port 5760
+AT-0002.5: get_parameter(STAT_BOOTCNT): None
+AT-0002.5: Sending param_request_read for (STAT_BOOTCNT)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: bind port 5762 for SERIAL1
+arducopter: SERIAL1 on TCP port 5762
+arducopter: bind port 5763 for SERIAL2
+arducopter: SERIAL2 on TCP port 5763
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Smoothing reset at 0.001
+arducopter: validate_structures:528: Validating structures
+arducopter: Waiting for internal clock bits to be set (current=0x00)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+AT-0002.5: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 3.0, param_type : 4, param_count : 1356, param_index : 65535}
+AT-0002.5: current=3.0 required=3
+AT-0002.5: Doing timesync roundtrip
+AT-0002.5: AP: RCInput: decoding UDP (Pulses)
+AT-0002.5: Received: TIMESYNC {tc1 : 196679000, ts1 : 164250}
+AT-0002.5: Received TIMESYNC response after 0.000016s
+AT-0002.5: Calling initialise-after-reboot
+AT-0002.5: AP: Calibrating barometer
+AT-0002.5: Drained 0 messages from mav (0.000000/s)
+AT-0002.5: Doing timesync roundtrip
+AT-0002.5: Received: TIMESYNC {tc1 : 1041341000, ts1 : 165250}
+AT-0002.5: Received TIMESYNC response after 0.000013s
+AT-0002.5: AP: Barometer 1 calibration complete
+AT-0002.5: AP: Barometer 2 calibration complete
+AT-0002.5: AP: ArduPilot Ready
+AT-0002.5: AP: AHRS: DCM active
+AT-0002.5: Reboot complete
+AT-0002.5: set_parameters: ({})
+AT-0002.5: Simstate Close to startup location: dist=0.000000 max=1.000000 (simstate: lat=-35.362938,lon=149.165085,alt=0.0 start-loc: lat=-35.362938,lon=149.165085,alt=584.0)
+AT-0002.5: Taking off to 10m
+AT-0002.5: TAKEOFF
+AT-0002.5: AP: RC7: SaveWaypoint MIDDLE
+AT-0002.5: Drained 4 messages from mav (15709.003745/s)
+AT-0002.5: Changing mode to ALT_HOLD
+AT-0002.5: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=2.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0002.5: Got mode ALT_HOLD
+AT-0002.5: Drained 0 messages from mav (0.000000/s)
+AT-0002.5: AP: EKF3 IMU0 initialised
+AT-0002.5: AP: EKF3 IMU1 initialised
+AT-0002.5: AP: AHRS: EKF3 active
+AT-0002.5: Waiting for ready to arm
+AT-0002.5: Sending param_request_read for (AHRS_EKF_TYPE)
+AT-0002.5: get_parameter(AHRS_EKF_TYPE): PARAM_VALUE {param_id : AHRS_EKF_TYPE, param_value : 3.0, param_type : 2, param_count : 1366, param_index : 65535}
+AT-0002.5: Waiting for EKF value 831
+AT-0002.5: Want=831 got=0 errors=0
+AT-0002.5: AP: EKF3 IMU1 tilt alignment complete
+AT-0002.5: AP: EKF3 IMU0 tilt alignment complete
+AT-0002.5: AP: EKF3 IMU1 MAG0 initial yaw alignment complete
+AT-0002.5: AP: EKF3 IMU0 MAG0 initial yaw alignment complete
+AT-0002.5: Want=831 got=167 errors=128
+AT-0002.6: Want=831 got=167 errors=128
+AT-0002.6: Want=831 got=167 errors=128
+AT-0002.6: AP: GPS 1: probing for u-blox at 230400 baud
+AT-0002.6: AP: GPS 1: detected u-blox
+AT-0002.6: Want=831 got=167 errors=128
+AT-0002.6: Want=831 got=167 errors=128
+AT-0002.7: Want=831 got=167 errors=128
+AT-0002.7: Want=831 got=167 errors=128
+AT-0002.7: Want=831 got=167 errors=128
+AT-0002.7: Want=831 got=167 errors=128
+AT-0002.7: Want=831 got=167 errors=128
+AT-0002.8: Want=831 got=167 errors=128
+AT-0002.8: Want=831 got=167 errors=128
+AT-0002.8: AP: EKF3 IMU1 origin set
+AT-0002.8: AP: Field Elevation Set: 584m
+AT-0002.8: AP: EKF3 IMU0 origin set
+AT-0002.8: Want=831 got=167 errors=128
+AT-0002.8: Want=831 got=167 errors=128
+AT-0002.8: Want=831 got=167 errors=128
+AT-0002.9: Want=831 got=167 errors=128
+AT-0002.9: Want=831 got=167 errors=128
+AT-0002.9: Want=831 got=167 errors=128
+AT-0002.9: Want=831 got=167 errors=128
+AT-0002.9: Want=831 got=167 errors=128
+AT-0003.0: Want=831 got=167 errors=128
+AT-0003.0: Want=831 got=167 errors=128
+AT-0003.0: Want=831 got=167 errors=128
+AT-0003.0: Want=831 got=167 errors=128
+AT-0003.0: Want=831 got=167 errors=128
+AT-0003.1: Want=831 got=167 errors=128
+AT-0003.1: Want=831 got=167 errors=128
+AT-0003.1: Want=831 got=167 errors=128
+AT-0003.1: Want=831 got=167 errors=128
+AT-0003.1: Want=831 got=167 errors=128
+AT-0003.1: AP: EKF3 IMU0 is using GPS
+AT-0003.1: AP: EKF3 IMU1 is using GPS
+AT-0003.1: EKF Flags OK
+AT-0003.1: Waiting for GPS health
+AT-0003.1: GPS healthy after 0.000000/30.000000 seconds
+AT-0003.2: Polled home position (HOME_POSITION {latitude : -353629380, longitude : 1491650850, altitude : 584090, x : 0.0, y : 0.0, z : -0.0, q : [nan, nan, nan, nan], approach_x : 0.0, approach_y : 0.0, approach_z : 0.0, time_usec : 42539644})
+AT-0003.2: Doing timesync roundtrip
+AT-0003.2: Received: TIMESYNC {tc1 : 42728826000, ts1 : 166250}
+AT-0003.2: Received TIMESYNC response after 0.000000s
+AT-0003.2: Took 38 seconds to become armable
+AT-0003.2: RC values good
+AT-0003.2: Arm motors with MAVLink cmd
+AT-0003.2: Sending COMMAND_LONG to (1,1) (MAV_CMD_COMPONENT_ARM_DISARM=400) (p1=1.000000 p2=0.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0003.2: ACK received: COMMAND_ACK {command : 400, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250} (0.000000s)
+AT-0003.2: AP: Arming motors
+AT-0003.2: AP: AP_Observer: Takeoff detected, starting frequency 
+AT-0003.2: AP: estimation
+AT-0003.2: Motors ARMED
+AT-0003.2: RC values good
+AT-0003.2: Waiting for Altitude=12.00 with accuracy 3.00
+AT-0003.2: Altitude=0.00 (want 12.000000 +- 3.000000)
+AT-0003.2: Altitude=0.00 (want 12.000000 +- 3.000000)
+AT-0003.3: Altitude=0.37 (want 12.000000 +- 3.000000)
+AT-0003.3: Altitude=1.08 (want 12.000000 +- 3.000000)
+AT-0003.3: Altitude=1.77 (want 12.000000 +- 3.000000)
+AT-0003.3: Altitude=2.54 (want 12.000000 +- 3.000000)
+AT-0003.3: AP: EKF3 IMU0 MAG0 in-flight yaw alignment complete
+AT-0003.3: AP: EKF3 IMU1 MAG0 in-flight yaw alignment complete
+AT-0003.3: Altitude=3.28 (want 12.000000 +- 3.000000)
+AT-0003.4: Altitude=4.05 (want 12.000000 +- 3.000000)
+AT-0003.4: Altitude=4.83 (want 12.000000 +- 3.000000)
+AT-0003.4: Altitude=5.60 (want 12.000000 +- 3.000000)
+AT-0003.4: Altitude=6.36 (want 12.000000 +- 3.000000)
+AT-0003.4: Altitude=7.12 (want 12.000000 +- 3.000000)
+AT-0003.5: Altitude=7.86 (want 12.000000 +- 3.000000)
+AT-0003.5: Altitude=8.63 (want 12.000000 +- 3.000000)
+AT-0003.5: Attained Altitude=9.015
+AT-0003.5: RC values good
+AT-0003.5: TAKEOFF COMPLETE
+AT-0003.5: Delaying 5.000000 seconds
+AT-0003.6: Hovering for 20 seconds to collect OBSV logs
+AT-0003.6: Delaying 20.000000 seconds
+AT-0004.0: Drained 8 messages from mav (18819.086932/s)
+AT-0004.0: Changing mode to RTL
+AT-0004.0: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=6.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0004.0: Got mode RTL
+AT-0004.0: RC values good
+AT-0004.0: Waiting RTL to reach Home and disarm
+AT-0004.0: Drained 24 messages from mav (23933.261056/s)
+AT-0004.0: Drained 24 messages from mav (22565.186281/s)
+AT-0004.0: Drained 24 messages from mav (28654.510675/s)
+AT-0004.1: Drained 24 messages from mav (26701.139523/s)
+AT-0004.1: Drained 24 messages from mav (27761.526751/s)
+AT-0004.1: Drained 24 messages from mav (24099.424467/s)
+AT-0004.1: Drained 24 messages from mav (23151.632015/s)
+AT-0004.1: Drained 24 messages from mav (26358.548311/s)
+AT-0004.2: Drained 24 messages from mav (27700.411668/s)
+AT-0004.2: Drained 24 messages from mav (27563.881709/s)
+AT-0004.2: Drained 24 messages from mav (23646.534179/s)
+AT-0004.2: Drained 24 messages from mav (26609.383029/s)
+AT-0004.2: Drained 24 messages from mav (21741.532613/s)
+AT-0004.2: Drained 24 messages from mav (28016.503201/s)
+AT-0004.3: Drained 24 messages from mav (26539.229106/s)
+AT-0004.3: Drained 23 messages from mav (31964.543406/s)
+AT-0004.3: Drained 23 messages from mav (32242.310160/s)
+AT-0004.3: Drained 23 messages from mav (22914.249881/s)
+AT-0004.3: Drained 23 messages from mav (22429.433155/s)
+AT-0004.4: Drained 23 messages from mav (28339.891892/s)
+AT-0004.4: Drained 23 messages from mav (30664.015257/s)
+AT-0004.4: Drained 23 messages from mav (33139.468224/s)
+AT-0004.4: Drained 23 messages from mav (29829.620284/s)
+AT-0004.4: Drained 23 messages from mav (30193.737715/s)
+AT-0004.5: Drained 23 messages from mav (18333.141771/s)
+AT-0004.5: Drained 23 messages from mav (22455.538175/s)
+AT-0004.5: Drained 23 messages from mav (26811.837688/s)
+AT-0004.5: Drained 23 messages from mav (21964.706740/s)
+AT-0004.5: Drained 23 messages from mav (21624.970186/s)
+AT-0004.6: Drained 23 messages from mav (27328.326346/s)
+AT-0004.6: Drained 23 messages from mav (22666.586466/s)
+AT-0004.6: Drained 23 messages from mav (43259.637668/s)
+AT-0004.6: Drained 23 messages from mav (22985.225637/s)
+AT-0004.6: Drained 23 messages from mav (28642.812352/s)
+AT-0004.6: Drained 23 messages from mav (39945.752381/s)
+AT-0004.7: Drained 23 messages from mav (40704.216034/s)
+AT-0004.7: Drained 23 messages from mav (25752.533903/s)
+AT-0004.7: Drained 23 messages from mav (42218.377243/s)
+AT-0004.7: Drained 23 messages from mav (32646.020981/s)
+AT-0004.7: Drained 23 messages from mav (28018.876561/s)
+AT-0004.7: AP: SIM Hit ground at 0.501760 m/s
+AT-0004.8: Drained 23 messages from mav (24478.302969/s)
+AT-0004.8: Drained 23 messages from mav (33813.176306/s)
+AT-0004.8: AP: Disarming motors
+AT-0004.8: Waiting for DISARM
+AT-0004.8: Waiting for disarm (0.00s so far of allowed 120.00)
+AT-0004.8: DISARMED after 0.00 seconds (allowed=120.00)
+AT-0004.8: Analyzing OBSV log data...
+AT-0004.8: log list: ['logs/00000001.BIN', 'logs/00000002.BIN']
+AT-0005.0: Found 13052 OBSV messages
+AT-0005.0: Fields found: ['FX', 'FY', 'PFX', 'PFY', 'PFZ', 'PLX', 'PLY', 'PLZ', 'SW', 'TimeUS']
+AT-0005.0: X-axis Frequency: median=0.6000, min=0.5869, max=0.6001 Hz
+AT-0005.0: PASS: ALL OBSERVER LOGGING TESTS PASSED
+AT-0005.0: set_parameters: ({'LOG_DISARMED': 1.0})
+AT-0005.1: LOG_DISARMED want=1.000000 autopilot=None (attempt=1/10)
+AT-0005.1: Requesting (LOG_DISARMED)
+AT-0005.1: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0005.1: LOG_DISARMED want=1.000000 autopilot=1.0 (attempt=2/10)
+AT-0005.1: LOG_DISARMED is now 1.000000
+AT-0005.1: Doing implicit context-pop reboot
+AT-0005.1: Drained 0 messages from mav (0.000000/s)
+AT-0005.1: Rebooting SITL
+AT-0005.1: Sending param_request_read for (STAT_RESET)
+AT-0005.1: get_parameter(STAT_RESET): PARAM_VALUE {param_id : STAT_RESET, param_value : 1.0, param_type : 6, param_count : 1366, param_index : 65535}
+AT-0005.1: Sending param_request_read for (STAT_BOOTCNT)
+AT-0005.1: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 3.0, param_type : 4, param_count : 1366, param_index : 65535}
+AT-0005.1: Sending reboot command
+AT-0005.1: Sending COMMAND_LONG to (1,1) (MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN=246) (p1=1.000000 p2=1.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0005.1: Sending param_request_read for (STAT_BOOTCNT)
+AT-0005.1: While awaiting reboot received (COMMAND_ACK {command : 246, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250})
+EOF on TCP socket
+Attempting reconnect
+[Errno 111] Connection refused sleeping
+arducopter: Suggested EK3_DRAG_BCOEF_* = 17.209, EK3_DRAG_MCOEF = 0.209
+arducopter: Home: -35.362938 149.165085 alt=584.000000m hdg=270.000000
+arducopter: Starting sketch 'ArduCopter'
+arducopter: Starting SITL input
+arducopter: Using Irlock at port : 9005
+arducopter: bind port 5760 for SERIAL0
+arducopter: SERIAL0 on TCP port 5760
+arducopter: Waiting for connection ....
+arducopter: Connection on serial port 5760
+AT-0006.1: get_parameter(STAT_BOOTCNT): None
+AT-0006.1: Sending param_request_read for (STAT_BOOTCNT)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: bind port 5762 for SERIAL1
+arducopter: SERIAL1 on TCP port 5762
+arducopter: bind port 5763 for SERIAL2
+arducopter: SERIAL2 on TCP port 5763
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Smoothing reset at 0.001
+arducopter: validate_structures:528: Validating structures
+arducopter: Waiting for internal clock bits to be set (current=0x00)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+AT-0006.1: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 4.0, param_type : 4, param_count : 1356, param_index : 65535}
+AT-0006.1: current=4.0 required=4
+AT-0006.1: Doing timesync roundtrip
+AT-0006.1: AP: RCInput: decoding UDP (Pulses)
+AT-0006.1: Received: TIMESYNC {tc1 : 195846000, ts1 : 168250}
+AT-0006.1: Received TIMESYNC response after 0.000048s
+AT-0006.1: Calling initialise-after-reboot
+AT-0006.1: Drained 0 messages from mav (0.000000/s)
+AT-0006.1: AP: Calibrating barometer
+AT-0006.1: Doing timesync roundtrip
+AT-0006.1: Received: TIMESYNC {tc1 : 1040508000, ts1 : 169250}
+AT-0006.1: Received TIMESYNC response after 0.000053s
+AT-0006.1: AP: Barometer 1 calibration complete
+AT-0006.1: AP: Barometer 2 calibration complete
+AT-0006.1: AP: ArduPilot Ready
+AT-0006.1: AP: AHRS: DCM active
+AT-0006.1: Reboot complete
+AT-0006.1: set_parameters: ({})
+AT-0006.1: Simstate Close to startup location: dist=0.000000 max=1.000000 (simstate: lat=-35.362938,lon=149.165085,alt=0.0 start-loc: lat=-35.362938,lon=149.165085,alt=584.0)
+AT-0006.1: AP: RC7: SaveWaypoint MIDDLE
+AT-0006.1: Drained 4 messages from mav (26630.501587/s)
+AT-0006.1: set_parameters: ({})
+AT-0006.1: Drained 0 messages from mav (0.000000/s)
+AT-0006.2: PASSED: "TestObserverLogging (Test AP_Observer OBSV log messages during flight)"
+AT-0006.2: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 1})
+AT-0006.2: MISSION_ACK.target_system has expected value 250
+AT-0006.2: MISSION_ACK.target_component has expected value 250
+AT-0006.2: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0006.2: AP: Fence Indexed OK
+AT-0006.2: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 0})
+AT-0006.2: MISSION_ACK.target_system has expected value 250
+AT-0006.2: MISSION_ACK.target_component has expected value 250
+AT-0006.2: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0006.2: AP: Flight plan received
+AT-0006.2: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 2})
+AT-0006.2: MISSION_ACK.target_system has expected value 250
+AT-0006.2: MISSION_ACK.target_component has expected value 250
+AT-0006.2: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0006.2: ##################################################################################
+AT-0006.2: ########## TestObserverEKFOperation (Test AP_Observer EKF operates correctly during flight)  ##########
+AT-0006.2: ##################################################################################
+AT-0006.2: Doing timesync roundtrip
+AT-0006.2: Received: TIMESYNC {tc1 : 4330025000, ts1 : 170250}
+AT-0006.2: Received TIMESYNC response after 0.000000s
+AT-0006.2: AP: EKF3 IMU0 initialised
+AT-0006.2: AP: EKF3 IMU1 initialised
+AT-0006.2: AP: AHRS: EKF3 active
+AT-0006.2: chan=3 needs resetting is=1500 want=1000
+AT-0006.2: RC values good
+AT-0006.2: Drained 12 messages from mav (20577.125102/s)
+AT-0006.2: Changing mode to STABILIZE
+AT-0006.2: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=0.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0006.2: AP: EKF3 IMU1 tilt alignment complete
+AT-0006.2: AP: EKF3 IMU0 tilt alignment complete
+AT-0006.2: AP: EKF3 IMU1 MAG0 initial yaw alignment complete
+AT-0006.2: AP: EKF3 IMU0 MAG0 initial yaw alignment complete
+AT-0006.2: Got mode STABILIZE
+AT-0006.2: set_parameters: ({'LOG_DISARMED': 1})
+AT-0006.2: LOG_DISARMED want=1.000000 autopilot=None (attempt=1/10)
+AT-0006.2: Requesting (LOG_DISARMED)
+AT-0006.2: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0006.2: LOG_DISARMED want=1.000000 autopilot=1.0 (attempt=2/10)
+AT-0006.2: LOG_DISARMED is now 1.000000
+AT-0006.2: Drained 0 messages from mav (0.000000/s)
+AT-0006.2: Rebooting SITL
+AT-0006.2: Sending param_request_read for (STAT_RESET)
+AT-0006.2: get_parameter(STAT_RESET): PARAM_VALUE {param_id : STAT_RESET, param_value : 1.0, param_type : 6, param_count : 1366, param_index : 65535}
+AT-0006.2: Sending param_request_read for (STAT_BOOTCNT)
+AT-0006.2: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 4.0, param_type : 4, param_count : 1366, param_index : 65535}
+AT-0006.2: Sending reboot command
+AT-0006.2: Sending COMMAND_LONG to (1,1) (MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN=246) (p1=1.000000 p2=1.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0006.2: Sending param_request_read for (STAT_BOOTCNT)
+AT-0006.2: While awaiting reboot received (COMMAND_ACK {command : 246, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250})
+EOF on TCP socket
+Attempting reconnect
+[Errno 111] Connection refused sleeping
+arducopter: Suggested EK3_DRAG_BCOEF_* = 17.209, EK3_DRAG_MCOEF = 0.209
+arducopter: Home: -35.362938 149.165085 alt=584.000000m hdg=270.000000
+arducopter: Starting sketch 'ArduCopter'
+arducopter: Starting SITL input
+arducopter: Using Irlock at port : 9005
+arducopter: bind port 5760 for SERIAL0
+arducopter: SERIAL0 on TCP port 5760
+arducopter: Waiting for connection ....
+arducopter: Connection on serial port 5760
+AT-0007.2: get_parameter(STAT_BOOTCNT): None
+AT-0007.2: Sending param_request_read for (STAT_BOOTCNT)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: bind port 5762 for SERIAL1
+arducopter: SERIAL1 on TCP port 5762
+arducopter: bind port 5763 for SERIAL2
+arducopter: SERIAL2 on TCP port 5763
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Smoothing reset at 0.001
+arducopter: validate_structures:528: Validating structures
+arducopter: Waiting for internal clock bits to be set (current=0x00)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+AT-0007.2: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 5.0, param_type : 4, param_count : 1356, param_index : 65535}
+AT-0007.2: current=5.0 required=5
+AT-0007.2: Doing timesync roundtrip
+AT-0007.2: AP: RCInput: decoding UDP (Pulses)
+AT-0007.2: Received: TIMESYNC {tc1 : 200844000, ts1 : 172250}
+AT-0007.2: Received TIMESYNC response after 0.000057s
+AT-0007.2: Calling initialise-after-reboot
+AT-0007.2: Drained 0 messages from mav (0.000000/s)
+AT-0007.2: AP: Calibrating barometer
+AT-0007.2: Doing timesync roundtrip
+AT-0007.2: Received: TIMESYNC {tc1 : 1024681000, ts1 : 173250}
+AT-0007.2: Received TIMESYNC response after 0.000011s
+AT-0007.2: AP: Barometer 1 calibration complete
+AT-0007.2: AP: Barometer 2 calibration complete
+AT-0007.2: AP: ArduPilot Ready
+AT-0007.2: AP: AHRS: DCM active
+AT-0007.3: Reboot complete
+AT-0007.3: set_parameters: ({})
+AT-0007.3: Simstate Close to startup location: dist=0.000000 max=1.000000 (simstate: lat=-35.362938,lon=149.165085,alt=0.0 start-loc: lat=-35.362938,lon=149.165085,alt=584.0)
+AT-0007.3: Taking off to 10m
+AT-0007.3: TAKEOFF
+AT-0007.3: AP: RC7: SaveWaypoint MIDDLE
+AT-0007.3: Drained 4 messages from mav (28926.234483/s)
+AT-0007.3: Changing mode to ALT_HOLD
+AT-0007.3: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=2.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0007.3: Got mode ALT_HOLD
+AT-0007.3: Drained 0 messages from mav (0.000000/s)
+AT-0007.3: AP: EKF3 IMU0 initialised
+AT-0007.3: AP: EKF3 IMU1 initialised
+AT-0007.3: AP: AHRS: EKF3 active
+AT-0007.3: Waiting for ready to arm
+AT-0007.3: Sending param_request_read for (AHRS_EKF_TYPE)
+AT-0007.3: get_parameter(AHRS_EKF_TYPE): PARAM_VALUE {param_id : AHRS_EKF_TYPE, param_value : 3.0, param_type : 2, param_count : 1366, param_index : 65535}
+AT-0007.3: Waiting for EKF value 831
+AT-0007.3: Want=831 got=0 errors=0
+AT-0007.3: AP: EKF3 IMU1 tilt alignment complete
+AT-0007.3: AP: EKF3 IMU0 tilt alignment complete
+AT-0007.3: AP: EKF3 IMU1 MAG0 initial yaw alignment complete
+AT-0007.3: AP: EKF3 IMU0 MAG0 initial yaw alignment complete
+AT-0007.3: Want=831 got=167 errors=128
+AT-0007.3: Want=831 got=167 errors=128
+AT-0007.4: Want=831 got=167 errors=128
+AT-0007.4: AP: GPS 1: probing for u-blox at 230400 baud
+AT-0007.4: AP: GPS 1: detected u-blox
+AT-0007.4: Want=831 got=167 errors=128
+AT-0007.4: Want=831 got=167 errors=128
+AT-0007.4: Want=831 got=167 errors=128
+AT-0007.4: Want=831 got=167 errors=128
+AT-0007.5: Want=831 got=167 errors=128
+AT-0007.5: Want=831 got=167 errors=128
+AT-0007.5: Want=831 got=167 errors=128
+AT-0007.5: Want=831 got=167 errors=128
+AT-0007.5: Want=831 got=167 errors=128
+AT-0007.6: Want=831 got=167 errors=128
+AT-0007.6: AP: EKF3 IMU1 origin set
+AT-0007.6: AP: Field Elevation Set: 584m
+AT-0007.6: AP: EKF3 IMU0 origin set
+AT-0007.6: Want=831 got=167 errors=128
+AT-0007.6: Want=831 got=167 errors=128
+AT-0007.6: Want=831 got=167 errors=128
+AT-0007.6: Want=831 got=167 errors=128
+AT-0007.6: Want=831 got=167 errors=128
+AT-0007.7: Want=831 got=167 errors=128
+AT-0007.7: Want=831 got=167 errors=128
+AT-0007.7: Want=831 got=167 errors=128
+AT-0007.7: Want=831 got=167 errors=128
+AT-0007.7: Want=831 got=167 errors=128
+AT-0007.8: Want=831 got=167 errors=128
+AT-0007.8: Want=831 got=167 errors=128
+AT-0007.8: Want=831 got=167 errors=128
+AT-0007.8: Want=831 got=167 errors=128
+AT-0007.8: Want=831 got=167 errors=128
+AT-0007.8: Want=831 got=167 errors=128
+AT-0007.9: Want=831 got=167 errors=128
+AT-0007.9: Want=831 got=167 errors=128
+AT-0007.9: Want=831 got=167 errors=128
+AT-0007.9: AP: EKF3 IMU0 is using GPS
+AT-0007.9: AP: EKF3 IMU1 is using GPS
+AT-0007.9: EKF Flags OK
+AT-0007.9: Waiting for GPS health
+AT-0007.9: GPS healthy after 0.000000/30.000000 seconds
+AT-0007.9: Polled home position (HOME_POSITION {latitude : -353629380, longitude : 1491650850, altitude : 584090, x : 0.0, y : 0.0, z : -0.0, q : [nan, nan, nan, nan], approach_x : 0.0, approach_y : 0.0, approach_z : 0.0, time_usec : 42527149})
+AT-0007.9: Doing timesync roundtrip
+AT-0007.9: Received: TIMESYNC {tc1 : 42747985000, ts1 : 174250}
+AT-0007.9: Received TIMESYNC response after 0.000000s
+AT-0007.9: Took 38 seconds to become armable
+AT-0007.9: RC values good
+AT-0007.9: Arm motors with MAVLink cmd
+AT-0007.9: Sending COMMAND_LONG to (1,1) (MAV_CMD_COMPONENT_ARM_DISARM=400) (p1=1.000000 p2=0.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0007.9: ACK received: COMMAND_ACK {command : 400, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250} (0.000000s)
+AT-0007.9: AP: Arming motors
+AT-0007.9: AP: AP_Observer: Takeoff detected, starting frequency 
+AT-0007.9: AP: estimation
+AT-0008.0: Motors ARMED
+AT-0008.0: RC values good
+AT-0008.0: Waiting for Altitude=12.00 with accuracy 3.00
+AT-0008.0: Altitude=0.00 (want 12.000000 +- 3.000000)
+AT-0008.0: Altitude=0.00 (want 12.000000 +- 3.000000)
+AT-0008.0: Altitude=0.17 (want 12.000000 +- 3.000000)
+AT-0008.0: Altitude=0.84 (want 12.000000 +- 3.000000)
+AT-0008.1: Altitude=1.52 (want 12.000000 +- 3.000000)
+AT-0008.1: Altitude=2.14 (want 12.000000 +- 3.000000)
+AT-0008.1: AP: EKF3 IMU0 MAG0 in-flight yaw alignment complete
+AT-0008.1: AP: EKF3 IMU1 MAG0 in-flight yaw alignment complete
+AT-0008.1: Altitude=2.91 (want 12.000000 +- 3.000000)
+AT-0008.1: Altitude=3.52 (want 12.000000 +- 3.000000)
+AT-0008.1: Altitude=4.28 (want 12.000000 +- 3.000000)
+AT-0008.2: Altitude=5.06 (want 12.000000 +- 3.000000)
+AT-0008.2: Altitude=5.69 (want 12.000000 +- 3.000000)
+AT-0008.2: Altitude=6.45 (want 12.000000 +- 3.000000)
+AT-0008.2: Altitude=7.11 (want 12.000000 +- 3.000000)
+AT-0008.2: Altitude=7.85 (want 12.000000 +- 3.000000)
+AT-0008.3: Altitude=8.49 (want 12.000000 +- 3.000000)
+AT-0008.3: Attained Altitude=9.141
+AT-0008.3: RC values good
+AT-0008.3: TAKEOFF COMPLETE
+AT-0008.3: Delaying 5.000000 seconds
+AT-0008.4: Hovering for 30s to let EKF converge
+AT-0008.4: Delaying 30.000000 seconds
+AT-0008.9: Drained 8 messages from mav (32896.501961/s)
+AT-0008.9: Changing mode to RTL
+AT-0008.9: Sending COMMAND_LONG to (1,1) (MAV_CMD_DO_SET_MODE=176) (p1=1.000000 p2=6.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0008.9: Got mode RTL
+AT-0008.9: RC values good
+AT-0008.9: Waiting RTL to reach Home and disarm
+AT-0008.9: Drained 24 messages from mav (20962.785506/s)
+AT-0009.0: Drained 24 messages from mav (22550.021505/s)
+AT-0009.0: Drained 24 messages from mav (27089.153929/s)
+AT-0009.0: Drained 24 messages from mav (26757.920255/s)
+AT-0009.0: Drained 24 messages from mav (24250.372440/s)
+AT-0009.0: Drained 24 messages from mav (36472.208696/s)
+AT-0009.0: Drained 24 messages from mav (37971.820445/s)
+AT-0009.1: Drained 24 messages from mav (20585.541104/s)
+AT-0009.1: Drained 24 messages from mav (22878.021818/s)
+AT-0009.1: Drained 24 messages from mav (33255.135778/s)
+AT-0009.1: Drained 24 messages from mav (23646.534179/s)
+AT-0009.1: Drained 24 messages from mav (25400.781226/s)
+AT-0009.2: Drained 24 messages from mav (21313.422824/s)
+AT-0009.2: Drained 24 messages from mav (31252.187519/s)
+AT-0009.2: Drained 24 messages from mav (28189.105573/s)
+AT-0009.2: Drained 23 messages from mav (34539.560329/s)
+AT-0009.2: Drained 23 messages from mav (25214.059592/s)
+AT-0009.3: Drained 23 messages from mav (25974.418955/s)
+AT-0009.3: Drained 23 messages from mav (27873.155735/s)
+AT-0009.3: Drained 23 messages from mav (30557.171999/s)
+AT-0009.3: Drained 23 messages from mav (38266.161047/s)
+AT-0009.3: Drained 23 messages from mav (22419.008134/s)
+AT-0009.4: Drained 23 messages from mav (24391.654109/s)
+AT-0009.4: Drained 23 messages from mav (30317.093652/s)
+AT-0009.4: Drained 23 messages from mav (29801.974668/s)
+AT-0009.4: Drained 23 messages from mav (21523.648371/s)
+AT-0009.4: Drained 23 messages from mav (29375.454324/s)
+AT-0009.4: Drained 23 messages from mav (21160.121079/s)
+AT-0009.5: Drained 23 messages from mav (32156.330667/s)
+AT-0009.5: Drained 23 messages from mav (21086.118470/s)
+AT-0009.5: Drained 23 messages from mav (28900.237268/s)
+AT-0009.5: Drained 23 messages from mav (25207.471126/s)
+AT-0009.5: Drained 23 messages from mav (26037.514710/s)
+AT-0009.6: Drained 23 messages from mav (23690.813360/s)
+AT-0009.6: Drained 23 messages from mav (25115.592814/s)
+AT-0009.6: Drained 23 messages from mav (39072.090725/s)
+AT-0009.6: Drained 23 messages from mav (21737.041911/s)
+AT-0009.6: Drained 23 messages from mav (26372.059049/s)
+AT-0009.7: Drained 23 messages from mav (26546.227848/s)
+AT-0009.7: Drained 23 messages from mav (29295.169147/s)
+AT-0009.7: AP: SIM Hit ground at 0.500234 m/s
+AT-0009.7: Drained 23 messages from mav (29628.068796/s)
+AT-0009.7: Drained 23 messages from mav (26250.065850/s)
+AT-0009.7: AP: Disarming motors
+AT-0009.7: Waiting for DISARM
+AT-0009.7: Waiting for disarm (0.00s so far of allowed 120.00)
+AT-0009.7: DISARMED after 0.00 seconds (allowed=120.00)
+AT-0009.7: Checking EKF state in log...
+AT-0009.7: log list: ['logs/00000001.BIN', 'logs/00000002.BIN', 'logs/00000003.BIN', 'logs/00000004.BIN']
+AT-0009.9: EKF samples: 3040
+AT-0009.9: EKF X-axis frequency: 0.6001 +/- 0.0000 Hz
+AT-0009.9: PASS: ALL EKF OPERATION TESTS PASSED
+AT-0009.9: set_parameters: ({'LOG_DISARMED': 1.0})
+AT-0010.0: LOG_DISARMED want=1.000000 autopilot=None (attempt=1/10)
+AT-0010.0: Requesting (LOG_DISARMED)
+AT-0010.0: LOG_DISARMED want=1.000000 autopilot=None (attempt=2/10)
+AT-0010.0: Requesting (LOG_DISARMED)
+AT-0010.0: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0010.0: Received wanted PARAM_VALUE LOG_DISARMED=1.000000
+AT-0010.0: LOG_DISARMED want=1.000000 autopilot=1.0 (attempt=3/10)
+AT-0010.0: LOG_DISARMED is now 1.000000
+AT-0010.0: Doing implicit context-pop reboot
+AT-0010.0: Drained 0 messages from mav (0.000000/s)
+AT-0010.0: Rebooting SITL
+AT-0010.0: Sending param_request_read for (STAT_RESET)
+AT-0010.0: get_parameter(STAT_RESET): PARAM_VALUE {param_id : STAT_RESET, param_value : 1.0, param_type : 6, param_count : 1366, param_index : 65535}
+AT-0010.0: Sending param_request_read for (STAT_BOOTCNT)
+AT-0010.0: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 5.0, param_type : 4, param_count : 1366, param_index : 65535}
+AT-0010.0: Sending reboot command
+AT-0010.0: Sending COMMAND_LONG to (1,1) (MAV_CMD_PREFLIGHT_REBOOT_SHUTDOWN=246) (p1=1.000000 p2=1.000000 p3=0.000000 p4=0.000000 p5=0.000000 p6=0.000000  p7=0.000000)
+AT-0010.0: Sending param_request_read for (STAT_BOOTCNT)
+AT-0010.0: While awaiting reboot received (COMMAND_ACK {command : 246, result : 0, progress : 0, result_param2 : 0, target_system : 250, target_component : 250})
+EOF on TCP socket
+Attempting reconnect
+[Errno 111] Connection refused sleeping
+arducopter: Suggested EK3_DRAG_BCOEF_* = 17.209, EK3_DRAG_MCOEF = 0.209
+arducopter: Home: -35.362938 149.165085 alt=584.000000m hdg=270.000000
+arducopter: Starting sketch 'ArduCopter'
+arducopter: Starting SITL input
+arducopter: Using Irlock at port : 9005
+arducopter: bind port 5760 for SERIAL0
+arducopter: SERIAL0 on TCP port 5760
+arducopter: Waiting for connection ....
+arducopter: Connection on serial port 5760
+AT-0011.0: get_parameter(STAT_BOOTCNT): None
+AT-0011.0: Sending param_request_read for (STAT_BOOTCNT)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: bind port 5762 for SERIAL1
+arducopter: SERIAL1 on TCP port 5762
+arducopter: bind port 5763 for SERIAL2
+arducopter: SERIAL2 on TCP port 5763
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Smoothing reset at 0.001
+arducopter: validate_structures:528: Validating structures
+arducopter: Waiting for internal clock bits to be set (current=0x00)
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+arducopter: Loaded defaults from /tmp/tmpb7piiaqu,/home/umemoto/Ardupilot-UmemotoLab/Tools/autotest/default_params/copter.parm
+AT-0011.0: get_parameter(STAT_BOOTCNT): PARAM_VALUE {param_id : STAT_BOOTCNT, param_value : 6.0, param_type : 4, param_count : 1356, param_index : 65535}
+AT-0011.0: current=6.0 required=6
+AT-0011.0: Doing timesync roundtrip
+AT-0011.0: Received: TIMESYNC {tc1 : 180019000, ts1 : 177250}
+AT-0011.0: Received TIMESYNC response after 0.000014s
+AT-0011.0: Calling initialise-after-reboot
+AT-0011.0: AP: RCInput: decoding UDP (Pulses)
+AT-0011.0: Drained 0 messages from mav (0.000000/s)
+AT-0011.0: AP: Calibrating barometer
+AT-0011.0: Doing timesync roundtrip
+AT-0011.0: Received: TIMESYNC {tc1 : 1025514000, ts1 : 178250}
+AT-0011.0: Received TIMESYNC response after 0.000014s
+AT-0011.0: AP: Barometer 1 calibration complete
+AT-0011.0: AP: Barometer 2 calibration complete
+AT-0011.0: AP: ArduPilot Ready
+AT-0011.0: AP: AHRS: DCM active
+AT-0011.0: Reboot complete
+AT-0011.0: set_parameters: ({})
+AT-0011.0: Simstate Close to startup location: dist=0.000000 max=1.000000 (simstate: lat=-35.362938,lon=149.165085,alt=0.0 start-loc: lat=-35.362938,lon=149.165085,alt=584.0)
+AT-0011.0: AP: RC7: SaveWaypoint MIDDLE
+AT-0011.0: Drained 4 messages from mav (26296.576803/s)
+AT-0011.0: set_parameters: ({})
+AT-0011.0: Drained 0 messages from mav (0.000000/s)
+AT-0011.0: PASSED: "TestObserverEKFOperation (Test AP_Observer EKF operates correctly during flight)"
+AT-0011.0: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 1})
+AT-0011.0: MISSION_ACK.target_system has expected value 250
+AT-0011.0: MISSION_ACK.target_component has expected value 250
+AT-0011.0: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0011.0: AP: Fence Indexed OK
+AT-0011.0: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 0})
+AT-0011.0: MISSION_ACK.target_system has expected value 250
+AT-0011.0: MISSION_ACK.target_component has expected value 250
+AT-0011.0: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0011.0: AP: Flight plan received
+AT-0011.0: Received (MISSION_ACK {target_system : 250, target_component : 250, type : 0, mission_type : 2})
+AT-0011.0: MISSION_ACK.target_system has expected value 250
+AT-0011.0: MISSION_ACK.target_component has expected value 250
+AT-0011.0: MISSION_ACK.type has expected value 0 (MAV_MISSION_ACCEPTED)
+AT-0011.0: Joining RC thread
+AT-0011.0: Stopping SITL
+>>>> PASSED STEP: test.CopterObserver at Tue May 12 00:55:04 2026

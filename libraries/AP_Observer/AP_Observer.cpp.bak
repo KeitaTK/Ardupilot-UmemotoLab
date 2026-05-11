@@ -101,33 +101,61 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_NIS_MAX", 25, AP_Observer, _ekf_nis_max, 4.0f),
 
-    // @Param: FADE_TH
-    // @DisplayName: Output Fade Amplitude Threshold
-    // @Description: Amplitude threshold [N] to reset the fade timer
-    // @Range: 0.0 10.0
+    // @Param: EKF_EN_GAT
+    // @DisplayName: EKF Energy Gate Enable
+    // @Description: Enable RMS-based axis gating for frequency fusion
+    // @Values: 0:Disabled,1:Enabled
     // @User: Advanced
-    AP_GROUPINFO("FADE_TH", 26, AP_Observer, _out_fade_th, 4.0f),
+    AP_GROUPINFO("EKF_EN_GAT", 26, AP_Observer, _ekf_energy_gate_enable, 1),
 
-    // @Param: FADE_DLY
-    // @DisplayName: Output Fade Delay
-    // @Description: Time [s] below threshold before starting to fade out
+    // @Param: EKF_EN_ON
+    // @DisplayName: EKF Energy Gate On Threshold
+    // @Description: RMS threshold for enabling an axis in fused frequency update [N]
     // @Range: 0.0 5.0
     // @User: Advanced
-    AP_GROUPINFO("FADE_DLY", 27, AP_Observer, _out_fade_dly, 2.0f),
+    AP_GROUPINFO("EKF_EN_ON", 27, AP_Observer, _ekf_energy_rms_on, 0.20f),
 
-    // @Param: FADE_IN_T
-    // @DisplayName: Output Fade In Time Constant
-    // @Description: Time constant [s] when fading in (typically fast)
-    // @Range: 0.01 2.0
+    // @Param: EKF_EN_OFF
+    // @DisplayName: EKF Energy Gate Off Threshold
+    // @Description: RMS threshold for disabling an axis in fused frequency update [N]
+    // @Range: 0.0 5.0
     // @User: Advanced
-    AP_GROUPINFO("FADE_IN_T", 28, AP_Observer, _out_fade_in_t, 0.1f),
+    AP_GROUPINFO("EKF_EN_OFF", 28, AP_Observer, _ekf_energy_rms_off, 0.16f),
 
-    // @Param: FADE_OUT_T
-    // @DisplayName: Output Fade Out Time Constant
-    // @Description: Time constant [s] when fading out (typically slow)
-    // @Range: 0.01 5.0
+    // @Param: EKF_EN_TAU
+    // @DisplayName: EKF Energy Gate Time Constant
+    // @Description: EMA time constant used to estimate RMS energy [s]
+    // @Range: 0.1 20.0
     // @User: Advanced
-    AP_GROUPINFO("FADE_OUT_T", 29, AP_Observer, _out_fade_out_t, 1.0f),
+    AP_GROUPINFO("EKF_EN_TAU", 29, AP_Observer, _ekf_energy_tau_sec, 4.0f),
+
+    // @Param: EKF_FHOLD
+    // @DisplayName: EKF Force Hold Threshold
+    // @Description: Hold the previous omega estimate when |force| is at or below this threshold [N]
+    // @Range: 0.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_FHOLD", 30, AP_Observer, _ekf_force_hold_max, 0.10f),
+
+    // @Param: EKF_FREJ
+    // @DisplayName: EKF Force Reject Threshold
+    // @Description: Reject force samples from estimation when |force| is at or above this threshold [N]
+    // @Range: 0.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_FREJ", 31, AP_Observer, _ekf_force_reject_min, 5.0f),
+
+    // @Param: EKF_RB_EN
+    // @DisplayName: EKF Robust Update Enable
+    // @Description: Enable robust observation update (innovation clipping and outlier reject)
+    // @Values: 0:Disabled,1:Enabled
+    // @User: Advanced
+    AP_GROUPINFO("EKF_RB_EN", 35, AP_Observer, _ekf_robust_update_enable, 1),
+
+    // @Param: EKF_RB_NIS
+    // @DisplayName: EKF Robust Reject NIS Scale
+    // @Description: Reject observation update when NIS exceeds EKF_NIS_MAX multiplied by this scale
+    // @Range: 1.0 20.0
+    // @User: Advanced
+    AP_GROUPINFO("EKF_RB_NIS", 36, AP_Observer, _ekf_robust_nis_reject_scale, 3.0f),
 
     AP_GROUPEND
 };
@@ -212,7 +240,30 @@ void AP_Observer::reset_frequency_estimation() {
 #endif
 }
 
+bool AP_Observer::is_axis_frequency_trusted(uint8_t axis) const {
+    if (axis >= EKF_NUM_AXES) {
+        return false;
+    }
 
+    const float force_reject_min = MAX(0.0f, _ekf_force_reject_min.get());
+    if (ekf_axis_force_abs[axis] >= force_reject_min) {
+        return false;
+    }
+
+    if (_ekf_energy_gate_enable.get() != 0) {
+        if (!ekf_axis_energy_trusted[axis]) {
+            return false;
+        }
+    }
+
+    const float innov_abs = fabsf(ekf_axis_innovation[axis]);
+    const float innov_max = MAX(1.0e-3f, _ekf_innov_max.get());
+    const float nis = ekf_axis_nis[axis];
+    const float nis_max = MAX(1.0e-3f, _ekf_nis_max.get());
+
+    return (innov_abs <= innov_max) &&
+           (nis <= nis_max);
+}
 
 void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
     if (!ekf_initialized) {
@@ -247,10 +298,68 @@ void AP_Observer::ekf_update(const Vector3f& y_output, float dt) {
 }
 
 void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
+    // EKF 1軸更新: 予測 -> 条件分岐（predict-only / reject）-> 観測更新
+    // 低振幅・低エネルギー領域では measurement を 0 に固定して発散を抑える。
+
     float* x = ekf_state[axis];
     float (*P)[EKF_STATE_SIZE] = ekf_P[axis];
+    const float omega_prev = x[3];
     const float force_abs = fabsf(measurement);
     ekf_axis_force_abs[axis] = force_abs;
+
+    const float energy_tau = MAX(0.1f, _ekf_energy_tau_sec.get());
+    const float energy_alpha = constrain_value(1.0f - expf(-dt / energy_tau), 0.0f, 1.0f);
+    const float energy_proxy = fabsf(_energy_band_proxy[axis]);
+    const float energy_proxy_sq = energy_proxy * energy_proxy;
+    if (ekf_sample_count == 0U || !isfinite(ekf_axis_energy_power[axis])) {
+        ekf_axis_energy_power[axis] = energy_proxy_sq;
+    } else {
+        ekf_axis_energy_power[axis] = energy_alpha * energy_proxy_sq + (1.0f - energy_alpha) * ekf_axis_energy_power[axis];
+    }
+
+    bool energy_gate_enabled = false;
+    if (_ekf_energy_gate_enable.get() != 0) {
+        const float energy_on = MAX(0.0f, _ekf_energy_rms_on.get());
+        const float energy_off = constrain_value(_ekf_energy_rms_off.get(), 0.0f, energy_on);
+        const float power_on = energy_on * energy_on;
+        const float power_off = energy_off * energy_off;
+        if (ekf_axis_energy_trusted[axis] == 0U) {
+            if (ekf_axis_energy_power[axis] >= power_on) {
+                ekf_axis_energy_trusted[axis] = 1U;
+            }
+        } else if (ekf_axis_energy_power[axis] <= power_off) {
+            ekf_axis_energy_trusted[axis] = 0U;
+        }
+        energy_gate_enabled = (ekf_axis_energy_trusted[axis] != 0U);
+    } else {
+        ekf_axis_energy_trusted[axis] = 1U;
+        energy_gate_enabled = true;
+    }
+
+    const float force_hold_max = MAX(0.0f, _ekf_force_hold_max.get());
+    const float force_reject_min = MAX(force_hold_max + 1.0e-3f, _ekf_force_reject_min.get());
+    
+    // 条件1: force_hold_omega - 低振幅時（omega固定）
+    const bool force_hold_omega = force_abs <= force_hold_max;
+    
+    // 条件2: energy_hold_omega - エネルギーゲート OFF 時
+    const bool energy_hold_omega = !energy_gate_enabled;
+    
+    // 統合判定
+    const bool hold_omega = force_hold_omega || energy_hold_omega;  // omega を固定
+    ekf_axis_hold_omega[axis] = hold_omega ? 1U : 0U;
+    ekf_axis_omega_updated[axis] = 0U;
+
+    // ※以前はスイッチOFF時に predict-only (観測更新スキップ) を行っていましたが、
+    // 前進オイラー法による数値発散（1e5~1e6オーダーへの発散）の原因となるため廃止しました。
+    // また、観測スキップにより「エネルギーゲートOFF時に0を注入して収束させる」仕組みが
+    // バイパスされてしまう不具合もこれで解消されます。
+    const bool predict_only_hold = false;
+    
+    // 追加判定: force_reject - 高振幅時の周波数推定拒否
+    //   トリガ：|force| >= force_reject_min（例：5.0 N）
+    //   非線形性や飽和による推定エラーを防ぐため、観測更新を完全に拒否
+    const bool force_reject = force_abs >= force_reject_min;
 
     const float omega = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
     const float d = x[0];
@@ -258,10 +367,32 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     const float c = x[2];
 
     float x_pred[EKF_STATE_SIZE];
+    // シンプレクティック・オイラー法（Symplectic Euler）を用いてエネルギー保存則を満たし、
+    // 長期的な予測での数値発散（前進オイラー法特有の爆発）を防ぐ。
+    //
+    // 【なぜ速度(d_dot)を先に更新するのか？】
+    // 単振動 d'' = -ω²d を前進オイラー法で離散化すると、
+    //   d_{k+1} = d_k + dt·d_dot_k
+    //   d_dot_{k+1} = d_dot_k - dt·ω²·d_k
+    // となり、各ステップでエネルギーが増加し発散する。
+    // シンプレクティック・オイラー法では速度を先に更新することで、
+    //   d_dot_{k+1} = d_dot_k - dt·ω²·d_k  (新しい速度)
+    //   d_{k+1} = d_k + dt·d_dot_{k+1}       (新しい速度を使って位置更新)
+    // となり、エネルギー保存が改善される（調和振動子のシンプレクティック性）。
+    //
+    // 【状態方程式の意味】
+    // d_dotの変化: d_dot_{k+1} - d_dot_k = -ω²·d_k·dt
+    //   → これは「dは角周波数ωの単振動をする」というモデルを離散化したもの。
+    //     外力の振動成分を仮想的なバネマス系の位置とみなしている。
+    // dの変化: d_{k+1} - d_k = d_dot_{k+1}·dt
+    //   → 新しい速度を使って位置を更新（シンプレクティック性の要）。
+    // c, ω: 予測ステップでは変化しない（観測更新でのみ変化）。
     x_pred[1] = d_dot + dt * (-(omega * omega) * d);
     x_pred[0] = d + dt * x_pred[1];
     x_pred[2] = c;
     x_pred[3] = omega;
+
+
     x_pred[3] = constrain_value(x_pred[3], _ekf_omega_min.get(), _ekf_omega_max.get());
 
     float F[EKF_STATE_SIZE][EKF_STATE_SIZE] = {
@@ -293,10 +424,17 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         }
     }
 
-    P_pred[0][0] += _ekf_q_d.get();
-    P_pred[1][1] += _ekf_q_d_dot.get();
-    P_pred[2][2] += _ekf_q_c.get();
-    P_pred[3][3] += _ekf_q_omega.get();
+    const float q_d = _ekf_q_d.get();
+    const float q_ddot = _ekf_q_d_dot.get();
+    const float q_c = _ekf_q_c.get();
+    const float q_omega_base = _ekf_q_omega.get();
+    const float q_omega = (!hold_omega && !force_reject)
+        ? q_omega_base
+        : 0.0f;
+    P_pred[0][0] += q_d;
+    P_pred[1][1] += q_ddot;
+    P_pred[2][2] += q_c;
+    P_pred[3][3] += q_omega;
 
     ekf_axis_p00[axis] = P_pred[0][0];
     ekf_axis_p22[axis] = P_pred[2][2];
@@ -305,23 +443,112 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
     ekf_axis_k2[axis] = 0.0f;
     ekf_axis_dbg_valid[axis] = 0U;
 
+    if (predict_only_hold) {
+            // SW OFF またはエネルギーゲート OFF では観測更新を行わない。
+        const float y_pred_hold = x_pred[0] + x_pred[2];
+        const float innov_hold = measurement - y_pred_hold;
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            x[i] = x_pred[i];
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = P_pred[i][j];
+            }
+        }
+        x[3] = omega_prev;
+        ekf_axis_innovation[axis] = innov_hold;
+        ekf_axis_nis[axis] = 0.0f;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_omega_updated[axis] = 0U;
+        return;
+    }
+
+    if (force_reject) {
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            x[i] = x_pred[i];
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = P_pred[i][j];
+            }
+        }
+        x[3] = omega_prev;
+        ekf_axis_innovation[axis] = 0.0f;
+        ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_omega_updated[axis] = 0U;
+        return;
+    }
+
+    // 低振幅デッドバンドでは観測値をゼロ強制して更新の暴れを抑制する。
+    if (force_hold_omega || energy_hold_omega) {
+        measurement = 0.0f;
+    }
+
+    // 【観測モデル】y_pred = d + c
+    // 観測される外力 = 振動成分(d) + DCバイアス(c)
+    // これは H = [1, 0, 1, 0] による線形観測。
+    // 速度(d_dot)と周波数(omega)は観測に直接現れない。
     const float y_pred = x_pred[0] + x_pred[2];
     const float innov_raw = measurement - y_pred;
 
-    const float innov_max = MAX(1.0e-3f, _ekf_innov_max.get());
-    float innov_used = constrain_value(innov_raw, -innov_max, innov_max);
+    float innov_used = innov_raw;
+    float R = _ekf_r_meas.get();
+    if (R < 1.0e-6f) {
+        R = 1.0e-6f;
+    }
+    float R_eff = R;
 
-    float R = MAX(1.0e-6f, _ekf_r_meas.get());
     float PHt[EKF_STATE_SIZE];
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         PHt[i] = P_pred[i][0] + P_pred[i][2];
     }
 
-    float S = PHt[0] + PHt[2] + R;
+    float S = PHt[0] + PHt[2] + R_eff;
     ekf_axis_s[axis] = S;
     if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
         ekf_axis_innovation[axis] = innov_raw;
+        ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
         ekf_axis_amp[axis] = fabsf(x[0]);
+        return;
+    }
+    const float nis_raw = (S > 1.0e-6f) ? ((innov_raw * innov_raw) / S) : (_ekf_nis_max.get() + 1.0f);
+
+    bool robust_reject = false;
+    if (_ekf_robust_update_enable.get() != 0) {
+        const float innov_max = MAX(1.0e-3f, _ekf_innov_max.get());
+        const float nis_max = MAX(1.0e-3f, _ekf_nis_max.get());
+        const float reject_nis_scale = MAX(1.0f, _ekf_robust_nis_reject_scale.get());
+
+        innov_used = constrain_value(innov_used, -innov_max, innov_max);
+
+        if (nis_raw > nis_max) {
+            const float nis_ratio = constrain_value(nis_raw / nis_max, 1.0f, 50.0f);
+            R_eff = R * nis_ratio;
+            S = PHt[0] + PHt[2] + R_eff;
+            ekf_axis_s[axis] = S;
+            if (!isfinite(S) || fabsf(S) < 1.0e-6f) {
+                ekf_axis_innovation[axis] = innov_raw;
+                ekf_axis_nis[axis] = nis_raw;
+                ekf_axis_amp[axis] = fabsf(x[0]);
+                ekf_axis_omega_updated[axis] = 0U;
+                return;
+            }
+        }
+
+        robust_reject = (nis_raw > (nis_max * reject_nis_scale));
+    }
+
+    if (robust_reject) {
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            x[i] = x_pred[i];
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = P_pred[i][j];
+            }
+        }
+        if (hold_omega) {
+            x[3] = omega_prev;
+        }
+        ekf_axis_innovation[axis] = innov_raw;
+        ekf_axis_nis[axis] = nis_raw;
+        ekf_axis_amp[axis] = fabsf(x[0]);
+        ekf_axis_omega_updated[axis] = 0U;
         return;
     }
 
@@ -330,19 +557,30 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         K[i] = PHt[i] / S;
     }
 
+    if (hold_omega) {
+        // hold 条件下では omega 更新を止める。
+        K[3] = 0.0f;
+    }
+
     ekf_axis_k0[axis] = K[0];
     ekf_axis_k2[axis] = K[2];
     ekf_axis_dbg_valid[axis] = 1U;
+    
     ekf_axis_innovation[axis] = innov_raw;
+    ekf_axis_nis[axis] = nis_raw;
 
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         x[i] = x_pred[i] + K[i] * innov_used;
+    }
+    if (hold_omega) {
+        x[3] = omega_prev;
     }
 
     float KH[EKF_STATE_SIZE][EKF_STATE_SIZE];
     for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
         for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
-            KH[i][j] = K[i] * ((j == 0 || j == 2) ? 1.0f : 0.0f);
+            const float H_j = (j == 0 || j == 2) ? 1.0f : 0.0f;
+            KH[i][j] = K[i] * H_j;
         }
     }
 
@@ -368,28 +606,58 @@ void AP_Observer::ekf_update_axis(uint8_t axis, float measurement, float dt) {
         for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
             P[i][j] = 0.5f * (P_new[i][j] + P_new[j][i]);
         }
-        P[i][i] = MAX(P[i][i], 0.0f);
     }
 
-    // フェード処理
-    const float new_omega = MAX(1e-3f, x[3]);
-    const float term = x[1] / new_omega;
-    const float A = sqrtf(x[0]*x[0] + term*term);
-    ekf_axis_amp[axis] = A;
-
-    const float fade_th = _out_fade_th.get();
-    if (A < fade_th) {
-        _fade_timer[axis] += dt;
-    } else {
-        _fade_timer[axis] = 0.0f;
+    if (hold_omega) {
+        x[3] = omega_prev;
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            P[3][i] = P_pred[3][i];
+            P[i][3] = P_pred[i][3];
+        }
     }
 
-    const float target_gain = (_fade_timer[axis] > _out_fade_dly.get()) ? 0.0f : 1.0f;
-    const float tau = (target_gain > _fade_gain[axis]) ? MAX(1e-3f, _out_fade_in_t.get()) : MAX(1e-3f, _out_fade_out_t.get());
-    const float alpha = constrain_value(dt / (dt + tau), 0.0f, 1.0f);
-    _fade_gain[axis] += alpha * (target_gain - _fade_gain[axis]);
+    bool finite_ok = true;
+    for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+        finite_ok = finite_ok && isfinite(x[i]);
+        for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+            finite_ok = finite_ok && isfinite(P[i][j]);
+        }
+    }
+    if (!finite_ok) {
+        // [対策3] 非有限値（NaN/Inf）検出時の軸リセット
+        // 数値計算による発散を検出したら、軸状態を安全値にリセット。
+        // omega は前フレーム値を維持（周波数推定は継続）し、他の状態は 0 化。
+        // この堅牢性対策により、局所的な演算エラーから回復。
+        const float init_cov = EKF_INIT_COVARIANCE;
+        x[0] = 0.0f;
+        x[1] = 0.0f;
+        x[2] = 0.0f;
+        x[3] = constrain_value(omega_prev, _ekf_omega_min.get(), _ekf_omega_max.get());
+        for (uint8_t i = 0; i < EKF_STATE_SIZE; i++) {
+            for (uint8_t j = 0; j < EKF_STATE_SIZE; j++) {
+                P[i][j] = (i == j) ? init_cov : 0.0f;
+            }
+        }
+        ekf_axis_innovation[axis] = 0.0f;
+        ekf_axis_nis[axis] = _ekf_nis_max.get() + 1.0f;
+        ekf_axis_amp[axis] = 0.0f;
+        ekf_axis_omega_updated[axis] = 0U;
+        return;
+    }
 
-    ekf_axis_omega_updated[axis] = 1U;
+    x[3] = constrain_value(x[3], _ekf_omega_min.get(), _ekf_omega_max.get());
+    ekf_axis_innovation[axis] = innov_raw;
+    ekf_axis_nis[axis] = nis_raw;
+    ekf_axis_amp[axis] = fabsf(x[0]);
+    ekf_axis_omega_updated[axis] = hold_omega ? 0U : 1U;
+
+#if HAL_GCS_ENABLED
+    if ((ekf_sample_count % 100U) == 0U && axis == 0) {
+        gcs().send_text(MAV_SEVERITY_INFO,
+            "EKF[%d]: y=%.3f pred=%.3f err=%.3f f=%.3f",
+            axis, measurement, y_pred, innov_raw, (double)(x[3] / (2.0f * M_PI)));
+    }
+#endif
 }
 
 void AP_Observer::update_prediction_cache() {
@@ -458,8 +726,8 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
     }
 
     float correction_gain = _correction_gain.get();
-    float roll  =  force.y * correction_gain * _fade_gain[1] / UAV_mass;
-    float pitch = -force.x * correction_gain * _fade_gain[0] / UAV_mass;
+    float roll  =  force.y * correction_gain / UAV_mass;
+    float pitch = -force.x * correction_gain / UAV_mass;
 
     float max_angle = _max_correction_angle.get();
     roll = constrain_value(roll, -max_angle, max_angle);
@@ -479,8 +747,8 @@ Vector3f AP_Observer::calculate_correction_euler_from_force(const Vector3f& forc
     }
 
     float correction_gain = _correction_gain.get();
-    float roll  =  force.y * correction_gain * _fade_gain[1] / UAV_mass;
-    float pitch = -force.x * correction_gain * _fade_gain[0] / UAV_mass;
+    float roll  =  force.y * correction_gain / UAV_mass;
+    float pitch = -force.x * correction_gain / UAV_mass;
 
     float max_angle = _max_correction_angle.get();
     roll = constrain_value(roll, -max_angle, max_angle);
@@ -643,9 +911,25 @@ void AP_Observer::set_ekf_innovation_limits_for_replay(float innov_max,
     _ekf_nis_max.set(MAX(1.0e-3f, nis_max));
 }
 
+void AP_Observer::set_ekf_energy_gate_for_replay(bool enabled,
+                                                 float rms_on,
+                                                 float rms_off,
+                                                 float tau_sec) {
+    _ekf_energy_gate_enable.set(enabled ? 1 : 0);
+    _ekf_energy_rms_on.set(MAX(0.0f, rms_on));
+    _ekf_energy_rms_off.set(constrain_value(rms_off, 0.0f, _ekf_energy_rms_on.get()));
+    _ekf_energy_tau_sec.set(MAX(0.1f, tau_sec));
+}
 
+void AP_Observer::set_ekf_force_thresholds_for_replay(float hold_max,
+                                                      float reject_min) {
+    _ekf_force_hold_max.set(MAX(0.0f, hold_max));
+    _ekf_force_reject_min.set(MAX(_ekf_force_hold_max.get() + 1.0e-3f, reject_min));
+}
 
-
-
-
+void AP_Observer::set_ekf_robust_update_for_replay(bool enabled,
+                                                   float nis_reject_scale) {
+    _ekf_robust_update_enable.set(enabled ? 1 : 0);
+    _ekf_robust_nis_reject_scale.set(MAX(1.0f, nis_reject_scale));
+}
 #endif
