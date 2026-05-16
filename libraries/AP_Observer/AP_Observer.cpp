@@ -78,7 +78,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Time ahead for force prediction [seconds]
     // @Range: 0.0 0.5
     // @User: Advanced
-    AP_GROUPINFO("PRED_TIME", 13, AP_Observer, _prediction_time, 0.01f),
+    AP_GROUPINFO("PRED_TIME", 13, AP_Observer, _prediction_time, 0.00f),
     
     // @Param: MAX_CORR_ANG
     // @DisplayName: Maximum Correction Angle
@@ -106,7 +106,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Description: Amplitude threshold [N] to reset the fade timer
     // @Range: 0.0 10.0
     // @User: Advanced
-    AP_GROUPINFO("FADE_TH", 26, AP_Observer, _out_fade_th, 4.0f),
+    AP_GROUPINFO("FADE_TH", 26, AP_Observer, _out_fade_th, 1.0f),
 
     // @Param: FADE_DLY
     // @DisplayName: Output Fade Delay
@@ -452,10 +452,7 @@ void AP_Observer::update() {
 }
     
 Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) const {
-    float mag = force.length();
-    if (mag < FORCE_THRESHOLD) {
-        return Quaternion(1, 0, 0, 0);
-    }
+    // FORCE_THRESHOLD によるマイルストーン足切りは完全に削除
 
     float correction_gain = _correction_gain.get();
     float roll  =  force.y * correction_gain * _fade_gain[1] / UAV_mass;
@@ -473,10 +470,7 @@ Quaternion AP_Observer::calculate_correction_from_force(const Vector3f& force) c
 
 // オイラー角形式で補正値を計算（ヨー角は常に0）
 Vector3f AP_Observer::calculate_correction_euler_from_force(const Vector3f& force) const {
-    float mag = force.length();
-    if (mag < FORCE_THRESHOLD) {
-        return Vector3f(0, 0, 0);
-    }
+    // FORCE_THRESHOLD によるマイルストーン足切りは完全に削除
 
     float correction_gain = _correction_gain.get();
     float roll  =  force.y * correction_gain * _fade_gain[1] / UAV_mass;
