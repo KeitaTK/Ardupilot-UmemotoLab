@@ -512,8 +512,8 @@ void AP_Observer::Write_Observer_Log() {
     // CR/CP = correction Euler Roll/Pitch [rad]
     const Vector3f predicted = get_predicted_force();
     logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,PFX,PFY,PFZ,FX,FY,CR,CP,SW",
-                  "s-----------", "F-----------",
-                  "QfffffffffffB",
+                  "s----------", "F----------",
+                  "QffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,

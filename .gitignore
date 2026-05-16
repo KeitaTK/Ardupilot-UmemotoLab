@@ -43,6 +43,7 @@ setup_user_proxy.sh
 # 4. SITL & Simulation Data
 # ==========================================
 /logs/
+*.tlog
 mav.log
 mav.log.raw
 mav.parm
