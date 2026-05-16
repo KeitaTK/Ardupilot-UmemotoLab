@@ -545,13 +545,14 @@ void AP_Observer::Write_Observer_Log() {
     }
 
     // ログメッセージをカスタムフォーマットで書き込み
-    // OBSV: TimeUS, PLX, PLY, PLZ, PFX, PFY, PFZ, FX, FY, SW
+    // OBSV: TimeUS, PLX, PLY, PLZ, PFX, PFY, PFZ, FX, FY, CR, CP, SW
     // PFX/PFY/PFZ = predicted force from EKF (replaces D, V, C internal states)
     // FX/FY = per-axis estimated frequency (Hz), no fused frequency field
+    // CR/CP = correction Euler Roll/Pitch [rad]
     const Vector3f predicted = get_predicted_force();
-    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,PFX,PFY,PFZ,FX,FY,SW",
-                  "s---------", "F---------",
-                  "QffffffffB",
+    logger->Write("OBSV", "TimeUS,PLX,PLY,PLZ,PFX,PFY,PFZ,FX,FY,CR,CP,SW",
+                  "s-----------", "F-----------",
+                  "QfffffffffffB",
                   AP_HAL::micros64(),
                   _payload_filtered.x,
                   _payload_filtered.y,
@@ -561,6 +562,8 @@ void AP_Observer::Write_Observer_Log() {
                   predicted.z,           // PFZ: predicted force Z
                   ekf_state[0][3] / (2.0f * M_PI), // FX: X-axis frequency
                   ekf_state[1][3] / (2.0f * M_PI), // FY: Y-axis frequency
+                  current_correction_euler.x,       // CR: correction roll [rad]
+                  current_correction_euler.y,       // CP: correction pitch [rad]
                   (uint8_t)1);  // SW: 常にON
 
     for (uint8_t axis = 0; axis < 2; axis++) {
