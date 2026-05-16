@@ -49,7 +49,7 @@ public:
     // リプレイテスト用
     void set_replay_time_ms(uint32_t ms) { _test_current_ms = ms; _replay_active = true; }
     void force_frequency_estimation_update(const Vector3f& payload);
-    void set_params_for_replay(float freq, float bw, float gain);
+    void set_params_for_replay(float freq, float gain);
     void set_ekf_w_init_hz_for_replay(float freq_hz);
     void set_ekf_process_noises_for_replay(float q_d,
                                            float q_dd,
@@ -74,7 +74,6 @@ private:
 
     // --- AP_Param variables (must match var_info order exactly) ---
     AP_Float _correction_gain;
-    AP_Float _filter_cutoff_freq;
     AP_Float _ekf_q_d;
     AP_Float _ekf_q_d_dot;
     AP_Float _ekf_q_c;
@@ -173,7 +172,6 @@ private:
     // 既存の関数
     Quaternion calculate_correction_from_force(const Vector3f& force) const;
     Vector3f calculate_correction_euler_from_force(const Vector3f& force) const;
-    float apply_lowpass_filter(float input, float& state, float dt, float cutoff_freq) const;
 
     // 揺れ制御のゲイン
     // ローパスフィルタのカットオフ周波数 [Hz]（パラメータ化）

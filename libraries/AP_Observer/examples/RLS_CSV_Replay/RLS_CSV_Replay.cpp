@@ -622,7 +622,7 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     observer.set_replay_time_ms(0); // Ensure time starts at 0 for init
     observer.init();
     // 初期化後にパラメータを上書き
-    observer.set_params_for_replay(0.5794f, 20.0f, 0.0f);
+    observer.set_params_for_replay(0.5794f, 0.0f);
     
     if (AP_Param::set_by_name("OBS_EKF_Q_D", cfg.has_ekf_q_d ? cfg.ekf_q_d : 9.5367432e-12f)) {}
     if (AP_Param::set_by_name("OBS_EKF_Q_DD", cfg.has_ekf_q_dd ? cfg.ekf_q_dd : 2.3841858e-11f)) {}

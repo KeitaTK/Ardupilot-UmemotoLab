@@ -9,14 +9,7 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @Range: 0.0 1.0
     // @User: Advanced
     AP_GROUPINFO("CORR_GAIN", 0, AP_Observer, _correction_gain, 0.0f),
-    
-    // @Param: FILT_CUTOFF
-    // @DisplayName: Observer Filter Cutoff Frequency
-    // @Description: Low-pass filter cutoff frequency [Hz]
-    // @Range: 1.0 100.0
-    // @User: Advanced
-    AP_GROUPINFO("FILT_CUTOFF", 1, AP_Observer, _filter_cutoff_freq, 20.0f),
-    
+
     // @Param: EKF_Q_D
     // @DisplayName: EKF Process Noise D
     // @Description: Process noise variance for disturbance state d
@@ -131,7 +124,6 @@ void AP_Observer::init() {
 
     // フィルタ初期化
     float sample_freq = 100.0f; // サンプリング周波数 [Hz]
-    _payload_filter.set_cutoff_frequency(sample_freq, _filter_cutoff_freq.get());
     _energy_bandpass_fast.set_cutoff_frequency(sample_freq, 0.80f);
     _energy_bandpass_slow.set_cutoff_frequency(sample_freq, 0.25f);
 
@@ -149,8 +141,6 @@ void AP_Observer::init() {
     // 予測用キャッシュ初期化
     update_prediction_cache();
     
-    // 初期化完了メッセージは一旦コメントアウト
-    // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
 
 void AP_Observer::ekf_init() {
@@ -565,8 +555,7 @@ void AP_Observer::force_frequency_estimation_update(const Vector3f& payload) {
 
 }
 
-void AP_Observer::set_params_for_replay(float freq, float bw, float gain) {
-    _filter_cutoff_freq.set(bw);
+void AP_Observer::set_params_for_replay(float freq, float gain) {
     _correction_gain.set(gain);
 
     // Reinitialize frequency state for replay runs.
