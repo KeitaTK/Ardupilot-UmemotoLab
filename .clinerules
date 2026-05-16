@@ -281,3 +281,36 @@ tests/
 - そのため、**常に `write_to_file` でファイル全体を上書きする方式**を採用する。部分編集は行わない。
 - `write_to_file` はブラックリストの対象外であるため常に成功する（Cline の実装保証）。
 - `.clinerules` は常に可視なので、`replace_in_file` による部分編集は問題なく行える。
+
+## Memory Bank Protocol
+
+### Startup Initialization (FIRST STEP — EVERY SESSION)
+
+At the start of every new session, you MUST read exactly these **two files first**, before any other action:
+
+1. `.mock-memory/activeContext.md` — current focus, recent changes, next planned tasks
+2. `.mock-memory/memory-map.md` — index of all memory bank files and what lives where
+
+**Prohibited:** Do NOT read `systemStructure.md`, `decisionLog.md`, or other memory files at startup. Read only the two files above to minimize token consumption. Load additional files only when needed (see below).
+
+### Lazy Loading During Tasks
+
+After reading `activeContext.md` and `memory-map.md`, if the task requires deeper context:
+
+- **Architecture changes or new modules →** read `.mock-memory/systemStructure.md`
+- **Design rationale or bug root causes →** read `.mock-memory/decisionLog.md`
+- **Core requirements or user-facing goals →** read `.mock-memory/productContext.md`
+
+Consult `memory-map.md` to decide which file to load. Once loaded, proceed immediately with the actual task.
+
+### Update Rules (Write Back)
+
+After completing a task that changes the system state:
+
+- Task progress changed (done/blocked/new) → update `progress.md` and `activeContext.md`
+- New architecture decision or bug fix insight → append to `decisionLog.md`
+- Directory structure or dependencies changed → update `systemStructure.md`
+
+### Response Constraint
+
+When reading/writing memory bank files, state only the reason for the action (e.g., "Loading activeContext.md to check current state"). Do not output long explanations about the memory bank itself. Proceed to the actual task immediately.
