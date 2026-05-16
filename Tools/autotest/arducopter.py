@@ -7595,11 +7595,11 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
         # Verify key parameter defaults
         expected_defaults = {
             'OBS_CORR_GAIN': 0.0,
-            'OBS_FILT_CUTOFF': 20.0,
             'OBS_MAX_CORR_ANG': 0.5,
-            'OBS_PRED_TIME': 0.01,
+            'OBS_PRED_TIME': 0.00,
             'OBS_EKF_Q_W': 0.0005,
             'OBS_EKF_R_MEAS': 46.0,
+            'OBS_FADE_TH': 1.0,
         }
 
         for param_name, expected_val in expected_defaults.items():
@@ -7699,7 +7699,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 )
 
             # Check all expected fields exist
-            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'FX', 'FY', 'SW'}
+            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'FX', 'FY', 'CR', 'CP', 'SW'}
             missing = expected_fields - fields_found
             if missing:
                 raise NotAchievedException(f"Missing OBSV fields: {missing}")
