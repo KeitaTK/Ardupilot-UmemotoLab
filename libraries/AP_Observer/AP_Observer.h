@@ -57,8 +57,7 @@ public:
     void set_ekf_q_w_for_replay(float q_w);
     void set_ekf_r_meas_for_replay(float r_meas);
     void set_prediction_time_for_replay(float pred_time_sec);
-    void set_ekf_innovation_limits_for_replay(float innov_max,
-                                              float nis_max);
+    void set_ekf_innovation_limits_for_replay(float innov_max);
     float get_axis_estimated_frequency(uint8_t axis) const {
         if (axis >= EKF_NUM_AXES) {
             return 0.0f;  // Invalid axis
@@ -87,7 +86,6 @@ private:
     AP_Float _prediction_time;
     AP_Float _max_correction_angle;
     AP_Float _ekf_innov_max;
-    AP_Float _ekf_nis_max;
     AP_Float _out_fade_th;
     AP_Float _out_fade_dly;
     AP_Float _out_fade_in_t;

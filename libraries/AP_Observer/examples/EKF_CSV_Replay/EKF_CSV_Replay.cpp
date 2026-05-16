@@ -154,8 +154,6 @@ struct ReplayRunConfig {
     float ekf_amp_max = 1.2f;
     bool has_ekf_innov_max = false;
     float ekf_innov_max = 0.7f;
-    bool has_ekf_nis_max = false;
-    float ekf_nis_max = 4.0f;
     bool has_ekf_energy_gate = false;
     int ekf_energy_gate = 1;
     bool has_ekf_energy_rms_on = false;
@@ -370,18 +368,6 @@ static bool parse_replay_args(ReplayRunConfig& cfg) {
         if (strncmp(arg, "--ekf-innov-max=", 16) == 0) {
             cfg.ekf_innov_max = strtof(arg + 16, nullptr);
             cfg.has_ekf_innov_max = true;
-            continue;
-        }
-
-        if ((strcmp(arg, "--ekf-nis-max") == 0) && next != nullptr) {
-            cfg.ekf_nis_max = strtof(next, nullptr);
-            cfg.has_ekf_nis_max = true;
-            i++;
-            continue;
-        }
-        if (strncmp(arg, "--ekf-nis-max=", 14) == 0) {
-            cfg.ekf_nis_max = strtof(arg + 14, nullptr);
-            cfg.has_ekf_nis_max = true;
             continue;
         }
 
@@ -663,12 +649,9 @@ static void run_case(const char* out_filename, const std::vector<ReplayData>& da
     observer.set_ekf_r_meas_for_replay(cfg.has_ekf_r_meas ? cfg.ekf_r_meas : 46.0f);
 
     );
-    observer.set_ekf_innovation_limits_for_replay(
-        cfg.has_ekf_innov_max ? cfg.ekf_innov_max : 0.7f,
-        cfg.has_ekf_nis_max ? cfg.ekf_nis_max : 4.0f
-    );
-    );
-    );
+    if (cfg.has_ekf_innov_max) {
+        observer.set_ekf_innovation_limits_for_replay(cfg.ekf_innov_max);
+    }
     if (cfg.has_ekf_w_init_hz) {
         observer.set_ekf_w_init_hz_for_replay(cfg.ekf_w_init_hz);
     }

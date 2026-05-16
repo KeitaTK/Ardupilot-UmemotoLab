@@ -94,13 +94,6 @@ const AP_Param::GroupInfo AP_Observer::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("EKF_INN_MAX", 24, AP_Observer, _ekf_innov_max, 0.70f),
 
-    // @Param: EKF_NIS_MAX
-    // @DisplayName: EKF NIS Maximum
-    // @Description: Maximum normalized innovation squared for including axis in fused frequency update
-    // @Range: 0.1 100.0
-    // @User: Advanced
-    AP_GROUPINFO("EKF_NIS_MAX", 25, AP_Observer, _ekf_nis_max, 4.0f),
-
     // @Param: FADE_TH
     // @DisplayName: Output Fade Amplitude Threshold
     // @Description: Amplitude threshold [N] to reset the fade timer
@@ -634,10 +627,8 @@ void AP_Observer::set_prediction_time_for_replay(float pred_time_sec) {
     _prediction_time.set(constrain_value(pred_time_sec, 0.0f, 0.5f));
 }
 
-void AP_Observer::set_ekf_innovation_limits_for_replay(float innov_max,
-                                                       float nis_max) {
+void AP_Observer::set_ekf_innovation_limits_for_replay(float innov_max) {
     _ekf_innov_max.set(MAX(1.0e-3f, innov_max));
-    _ekf_nis_max.set(MAX(1.0e-3f, nis_max));
 }
 
 
