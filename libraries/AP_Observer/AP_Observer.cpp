@@ -149,9 +149,6 @@ void AP_Observer::init() {
     // 予測用キャッシュ初期化
     update_prediction_cache();
     
-    // 離陸検知フラグ初期化
-    _has_taken_off = false;
-    
     // 初期化完了メッセージは一旦コメントアウト
     // gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: initialized with %.1fHz filter", _filter_cutoff_freq.get());
 }
@@ -413,21 +410,13 @@ void AP_Observer::update() {
     // _payload_filtered = _payload_filter.apply(payload);
     _payload_filtered = payload; // フィルタなしで生データを使用
 
-    // 離陸検知
-    if (!_has_taken_off && is_taking_off()) {
-        _has_taken_off = true;
-#if HAL_GCS_ENABLED
-        gcs().send_text(MAV_SEVERITY_INFO, "AP_Observer: Takeoff detected, starting frequency estimation");
-#endif
-    }
-
     const uint32_t now_ms = get_current_time_ms();
     float dt = 0.01f;
     if (last_update_ms != 0) {
         dt = 0.001f * (float)(now_ms - last_update_ms);
     }
 
-    if (_has_taken_off && ekf_initialized) {
+    if (ekf_initialized) {
         ekf_update(_payload_filtered, dt);
     }
     
@@ -516,17 +505,6 @@ Vector3f AP_Observer::get_predicted_force() const {
     }
     
     return predicted;
-}
-
-// 離陸検知（モーターアーム済み）
-bool AP_Observer::is_taking_off() {
-    AP_Motors* motors = AP::motors();
-    if (!motors) {
-        return false;
-    }
-    
-    // モーターがアームされていれば離陸とみなす
-    return motors->armed();
 }
 
 // ログをSDカードに記録

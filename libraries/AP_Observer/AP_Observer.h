@@ -190,9 +190,5 @@ private:
     
     static constexpr float    EKF_INIT_COVARIANCE   = 10.0f;
     
-    // 離陸検知用の変数
-    bool _has_taken_off = false;  // 離陸済みフラグ
-
     // ヘルパー関数
-    bool is_taking_off();  // 離陸検知
 };
