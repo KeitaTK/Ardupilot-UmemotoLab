@@ -38,9 +38,26 @@
 
 ## 仮想環境
 
-- Python仮想環境は `venv/` に一本化（`/home/umemoto/Ardupilot-UmemotoLab/venv/`）
-- すべてのPythonコマンドは `venv/bin/python3` または `source venv/bin/activate` 後に実行すること
-- 不要になった `.venv/` は削除済み
+- Python仮想環境は `.venv/` に一本化
+- すべてのPythonコマンドは `.venv/bin/python3` または `source .venv/bin/activate` 後に実行すること
+- 不要になった `venv/` は削除済み
+
+### MAVLink Python バインディング生成（環境構築時のみ）
+
+本プロジェクトではカスタム MAVLink 定義（`modules/mavlink/message_definitions/v1.0/ardupilotmega.xml`）を使用しているため、
+仮想環境構築後に以下のコマンドで Python バインディングを生成する必要がある：
+
+```bash
+source .venv/bin/activate
+python3 modules/mavlink/pymavlink/tools/mavgen.py \
+  --lang=Python \
+  --wire-protocol=2.0 \
+  modules/mavlink/message_definitions/v1.0/ardupilotmega.xml \
+  -o modules/mavlink/pymavlink/dialects/v20/ardupilotmega.py
+```
+
+生成された `ardupilotmega.py` は `pymavlink`（autotest で使用）が参照する。
+`ardupilotmega.xml` を変更した場合は再生成が必要。
 
 ## ビルドルール
 

@@ -7677,7 +7677,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 obsv_count += 1
 
                 # Check required fields
-                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'PFY', 'PFZ', 'FX', 'FY', 'SW']:
+                for field in ['TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'PFY', 'PFZ', 'FX', 'FY', 'CR', 'CP', 'SW']:
                     if hasattr(m, field):
                         fields_found.add(field)
                         val = getattr(m, field)
@@ -7699,7 +7699,7 @@ class AutoTestCopter(vehicle_test_suite.TestSuite):
                 )
 
             # Check all expected fields exist
-            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'FX', 'FY', 'CR', 'CP', 'SW'}
+            expected_fields = {'TimeUS', 'PLX', 'PLY', 'PLZ', 'PFX', 'PFY', 'PFZ', 'FX', 'FY', 'CR', 'CP', 'SW'}
             missing = expected_fields - fields_found
             if missing:
                 raise NotAchievedException(f"Missing OBSV fields: {missing}")
