@@ -37,7 +37,7 @@ echo "=========================================="
 # SITL ビルド（必要に応じて --no-clean でスキップ）
 echo ""
 echo "[1/2] Building SITL..."
-source venv/bin/activate
+source .venv/bin/activate
 ./waf configure --board sitl
 ./waf build --target bin/arducopter
 echo "Build complete."

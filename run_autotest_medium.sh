@@ -19,7 +19,7 @@ echo "  Speedup: ${SPEEDUP}"
 echo "  Timeout: ${TIMEOUT}s"
 echo "=========================================="
 
-source venv/bin/activate
+source .venv/bin/activate
 
 # SITLビルド
 echo "--- SITL Build ---"
