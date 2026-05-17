@@ -44,6 +44,7 @@ echo "=========================================="
 echo ""
 echo "[1/4] Building SITL..."
 source .venv/bin/activate
+export PYTHONPATH="${SCRIPT_DIR}/modules/mavlink:${PYTHONPATH}"
 ./waf configure --board sitl
 ./waf build --target bin/arducopter
 echo "Build complete."

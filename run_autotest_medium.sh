@@ -20,6 +20,7 @@ echo "  Timeout: ${TIMEOUT}s"
 echo "=========================================="
 
 source .venv/bin/activate
+export PYTHONPATH="${SCRIPT_DIR}/modules/mavlink:${PYTHONPATH}"
 
 # SITLビルド
 echo "--- SITL Build ---"
